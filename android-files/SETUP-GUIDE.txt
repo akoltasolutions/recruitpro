@@ -1,0 +1,218 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                                                                          ║
+║          ANDROID STUDIO SETUP GUIDE — FOR NON-CODERS                    ║
+║     Phone Dialer + Post Call Disposition — Step by Step                  ║
+║                                                                          ║
+║     You only need to change 2 files in Android Studio:                   ║
+║     1. MainActivity.kt                                                   ║
+║     2. AndroidManifest.xml                                               ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  STEP 0: FIND YOUR PACKAGE NAME (Do this FIRST)                         ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+Your package name looks like: com.companyname.appname
+
+How to find it:
+  1. Open Android Studio
+  2. Look at the LEFT side panel
+  3. Click the small arrow (▶) next to "app"
+  4. Click the small arrow (▶) next to "java"
+  5. You will see folders like: com  →  companyname  →  appname
+  6. Your package name is all of them joined with dots:
+     com.companyname.appname
+
+  EXAMPLE: If you see folders com → example → recruitpro
+  Then your package name is: com.example.recruitpro
+
+  WRITE THIS DOWN — you will need it in Step 1.
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  STEP 1: EDIT MainActivity.kt                                            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+FILE PATH in Android Studio:
+  app → java → com → yourcompany → yourapp → MainActivity.kt
+
+INSTRUCTIONS:
+  1. In the LEFT panel, expand: app → java → com → (your folders)
+  2. Double-click on "MainActivity.kt" to open it
+  3. Press Ctrl+A (Select ALL text)
+  4. Press Delete key (delete everything)
+  5. Copy the ENTIRE content from "MainActivity.kt" file I gave you
+  6. Paste it (Ctrl+V)
+  7. NOW MAKE 2 CHANGES:
+
+     CHANGE 1 — Line 1 (Package Name):
+     ┌─────────────────────────────────────────────────────┐
+     │  FIND:    package com.yourpackage.app               │
+     │  REPLACE: package com.YOUR.ACTUAL.PACKAGE.NAME      │
+     │                                                     │
+     │  Example:                                           │
+     │  package com.example.recruitpro                     │
+     └─────────────────────────────────────────────────────┘
+
+     CHANGE 2 — Line ~47 (App URL):
+     ┌─────────────────────────────────────────────────────┐
+     │  FIND:    private val APP_URL = "https://your-app-url.com"  │
+     │  REPLACE: private val APP_URL = "https://YOUR-ACTUAL-URL"   │
+     │                                                     │
+     │  Example:                                           │
+     │  private val APP_URL = "https://recruitpro.example.com"     │
+     └─────────────────────────────────────────────────────┘
+
+  8. Press Ctrl+S to save
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  STEP 2: EDIT AndroidManifest.xml                                        ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+FILE PATH in Android Studio:
+  app → manifests → AndroidManifest.xml
+
+INSTRUCTIONS:
+  1. In the LEFT panel, expand: app → manifests
+  2. Double-click on "AndroidManifest.xml" to open it
+  3. Press Ctrl+A (Select ALL text)
+  4. Press Delete key (delete everything)
+  5. Copy the ENTIRE content from "AndroidManifest.xml" file I gave you
+  6. Paste it (Ctrl+V)
+  7. UPDATE the app label (optional — this is your app's display name):
+     ┌─────────────────────────────────────────────────────┐
+     │  FIND:    android:label="RecruitPro"                │
+     │  REPLACE: android:label="YOUR APP NAME"             │
+     │                                                     │
+     │  This is what shows under the app icon on your phone │
+     └─────────────────────────────────────────────────────┘
+  8. IMPORTANT: If your original AndroidManifest.xml had other
+     <activity> tags (for other screens), do NOT delete them.
+     Only replace the <uses-permission> lines and make sure
+     the <activity> for MainActivity has these 3 attributes:
+       - android:configChanges="orientation|screenSize|keyboardHidden"
+       - android:launchMode="singleTop"
+       - android:exported="true"
+  9. Press Ctrl+S to save
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  STEP 3: BUILD AND RUN                                                  ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  1. At the TOP of Android Studio, click: Build → Rebuild Project
+  2. Wait for it to finish (look at bottom bar — it will say "BUILD SUCCESSFUL")
+  3. Connect your phone via USB cable
+  4. Click the GREEN ▶ Run button at the top
+  5. The app will install on your phone and open
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  STEP 4: TEST IT                                                        ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  1. Open the app on your phone
+  2. Login to your account
+  3. Go to "Pending" (Auto Dialer page)
+  4. Select a call list → Start Calling
+  5. Tap the green "Call" button
+  6. ✅ Phone dialer should open with the candidate's number
+  7. Make the call (or just press back without calling)
+  8. ✅ Post Call Disposition popup should appear automatically
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  HOW IT WORKS (Technical explanation — skip if you don't care)          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  1. User taps "Call" button in the web app
+         ↓
+  2. The button is a real <a href="tel:1234567890"> link
+     Android WebView sees this and calls shouldOverrideUrlLoading()
+         ↓
+  3. shouldOverrideUrlLoading() detects "tel:" prefix
+     Opens Android's phone dialer via ACTION_DIAL Intent
+     Sets isCallInProgress = true
+         ↓
+  4. User makes the call on the phone dialer
+         ↓
+  5. User presses Back to return to your app
+         ↓
+  6. Android calls onResume() (this happens every time you return)
+     Sees isCallInProgress = true
+     Calls JavaScript: showPostCallDisposition('phone')
+         ↓
+  7. JavaScript in your web app receives the call
+     Opens the Post Call Disposition popup
+     User selects disposition → Save & Next Call
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  TROUBLESHOOTING                                                         ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+❌ "BUILD FAILED" error in Android Studio
+   → Check line 1: Did you change "com.yourpackage.app" to your actual
+     package name? It MUST match exactly.
+
+❌ "Call button does nothing" / "Phone dialer doesn't open"
+   → Open AndroidManifest.xml
+   → Make sure this line exists:
+     <uses-permission android:name="android.permission.CALL_PHONE" />
+   → Make sure the <activity> has android:exported="true"
+
+❌ "App crashes when returning from dialer"
+   → Open AndroidManifest.xml
+   → Make sure the <activity> has these attributes:
+     android:configChanges="orientation|screenSize|keyboardHidden"
+     android:launchMode="singleTop"
+
+❌ "Disposition popup doesn't appear after call"
+   → Connect phone to PC
+   → In Android Studio, open the "Logcat" tab at the bottom
+   → Filter by "[Dialer]" 
+   → You should see logs like:
+     "onResume called. isCallInProgress=true, phone=1234567890"
+     "User returned from dialer for: 1234567890"
+   → If you don't see these logs, the onResume is not detecting the return
+
+❌ "WebView shows blank page"
+   → Check APP_URL — make sure it's correct (include https://)
+   → Make sure android:usesCleartextTraffic="true" is in <application>
+     (needed if your URL uses http:// instead of https://)
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  FILES IN ANDROID STUDIO — WHERE TO FIND THEM                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  Your project structure in Android Studio LEFT panel:
+
+  📁 app
+  ├── 📁 manifests
+  │   └── 📄 AndroidManifest.xml          ← EDIT THIS (Step 2)
+  ├── 📁 java
+  │   └── 📁 com
+  │       └── 📁 yourcompany
+  │           └── 📁 yourapp
+  │               └── 📄 MainActivity.kt  ← EDIT THIS (Step 1)
+  └── 📁 res
+      ├── 📁 drawable
+      ├── 📁 layout
+      ├── 📁 mipmap-xxxhdpi
+      └── 📁 values
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  QUICK CHECKLIST — verify all 3 things before building                  ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+  ☐ MainActivity.kt line 1: package name matches your project
+  ☐ MainActivity.kt APP_URL: your actual web app URL
+  ☐ AndroidManifest.xml: has <uses-permission android:name="android.permission.CALL_PHONE" />
+  ☐ AndroidManifest.xml: <activity> has android:configChanges="orientation|screenSize|keyboardHidden"
+  ☐ AndroidManifest.xml: <activity> has android:launchMode="singleTop"
+  ☐ AndroidManifest.xml: <activity> has android:exported="true"

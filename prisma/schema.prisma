@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  phone     String?
+  role      String   @default("RECRUITER") // ADMIN, RECRUITER
+  isActive  Boolean  @default(true)
+  avatarUrl String?
+  callModeOn    Boolean @default(true)
+  whatsappAccess Boolean @default(true)
+  uploadPermission Boolean @default(false)
+  createListPermission Boolean @default(false)
+  // Password recovery fields
+  resetToken     String?
+  resetTokenExpires DateTime?
+  otpCode        String?
+  otpExpires     DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedCallLists CallListAssignment[]
+  callRecords       CallRecord[]
+  whatsappMessages  WhatsAppMessage[]
+  activityLogs      ActivityLog[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  callRecords CallRecord[]
+}
+
+model Disposition {
+  id        String   @id @default(cuid())
+  heading   String
+  type      String   // SHORTLISTED, CONNECTED, NOT_CONNECTED, NOT_INTERESTED
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  callRecords CallRecord[]
+}
+
+model CallList {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  source          String    @default("MANUAL") // MANUAL, CSV, XLSX, COPY_PASTE, GOOGLE_SHEETS
+  createdBy       String
+  googleSheetsUrl String?
+  googleSheetGid  String?
+  syncInterval    Int       @default(0) // minutes, 0 = disabled
+  lastSyncedAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  candidates   Candidate[]
+  assignments  CallListAssignment[]
+}
+
+model Candidate {
+  id        String   @id @default(cuid())
+  callListId String
+  name      String
+  phone     String
+  email     String?
+  role      String?
+  location  String?
+  company   String?
+  notes     String?
+  status    String   @default("PENDING") // PENDING, DONE, SCHEDULED, SKIPPED
+  // Pipeline stages for CRM
+  pipelineStage String @default("NEW") // NEW, SHORTLISTED, FOLLOW_UP, INTERVIEWED, JOINED, BACKOUT
+  followUpDate    DateTime?
+  interviewDate   DateTime?
+  joinedDate      DateTime?
+  backoutReason   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  callList     CallList            @relation(fields: [callListId], references: [id], onDelete: Cascade)
+  callRecords  CallRecord[]
+}
+
+model CallListAssignment {
+  id          String   @id @default(cuid())
+  callListId  String
+  recruiterId String
+  assignedAt  DateTime @default(now())
+
+  callList  CallList @relation(fields: [callListId], references: [id], onDelete: Cascade)
+  recruiter User    @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
+}
+
+model CallRecord {
+  id            String   @id @default(cuid())
+  candidateId   String
+  recruiterId   String
+  dispositionId String?
+  clientId      String?
+  notes         String?
+  callDuration  Int      @default(0) // in seconds
+  callStatus    String   @default("COMPLETED") // COMPLETED, FAILED, SKIPPED, SCHEDULED
+  scheduledAt       DateTime?
+  f2fInterviewDate  DateTime?
+  customClientName  String?
+  calledAt          DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  candidate   Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  recruiter   User        @relation(fields: [recruiterId], references: [id])
+  disposition Disposition? @relation(fields: [dispositionId], references: [id])
+  client      Client?     @relation(fields: [clientId], references: [id])
+}
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // NOT_ANSWERED, SHORTLISTED, CUSTOM
+  content   String   // supports {{candidate_name}}, {{recruiter_name}}, {{role}}, {{location}}
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WhatsAppMessage {
+  id          String   @id @default(cuid())
+  recruiterId String
+  candidateId String?
+  phone       String
+  message     String
+  status      String   @default("SENT") // SENT, FAILED, PENDING
+  sentAt      DateTime @default(now())
+
+  recruiter User      @relation(fields: [recruiterId], references: [id])
+}
+
+// ==================== NEW MODELS ====================
+
+// Activity logging for recruiter tracking / attendance
+model ActivityLog {
+  id            String   @id @default(cuid())
+  userId        String
+  action        String   // LOGIN, LOGOUT, IDLE, ACTIVE, BREAK_START, BREAK_END, ON_CALL, CALL_END
+  status        String   @default("ACTIVE") // ACTIVE, IDLE, OFFLINE, ON_CALL, ON_BREAK
+  metadata      String?  // JSON string for extra data (phone number, candidate id, etc.)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

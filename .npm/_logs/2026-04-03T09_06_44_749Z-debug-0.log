@@ -1,0 +1,12 @@
+0 verbose cli /usr/bin/node /usr/lib/node_modules/npm/bin/npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v24.13.0
+3 silly config load:file:/usr/lib/node_modules/npm/npmrc
+4 silly config load:file:/home/z/my-project/.npmrc
+5 silly config load:file:/usr/etc/npmrc
+6 verbose title npm exec next dev -p 3000
+7 verbose argv "exec" "--" "next" "dev" "-p" "3000"
+8 verbose logfile logs-max:10 dir:/home/z/my-project/.npm/_logs/2026-04-03T09_06_44_749Z-
+9 verbose logfile /home/z/my-project/.npm/_logs/2026-04-03T09_06_44_749Z-debug-0.log
+10 silly logfile done cleaning log files
+11 http fetch GET 200 https://registry.npmjs.org/npm 92ms
