@@ -204,3 +204,23 @@ Stage Summary:
 - No security issues remain (random password generation)
 - No memory leak issues remain (interval cleanup)
 - ESLint passes clean with zero errors
+---
+Task ID: 10
+Agent: Main Agent
+Task: Fix recurring "function is pending state, please try later" deployment error
+
+Work Log:
+- Found 4 stale build directories + 2 stale tar.gz files in /tmp/ (accumulated again since last cleanup)
+- Cleaned all stale build artifacts from /tmp/ (rm -rf /tmp/build_fullstack_*, rm -f /tmp/*.tar.gz)
+- Rebuilt /home/sync/repo.tar (1.4MB) with latest code
+- Verified dev server health: PID 6967, HTTP 200, 28919 bytes
+- Disk space healthy: 7.6GB available (19% used)
+- Platform: Alibaba Cloud FC (cn-hongkong), container c-69d10b10-14cc6286-3663119d4c11
+
+Stage Summary:
+- Stale build artifacts cleared from /tmp/
+- Sync tar rebuilt with latest code
+- Dev server running healthy
+- "function is pending state" is a platform-level issue — FC function is still transitioning from a previous deployment
+- Resolution: Wait 3-5 minutes for platform to clear the pending state, then retry deployment
+- If error persists, it may indicate the FC function needs to be manually reset from the Alibaba Cloud console
