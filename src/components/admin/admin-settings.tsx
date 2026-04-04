@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Settings as SettingsIcon,
   User,
@@ -68,14 +68,15 @@ export function AdminSettings({ userId }: AdminSettingsProps) {
           updateUser(u)
         }
       } catch {
-        setNameValue(user?.name || '')
-        setEmailValue(user?.email || '')
-        setPhoneValue(user?.phone || '')
+        const currentUser = useAuthStore.getState().user
+        setNameValue(currentUser?.name || '')
+        setEmailValue(currentUser?.email || '')
+        setPhoneValue(currentUser?.phone || '')
       }
       setLoading(false)
     }
     loadData()
-  }, [userId, updateUser])
+  }, [userId])
 
   // Password strength calculation
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   Settings as SettingsIcon,
   User,
@@ -35,7 +35,6 @@ interface SettingsProps {
 export function Settings({ userId, onLogout }: SettingsProps) {
   const user = useAuthStore((s) => s.user)
   const updateUser = useAuthStore((s) => s.updateUser)
-  const initialLoad = useRef(true)
 
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
@@ -61,7 +60,7 @@ export function Settings({ userId, onLogout }: SettingsProps) {
   const [callingMode, setCallingMode] = useState(true)
   const [whatsappAccess, setWhatsappAccess] = useState(true)
 
-  // Load user data once on mount
+  // Load user data once on mount (skip deps on updateUser/user to avoid infinite loop)
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
@@ -76,11 +75,20 @@ export function Settings({ userId, onLogout }: SettingsProps) {
           setCallingMode(u.callModeOn ?? true)
           setWhatsappAccess(u.whatsappAccess ?? true)
           updateUser(u)
+        } else {
+          // If fetch fails (e.g. 401), use store data as fallback
+          const currentUser = useAuthStore.getState().user
+          setNameValue(currentUser?.name || '')
+          setEmailValue(currentUser?.email || '')
+          setPhoneValue(currentUser?.phone || '')
+          setCallingMode(currentUser?.callModeOn ?? true)
+          setWhatsappAccess(currentUser?.whatsappAccess ?? true)
         }
       } catch {
-        setNameValue(user?.name || '')
-        setEmailValue(user?.email || '')
-        setPhoneValue(user?.phone || '')
+        const currentUser = useAuthStore.getState().user
+        setNameValue(currentUser?.name || '')
+        setEmailValue(currentUser?.email || '')
+        setPhoneValue(currentUser?.phone || '')
       }
 
       const savedDelay = localStorage.getItem('recruiter-call-delay')
@@ -91,7 +99,7 @@ export function Settings({ userId, onLogout }: SettingsProps) {
       setLoading(false)
     }
     loadData()
-  }, [userId, updateUser, user])
+  }, [userId])
 
   // Save profile field
   const handleSaveProfile = async (field: string, value: string) => {
