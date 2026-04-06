@@ -173,6 +173,7 @@ export function AnnouncementsManagement() {
       if (isNew) {
         const res = await authFetch('/api/announcements', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: formData.title.trim(),
             content: formData.content.trim(),
@@ -186,6 +187,7 @@ export function AnnouncementsManagement() {
       } else {
         const res = await authFetch(`/api/announcements/${editingId}`, {
           method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: formData.title.trim(),
             content: formData.content.trim(),
@@ -201,6 +203,7 @@ export function AnnouncementsManagement() {
       setFormDialogOpen(false)
       fetchAnnouncements()
     } catch (err) {
+      console.error('[Announcements] Submit error:', err)
       toast.error(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setActionLoading(null)
@@ -548,7 +551,19 @@ export function AnnouncementsManagement() {
 
       {/* ── Create / Edit Dialog ───────────────────────────────────────── */}
       <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
-        <DialogContent>
+        <DialogContent
+          onPointerDownOutside={(e) => {
+            // Prevent dialog from closing when interacting with content inside on Android WebView
+            e.preventDefault()
+          }}
+          onInteractOutside={(e) => {
+            e.preventDefault()
+          }}
+          onOpenAutoFocus={(e) => {
+            // Prevent auto-focus on mobile to avoid keyboard popup issues
+            if (window.innerWidth < 768) e.preventDefault()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {editingId ? 'Edit Announcement' : 'New Announcement'}
@@ -605,14 +620,24 @@ export function AnnouncementsManagement() {
 
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setFormDialogOpen(false)}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setFormDialogOpen(false)
+              }}
               disabled={!!actionLoading}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleSubmit()
+              }}
               disabled={!!actionLoading}
               className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
@@ -644,7 +669,10 @@ export function AnnouncementsManagement() {
           if (!open) setDeleteTarget(null)
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Announcement</AlertDialogTitle>
             <AlertDialogDescription>
