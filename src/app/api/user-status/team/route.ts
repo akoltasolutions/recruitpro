@@ -108,13 +108,13 @@ function calculateMemberStatus(
       // Old login entries treated as IDLE (default state)
       status = 'IDLE';
     } else if (latestLog.action === 'BREAK_START') {
-      status = 'BREAK';
+      status = 'ON_BREAK';
     } else if (latestLog.action === 'BREAK_END' || latestLog.action === 'ACTIVE') {
       status = 'ACTIVE';
     } else if (latestLog.action === 'IDLE') {
       status = 'IDLE';
     } else if (latestLog.status === 'ON_BREAK') {
-      status = 'BREAK';
+      status = 'ON_BREAK';
     } else if (latestLog.status === 'ACTIVE') {
       status = 'ACTIVE';
     } else if (latestLog.status === 'IDLE') {

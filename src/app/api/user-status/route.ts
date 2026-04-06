@@ -115,13 +115,13 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
       // Old login entries are treated as IDLE (default state)
       status = 'IDLE';
     } else if (latestLog.action === 'BREAK_START') {
-      status = 'BREAK';
+      status = 'ON_BREAK';
     } else if (latestLog.action === 'BREAK_END' || latestLog.action === 'ACTIVE') {
       status = 'ACTIVE';
     } else if (latestLog.action === 'IDLE') {
       status = 'IDLE';
     } else if (latestLog.status === 'ON_BREAK') {
-      status = 'BREAK';
+      status = 'ON_BREAK';
     } else if (latestLog.status === 'ACTIVE') {
       status = 'ACTIVE';
     } else if (latestLog.status === 'IDLE') {
@@ -169,10 +169,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { status } = body;
 
-    const validStatuses = ['IDLE', 'LAUNCH', 'BREAK', 'ACTIVE'];
+    const validStatuses = ['IDLE', 'LAUNCH', 'ON_BREAK', 'ACTIVE'];
     if (!status || !validStatuses.includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: IDLE, LAUNCH, BREAK, ACTIVE' },
+        { error: 'Invalid status. Must be one of: IDLE, LAUNCH, ON_BREAK, ACTIVE' },
         { status: 400 }
       );
     }
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
     switch (status) {
       case 'IDLE':
         // If on break, end the break first
-        if (currentInfo.status === 'BREAK') {
+        if (currentInfo.status === 'ON_BREAK') {
           await db.activityLog.create({
             data: {
               userId: auth.userId,
@@ -203,9 +203,9 @@ export async function POST(request: NextRequest) {
         action = 'LAUNCH';
         logStatus = 'ACTIVE';
         break;
-      case 'BREAK':
-        // Prevent going to BREAK if already on break
-        if (currentInfo.status === 'BREAK') {
+      case 'ON_BREAK':
+        // Prevent going to ON_BREAK if already on break
+        if (currentInfo.status === 'ON_BREAK') {
           return NextResponse.json({ error: 'Already on break' }, { status: 400 });
         }
         action = 'BREAK_START';
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
         break;
       case 'ACTIVE':
         // When switching to ACTIVE, if was on break, create BREAK_END first
-        if (currentInfo.status === 'BREAK') {
+        if (currentInfo.status === 'ON_BREAK') {
           await db.activityLog.create({
             data: {
               userId: auth.userId,

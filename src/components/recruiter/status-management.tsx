@@ -13,7 +13,7 @@ import { useActivityTracker } from '@/hooks/use-activity-tracker'
 // Types
 // ---------------------------------------------------------------------------
 
-type UserStatus = 'IDLE' | 'LAUNCH' | 'BREAK' | 'ACTIVE' | 'OFFLINE'
+type UserStatus = 'IDLE' | 'LAUNCH' | 'ON_BREAK' | 'ACTIVE' | 'OFFLINE'
 
 interface StatusInfo {
   userId: string
@@ -62,7 +62,7 @@ const STATUS_CONFIG: Record<
     activeBtnClass: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
     description: 'Shift started',
   },
-  BREAK: {
+  ON_BREAK: {
     label: 'Break',
     emoji: '☕',
     bgClass: 'bg-amber-50 dark:bg-amber-950/40',
@@ -318,7 +318,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Break timer: counts from when the current break started
   const breakElapsedMs = useCountUp(
     statusInfo?.currentBreakStartTime ?? null,
-    statusInfo?.status === 'BREAK',
+    statusInfo?.status === 'ON_BREAK',
   )
 
   // Idle timer: counts from when the status was last set to IDLE
@@ -359,7 +359,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         className={`h-1 ${
           currentStatus === 'LAUNCH'
             ? 'bg-blue-500'
-            : currentStatus === 'BREAK'
+            : currentStatus === 'ON_BREAK'
               ? 'bg-amber-500'
               : currentStatus === 'ACTIVE'
                 ? 'bg-emerald-500'
@@ -417,7 +417,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
                 Active
               </span>
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {currentStatus === 'BREAK' || currentStatus === 'IDLE' || currentStatus === 'OFFLINE'
+                {currentStatus === 'ON_BREAK' || currentStatus === 'IDLE' || currentStatus === 'OFFLINE'
                   ? formatDuration(statusInfo?.totalActiveDurationMs ?? 0)
                   : formatDuration(activeElapsedMs)}
               </span>
@@ -426,12 +426,12 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         </div>
 
         {/* ── Live Timer Display ────────────────────────────────────── */}
-        {(currentStatus === 'ACTIVE' || currentStatus === 'BREAK' || currentStatus === 'LAUNCH' || currentStatus === 'IDLE') && (
+        {(currentStatus === 'ACTIVE' || currentStatus === 'ON_BREAK' || currentStatus === 'LAUNCH' || currentStatus === 'IDLE') && (
           <div className="mt-4 flex items-center gap-3">
             <div
               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-mono font-medium ${cfg.bgClass} ${cfg.textClass}`}
             >
-              {currentStatus === 'BREAK' ? (
+              {currentStatus === 'ON_BREAK' ? (
                 <>
                   <Pause className="h-3.5 w-3.5" />
                   Break: {formatDuration(breakElapsedMs)}
@@ -498,15 +498,15 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('BREAK')}
+            onClick={() => setConfirmTarget('ON_BREAK')}
             disabled={switching || currentStatus === 'OFFLINE'}
             className={
-              currentStatus === 'BREAK'
-                ? STATUS_CONFIG.BREAK.activeBtnClass
+              currentStatus === 'ON_BREAK'
+                ? STATUS_CONFIG.ON_BREAK.activeBtnClass
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'BREAK' ? (
+            {switching && confirmTarget === 'ON_BREAK' ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Coffee className="h-3.5 w-3.5" />

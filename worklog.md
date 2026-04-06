@@ -526,3 +526,24 @@ Stage Summary:
 - ESLint passes clean with zero errors
 - TypeScript has zero errors in src/
 - Server running on port 3000, responding HTTP 200
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix team monitoring error and loading issues
+
+Work Log:
+- Dev server was down — restarted with `nohup npx next dev -p 3000`
+- Investigated team monitoring error by reading API route and frontend component
+- Found root cause: API returned `status: "BREAK"` but frontend `STATUS_CONFIG` only had key `"ON_BREAK"`
+- When any user was on break, accessing `STATUS_CONFIG["BREAK"].emoji` crashed with TypeError
+- Fixed 4 files:
+  1. `src/app/api/user-status/route.ts`: Changed `'BREAK'` → `'ON_BREAK'` in status mapping and validation
+  2. `src/app/api/user-status/team/route.ts`: Same status mapping fix
+  3. `src/components/recruiter/status-management.tsx`: Updated type, STATUS_CONFIG key, and all comparisons
+- Verified: API now returns `"ON_BREAK"`, ESLint clean, all 200 responses
+
+Stage Summary:
+- Root cause: Status value mismatch between API (`BREAK`) and frontend (`ON_BREAK`)
+- Fixed across all API routes and UI components for consistency
+- Dev server running, all endpoints verified working
