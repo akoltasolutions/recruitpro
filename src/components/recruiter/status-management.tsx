@@ -187,6 +187,8 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   const mountedRef = useRef(true)
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const idleStartedAtRef = useRef<string | null>(null)
+  // Track when the API last returned data — used to add live elapsed time
+  const lastFetchTimeRef = useRef<number>(0)
 
   // -----------------------------------------------------------------------
   // Fetch current status
@@ -199,11 +201,13 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
       const data: StatusInfo = await res.json()
       if (mountedRef.current) {
         // Track when the IDLE period started (for live idle timer display)
+        // Use the loginTime from API as the idle start reference (since IDLE is the default)
         if (data.status === 'IDLE' && !idleStartedAtRef.current) {
-          idleStartedAtRef.current = new Date().toISOString()
+          idleStartedAtRef.current = data.loginTime || new Date().toISOString()
         } else if (data.status !== 'IDLE') {
           idleStartedAtRef.current = null
         }
+        lastFetchTimeRef.current = Date.now()
         setStatusInfo(data)
       }
     } catch {
@@ -289,22 +293,27 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Live timers
   // -----------------------------------------------------------------------
 
-  // Active timer: counts from when status became ACTIVE (or LAUNCH)
-  const activeTimerStart = statusInfo
-    ? statusInfo.currentBreakStartTime
-      ? null // Currently on break, not active
-      : statusInfo.loginTime // Use loginTime as the reference; subtract break time for display
-    : null
+  // Active timer: only counts up when status is LAUNCH or ACTIVE (not IDLE or BREAK)
+  // We use totalActiveDurationMs from the API plus elapsed time since last fetch
+  const isActiveTimerStatus = currentStatus === 'LAUNCH' || currentStatus === 'ACTIVE'
 
-  const rawActiveElapsed = useCountUp(
-    activeTimerStart,
-    !!statusInfo && statusInfo.status !== 'OFFLINE' && statusInfo.status !== 'BREAK' && statusInfo.status !== 'IDLE',
-  )
+  // Simple elapsed-since-fetch counter (1-second interval)
+  const [liveElapsed, setLiveElapsed] = useState(0)
+  useEffect(() => {
+    if (!isActiveTimerStatus || !lastFetchTimeRef.current) {
+      setLiveElapsed(0)
+      return
+    }
+    const tick = () => setLiveElapsed(Date.now() - lastFetchTimeRef.current)
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [isActiveTimerStatus])
 
-  // Calculate actual active duration: totalActiveDurationMs from API + time since last fetch
-  const activeElapsedMs = statusInfo
-    ? statusInfo.totalActiveDurationMs + (activeTimerStart ? rawActiveElapsed : 0)
-    : 0
+  // Total active duration = API value + live elapsed since last fetch
+  const activeElapsedMs = isActiveTimerStatus && lastFetchTimeRef.current
+    ? (statusInfo?.totalActiveDurationMs ?? 0) + liveElapsed
+    : (statusInfo?.totalActiveDurationMs ?? 0)
 
   // Break timer: counts from when the current break started
   const breakElapsedMs = useCountUp(
@@ -318,12 +327,8 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
     statusInfo?.status === 'IDLE',
   )
 
-  // Total break duration today
-  const totalBreakTodayMs = statusInfo
-    ? statusInfo.status === 'BREAK'
-      ? statusInfo.totalBreakDurationMs - breakElapsedMs + breakElapsedMs
-      : statusInfo.totalBreakDurationMs
-    : 0
+  // Total break duration today (from API — already capped for orphaned breaks)
+  const totalBreakTodayMs = statusInfo?.totalBreakDurationMs ?? 0
 
   // -----------------------------------------------------------------------
   // Render

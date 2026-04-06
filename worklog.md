@@ -446,3 +446,37 @@ Stage Summary:
 - Date filter: Today (default) + Custom date range
 - All existing features preserved (Live Status, Break toggle, auto-refresh)
 - No modifications to any existing features
+---
+Task ID: 18
+Agent: Main Agent
+Task: Fix default status showing Launch instead of Idle on app startup + break time increasing
+
+Work Log:
+- Investigated root cause: `calculateStatusInfo` in user-status/route.ts mapped `action === 'LOGIN'` to status `'LAUNCH'`. Old LOGIN entries from before the IDLE-default fix were causing the status to show as LAUNCH on app startup.
+- Identified that the POST handler for LAUNCH used `action: 'LOGIN'` — same as old login entries, making it impossible to distinguish between old auto-logins and explicit user Launch clicks.
+- Identified orphaned BREAK_START entries (no BREAK_END) causing break time to increase indefinitely when the session ended without properly ending the break.
+- Fixed `src/app/api/user-status/route.ts`:
+  - Changed `action === 'LOGIN'` → status `'IDLE'` (old login entries now treated as default idle state)
+  - Added `action === 'LAUNCH'` → status `'LAUNCH'` (for explicit user-initiated Launch)
+  - Changed POST handler LAUNCH case: `action = 'LAUNCH'` instead of `action = 'LOGIN'`
+  - Added orphaned break cap: breaks exceeding 2 hours without BREAK_END are capped and no longer counted as ongoing
+  - Updated idle duration calculation to treat both IDLE and LOGIN actions as idle period starters
+- Fixed `src/app/api/user-status/team/route.ts`:
+  - Same LOGIN→IDLE mapping fix for admin team monitoring view
+  - Same orphaned break cap (2 hours max)
+  - Same idle duration calculation update
+- Fixed `src/components/recruiter/status-management.tsx`:
+  - Replaced loginTime-based active timer with API-value + elapsed-since-fetch approach (eliminates double-counting)
+  - Active timer now only counts when status is LAUNCH or ACTIVE (never when IDLE or BREAK)
+  - Added `lastFetchTimeRef` to track when API response was received
+  - Idle timer now uses API's loginTime as reference for accurate idle duration display
+  - Simplified total break duration display to use API value directly (already capped server-side)
+- ESLint passes clean, dev server running and responding HTTP 200
+
+Stage Summary:
+- 3 files modified: user-status/route.ts, user-status/team/route.ts, status-management.tsx
+- Default status is now IDLE on app startup (old LOGIN entries treated as IDLE)
+- Break time no longer increases indefinitely (orphaned breaks capped at 2 hours)
+- Active time no longer leaks when status is IDLE
+- Launch button still works correctly (uses distinct LAUNCH action)
+- All existing features preserved, no breaking changes

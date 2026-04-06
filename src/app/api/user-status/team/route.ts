@@ -53,21 +53,30 @@ function calculateMemberStatus(
   }
 
   // If still on break, include current break duration
+  // But cap orphaned breaks at 2 hours (session may have ended without BREAK_END)
   if (breakStart) {
-    breakStartTime = breakStart.toISOString();
-    totalBreakDurationMs += Date.now() - breakStart.getTime();
+    const breakElapsed = Date.now() - breakStart.getTime();
+    const maxBreakMs = 2 * 60 * 60 * 1000; // 2 hours cap
+    if (breakElapsed > maxBreakMs) {
+      totalBreakDurationMs += maxBreakMs;
+      breakStart = null;
+      breakStartTime = null;
+    } else {
+      breakStartTime = breakStart.toISOString();
+      totalBreakDurationMs += breakElapsed;
+    }
   }
 
   // Calculate total idle duration from IDLE action pairs
-  // An IDLE log starts the idle period; a LOGIN, ACTIVE, or BREAK_START ends it
+  // An IDLE or LOGIN log starts the idle period; LAUNCH, ACTIVE, or BREAK_START ends it
   let totalIdleDurationMs = 0;
   let idleStart: Date | null = null;
 
   for (const log of logs) {
-    if (log.action === 'IDLE') {
+    if (log.action === 'IDLE' || log.action === 'LOGIN') {
       idleStart = log.createdAt;
     } else if (
-      (log.action === 'LOGIN' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
+      (log.action === 'LAUNCH' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
       idleStart
     ) {
       totalIdleDurationMs += log.createdAt.getTime() - idleStart.getTime();
@@ -93,8 +102,11 @@ function calculateMemberStatus(
   let status = 'OFFLINE';
 
   if (latestLog) {
-    if (latestLog.action === 'LOGIN') {
+    if (latestLog.action === 'LAUNCH') {
       status = 'LAUNCH';
+    } else if (latestLog.action === 'LOGIN') {
+      // Old login entries treated as IDLE (default state)
+      status = 'IDLE';
     } else if (latestLog.action === 'BREAK_START') {
       status = 'BREAK';
     } else if (latestLog.action === 'BREAK_END' || latestLog.action === 'ACTIVE') {
