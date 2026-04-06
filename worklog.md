@@ -360,3 +360,25 @@ Stage Summary:
 - Announcements create/edit dialog now works reliably on mobile and desktop
 - Button tap events properly registered with event propagation prevention
 - All existing features preserved
+
+---
+Task ID: 15
+Agent: Main Agent
+Task: Fix announcement creation returning 500 error (stale Prisma Client)
+
+Work Log:
+- User reported "Still not able to create announcement" — analyzed error screenshot
+- Tested API directly: POST /api/announcements returned 500 with error "Failed to create announcement"
+- Captured server error log: `TypeError: Cannot read properties of undefined (reading 'create')` at `db.announcement.create()`
+- ROOT CAUSE: The `globalForPrisma.prisma` singleton in `src/lib/db.ts` cached an old Prisma Client instance created BEFORE the Announcement model was added to the schema. Hot module reload in Next.js dev mode doesn't clear `globalThis`, so the stale client persisted.
+- Direct Prisma test (new PrismaClient) confirmed the model works: create/read/delete all pass
+- Fixed `src/lib/db.ts`: Changed caching strategy — in development mode, always create a fresh PrismaClient instance (no globalThis caching). In production, continue caching to avoid connection exhaustion.
+- Restarted dev server with clean `.next` cache
+- Verified fix: POST /api/announcements now returns 201 with correct announcement data
+- Cleaned up test announcement from database
+
+Stage Summary:
+- Root cause: Stale Prisma Client cached in globalForPrisma from before Announcement model was added
+- Fix: db.ts now creates fresh PrismaClient in dev mode, caches only in production
+- Announcement creation confirmed working (201 status)
+- Dev server restarted and running on port 3000
