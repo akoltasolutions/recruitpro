@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { authFetch } from '@/stores/auth-store'
 import { toast } from 'sonner'
+import { useActivityTracker } from '@/hooks/use-activity-tracker'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -217,6 +218,23 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   }, [fetchStatus])
 
   // -----------------------------------------------------------------------
+  // Activity tracker: auto-idle (20 min no calls) + auto-logout (30 min)
+  // -----------------------------------------------------------------------
+
+  const currentStatus = statusInfo?.status || 'OFFLINE'
+
+  const handleAutoIdle = useCallback(() => {
+    // When auto-idle fires, refresh status from API
+    fetchStatus()
+    onStatusChange?.('IDLE')
+  }, [fetchStatus, onStatusChange])
+
+  useActivityTracker({
+    currentStatus,
+    onAutoIdle: handleAutoIdle,
+  })
+
+  // -----------------------------------------------------------------------
   // Status switch handler
   // -----------------------------------------------------------------------
 
@@ -298,7 +316,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Render
   // -----------------------------------------------------------------------
 
-  const currentStatus = statusInfo?.status || 'OFFLINE'
   const cfg = STATUS_CONFIG[currentStatus]
 
   if (loading) {

@@ -51,6 +51,7 @@ import {
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { cn, formatPhoneForWhatsApp } from '@/lib/utils'
+import { recordCallActivity } from '@/lib/call-activity-tracker'
 // format removed — scheduledDate is now a YYYY-MM-DD string, formatted natively
 
 interface AutoDialerProps {
@@ -504,6 +505,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     callInitiatedRef.current = true
     setCallInitiated(true)
     startCallTimer()
+    recordCallActivity() // Reset auto-idle timer on call initiation
 
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
@@ -872,6 +874,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     callInitiatedRef.current = true
     setCallInitiated(true)
     startCallTimer()
+    recordCallActivity() // Reset auto-idle timer on call initiation
 
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
@@ -1041,6 +1044,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
       const result = await res.json()
       console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
+      recordCallActivity() // Reset auto-idle timer on call record save
 
       toast.success('Call record saved! Moving to next contact...')
       setIsDispositionModalOpen(false)
@@ -1100,6 +1104,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
       const result = await res.json()
       console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
+      recordCallActivity() // Reset auto-idle timer on call record save
 
       toast.success('Call record saved')
       setIsDispositionModalOpen(false)
