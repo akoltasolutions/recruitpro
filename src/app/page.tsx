@@ -16,6 +16,7 @@ import { MessageTemplates } from '@/components/admin/message-templates'
 import { TeamPerformance } from '@/components/admin/team-performance'
 import { TeamMonitoring } from '@/components/admin/team-monitoring'
 import { AdminSettings } from '@/components/admin/admin-settings'
+import { AnnouncementsManagement } from '@/components/admin/announcements-management'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { AutoDialer } from '@/components/recruiter/auto-dialer'
@@ -28,7 +29,7 @@ import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
 type AuthView = 'login' | 'signup' | 'forgot-password'
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals' | 'settings'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals' | 'settings' | 'announcements'
 type RecruiterPage = 'home' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
@@ -192,6 +193,7 @@ function AppContent() {
         case 'users': return <UserManagement />
         case 'approvals': return <ApprovalRequests />
         case 'settings': return <AdminSettings userId={user.id} />
+        case 'announcements': return <AnnouncementsManagement />
         default: return <AdminDashboard />
       }
     }

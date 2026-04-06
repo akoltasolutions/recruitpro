@@ -13,6 +13,8 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { formatPhoneForWhatsApp } from '@/lib/utils'
+import { StatusManagement } from '@/components/recruiter/status-management'
+import { AnnouncementsSection } from '@/components/recruiter/announcements-section'
 
 interface RecruiterDashboardProps {
   userId: string
@@ -77,6 +79,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
   const [callRecords, setCallRecords] = useState<CallRecord[]>([])
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [userStatus, setUserStatus] = useState<string>('LAUNCH')
 
   const initialSelected = useRef(false)
 
@@ -165,6 +168,12 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
         icon={Phone}
       />
 
+      {/* Status Management — Launch / Break / Active */}
+      <StatusManagement
+        userId={userId}
+        onStatusChange={(status) => setUserStatus(status)}
+      />
+
       {/* Stats Cards — Daily Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
@@ -199,13 +208,21 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
-        <Button
-          onClick={() => onNavigate('pending')}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
-        >
-          <Play className="h-4 w-4 mr-2" />
-          Start Calling
-        </Button>
+        {userStatus !== 'ACTIVE' ? (
+          <div className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
+              ⚠️ Calling is disabled — Please set your status to <strong>Active</strong> to start making calls.
+            </p>
+          </div>
+        ) : (
+          <Button
+            onClick={() => onNavigate('pending')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Start Calling
+          </Button>
+        )}
         <Button variant="outline" onClick={() => onNavigate('pipeline')}>
           <GitBranch className="h-4 w-4 mr-2" />
           Pipeline
@@ -289,6 +306,9 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
           </CardContent>
         </Card>
       )}
+
+      {/* Instructions / Announcements */}
+      <AnnouncementsSection />
 
       {/* Current Call List */}
       {callLists.length === 0 ? (

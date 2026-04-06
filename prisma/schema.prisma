@@ -152,6 +152,17 @@ model WhatsAppMessage {
 
 // ==================== NEW MODELS ====================
 
+// Announcements / Instructions from admin to recruiters
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  isActive  Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // Activity logging for recruiter tracking / attendance
 model ActivityLog {
   id            String   @id @default(cuid())

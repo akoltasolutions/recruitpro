@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Tag, PhoneCall, MessageSquare, Building2, Users, LogOut,
-  Menu, Headphones, BarChart3, UserCheck, Activity, Settings,
+  Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone,
 } from 'lucide-react'
 
 const menuItems = [
@@ -26,6 +26,7 @@ const menuItems = [
   { key: 'call-lists', label: 'Call List', icon: PhoneCall },
   { key: 'templates', label: 'Message Templates', icon: MessageSquare },
   { key: 'clients', label: 'Client Name', icon: Building2 },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'users', label: 'User Management', icon: Users },
   { key: 'approvals', label: 'Approval Requests', icon: UserCheck },
   { key: 'settings', label: 'Settings', icon: Settings },

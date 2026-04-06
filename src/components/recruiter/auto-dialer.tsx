@@ -485,6 +485,21 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       return
     }
 
+    // ===== STATUS CHECK: Only allow calls when status is ACTIVE =====
+    try {
+      const rawStatus = localStorage.getItem('recruiter_current_status')
+      if (rawStatus && rawStatus !== 'ACTIVE') {
+        toast.error('⚠️ Please set your status to Active before making calls', { duration: 3000 })
+        stopCallTimer()
+        callInitiatedRef.current = false
+        setCallInitiated(false)
+        clearCallState()
+        return
+      }
+    } catch {
+      // If localStorage read fails, allow the call (non-blocking)
+    }
+
     // Mark call as initiated
     callInitiatedRef.current = true
     setCallInitiated(true)
@@ -512,10 +527,25 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       // Bridge not available — fall through to tel: link
     }
 
+    // ===== ENHANCED: Try window._autoDial bridge (custom WebView injection) =====
+    // Some WebView implementations inject a custom global function for direct calling
+    try {
+      const autoDial = (window as unknown as Record<string, unknown>)._autoDial as
+        ((phoneNumber: string) => void) | undefined
+      if (typeof autoDial === 'function') {
+        console.log('[AutoDialer] Using window._autoDial for direct dial:', phone)
+        autoDial(phone)
+        return
+      }
+    } catch {
+      // Not available — fall through
+    }
+
     // ===== FALLBACK: tel: link (ACTION_DIAL) — opens phone dialer with number pasted =====
     // This is the standard web behavior; requires user to press Call in the dialer.
     console.log('[AutoDialer] AndroidBridge.makeCall not available, falling back to tel: link')
     triggerNativeLink(`tel:${phone}`)
+    toast.info('Opening dialer... Please press Call to connect.', { duration: 2000 })
   }
 
   // Start pre-call countdown — when it reaches 0, executeCall is called

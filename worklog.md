@@ -224,3 +224,70 @@ Stage Summary:
 - "function is pending state" is a platform-level issue — FC function is still transitioning from a previous deployment
 - Resolution: Wait 3-5 minutes for platform to clear the pending state, then retry deployment
 - If error persists, it may indicate the FC function needs to be manually reset from the Alibaba Cloud console
+
+---
+## Task ID: 11
+### Agent: Component Builder
+### Work Task
+Create three new React components: status-management.tsx, announcements-section.tsx, and announcements-management.tsx.
+
+### Work Summary
+- **Created `/src/components/recruiter/status-management.tsx`**: Recruiter shift status management card with 3 status buttons (Launch/Break/Active), live counting timers using custom `useCountUp` hook, login time display, total break duration, active duration tracking, confirmation dialog before status switches, auto-refresh every 60 seconds, `onStatusChange` callback prop, and responsive mobile-first design using shadcn/ui Card/Button/Badge.
+
+- **Created `/src/components/recruiter/announcements-section.tsx`**: Recruiter announcements display section fetching from GET /api/announcements. Shows title, content, relative time via date-fns `formatDistanceToNow`, "NEW" badge on latest announcement, empty state, error state, max-height scrollable list, and responsive layout.
+
+- **Created `/src/components/admin/announcements-management.tsx`**: Admin announcements CRUD management with list/cards view, add/edit via Dialog with title+content fields and validation, toggle active/inactive, delete with AlertDialog confirmation, responsive mobile/desktop layouts, loading skeleton, empty state with CTA, and toast notifications via sonner.
+
+- All components follow existing project patterns: `'use client'` directive, `authFetch` from auth-store, shadcn/ui components, lucide-react icons, TypeScript strict typing, ESLint passes clean with zero errors.
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: User App & Admin Panel Enhancements - Automatic Dialer (Status Management, Team Monitoring, Announcements, Dialer Fix)
+
+Work Log:
+- Updated Prisma schema: added Announcement model (id, title, content, isActive, createdBy, timestamps)
+- Pushed schema to database successfully, regenerated Prisma client
+- Created 4 new API routes:
+  - GET/POST /api/user-status - Get/set recruiter work status (LAUNCH/BREAK/ACTIVE)
+  - GET /api/user-status/team - Get all team members' statuses with durations (admin only)
+  - GET/POST /api/announcements - List/create announcements
+  - PUT/DELETE /api/announcements/[id] - Update/delete announcements (admin only)
+- Created StatusManagement component for recruiter dashboard with:
+  - 3 status buttons (Launch/Break/Active) with confirmation dialog
+  - Live counting timers for active/break duration
+  - Login time and break duration tracking
+  - Status saved to localStorage for dialer restriction check
+  - Auto-refresh every 60 seconds
+- Created AnnouncementsSection component for recruiter dashboard:
+  - Displays active announcements from admin
+  - "NEW" badge on latest announcement
+  - Relative time formatting
+  - Scrollable list with max height
+- Created AnnouncementsManagement component for admin panel:
+  - Full CRUD: Create, Edit, Toggle active/inactive, Delete
+  - Dialog form with title and content validation
+  - Responsive mobile/desktop layouts
+- Updated recruiter-dashboard.tsx:
+  - Added StatusManagement card at top of dashboard
+  - Added AnnouncementsSection before call list section
+  - Added call restriction: "Start Calling" button shows warning when status ≠ ACTIVE
+- Updated page.tsx:
+  - Added 'announcements' to AdminPage type union
+  - Added AnnouncementsManagement case in admin router
+- Updated admin-layout.tsx:
+  - Added Megaphone icon import
+  - Added 'announcements' menu item with Megaphone icon to sidebar
+- Enhanced auto-dialer.tsx:
+  - Added status check before allowing calls (reads localStorage)
+  - Added window._autoDial bridge fallback for custom WebView implementations
+  - Added toast notification when falling back to tel: link
+- Build successful: all 37 routes compiled, lint passes clean
+
+Stage Summary:
+- 4 new API endpoints created for status management and announcements
+- 3 new UI components created (StatusManagement, AnnouncementsSection, AnnouncementsManagement)
+- Recruiter dashboard now has status management with call restriction
+- Admin panel now has Announcements management page in sidebar
+- Dialer enhanced with additional auto-call bridge support and status gating
+- All existing features preserved, no breaking changes
