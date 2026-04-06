@@ -291,3 +291,38 @@ Stage Summary:
 - Admin panel now has Announcements management page in sidebar
 - Dialer enhanced with additional auto-call bridge support and status gating
 - All existing features preserved, no breaking changes
+
+---
+Task ID: 13
+Agent: Main Agent
+Task: Add Idle status and Select placeholder to User Status Management
+
+Work Log:
+- Updated `src/components/recruiter/status-management.tsx`:
+  - Added IDLE to UserStatus type (IDLE | LAUNCH | BREAK | ACTIVE | OFFLINE)
+  - Added IDLE to STATUS_CONFIG with 😴 emoji, slate color theme, "No activity" description
+  - Changed OFFLINE label to "Select" with ⚪ emoji and "Select your status" description — this is the default placeholder
+  - Added Idle button (😴) with Moon icon before Launch button
+  - Updated live timer to pause when status is IDLE
+  - Updated active timer display to show static duration when IDLE or OFFLINE
+- Updated `src/app/api/user-status/route.ts`:
+  - Added IDLE to valid statuses array
+  - Added IDLE case in status switch: creates IDLE activity log, ends break first if currently on break
+  - Added IDLE detection in calculateStatusInfo: checks for IDLE action and IDLE status fields
+- Updated `src/app/api/user-status/team/route.ts`:
+  - Added IDLE detection in calculateMemberStatus for admin team view
+  - Handles both action === 'IDLE' and status === 'IDLE' log entries
+- Updated `src/components/admin/team-monitoring.tsx`:
+  - Changed IDLE config from amber to slate color theme with 😴 emoji and Moon icon
+  - Added Moon icon import
+  - Added isIdle helper function for future use
+  - Differentiated IDLE from ON_BREAK visually (slate vs amber colors)
+- ESLint passes clean, dev server returns HTTP 200
+
+Stage Summary:
+- 4 files modified to add IDLE status and SELECT placeholder
+- Status options now: Idle (😴 default no activity), Launch (🚀), Break (☕), Active (✅)
+- OFFLINE now shows as "Select ⚪" — placeholder when no status is explicitly chosen
+- Backend API fully supports IDLE status transitions
+- Admin team monitoring shows IDLE with distinct slate color (different from amber ON_BREAK)
+- All existing features preserved, no breaking changes

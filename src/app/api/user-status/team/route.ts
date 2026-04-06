@@ -78,10 +78,14 @@ function calculateMemberStatus(
       status = 'BREAK';
     } else if (latestLog.action === 'BREAK_END' || latestLog.action === 'ACTIVE') {
       status = 'ACTIVE';
+    } else if (latestLog.action === 'IDLE') {
+      status = 'IDLE';
     } else if (latestLog.status === 'ON_BREAK') {
       status = 'BREAK';
     } else if (latestLog.status === 'ACTIVE') {
       status = 'ACTIVE';
+    } else if (latestLog.status === 'IDLE') {
+      status = 'IDLE';
     }
   }
 

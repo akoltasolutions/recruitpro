@@ -83,10 +83,14 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
       status = 'BREAK';
     } else if (latestLog.action === 'BREAK_END' || latestLog.action === 'ACTIVE') {
       status = 'ACTIVE';
+    } else if (latestLog.action === 'IDLE') {
+      status = 'IDLE';
     } else if (latestLog.status === 'ON_BREAK') {
       status = 'BREAK';
     } else if (latestLog.status === 'ACTIVE') {
       status = 'ACTIVE';
+    } else if (latestLog.status === 'IDLE') {
+      status = 'IDLE';
     }
   }
 
@@ -119,7 +123,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/user-status — Update user status (LAUNCH, BREAK, ACTIVE)
+// POST /api/user-status — Update user status (IDLE, LAUNCH, BREAK, ACTIVE)
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -130,10 +134,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { status } = body;
 
-    const validStatuses = ['LAUNCH', 'BREAK', 'ACTIVE'];
+    const validStatuses = ['IDLE', 'LAUNCH', 'BREAK', 'ACTIVE'];
     if (!status || !validStatuses.includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: LAUNCH, BREAK, ACTIVE' },
+        { error: 'Invalid status. Must be one of: IDLE, LAUNCH, BREAK, ACTIVE' },
         { status: 400 }
       );
     }
@@ -145,6 +149,21 @@ export async function POST(request: NextRequest) {
     let logStatus: string;
 
     switch (status) {
+      case 'IDLE':
+        // If on break, end the break first
+        if (currentInfo.status === 'BREAK') {
+          await db.activityLog.create({
+            data: {
+              userId: auth.userId,
+              action: 'BREAK_END',
+              status: 'IDLE',
+              userAgent: request.headers.get('user-agent') || null,
+            },
+          });
+        }
+        action = 'IDLE';
+        logStatus = 'IDLE';
+        break;
       case 'LAUNCH':
         action = 'LOGIN';
         logStatus = 'ACTIVE';

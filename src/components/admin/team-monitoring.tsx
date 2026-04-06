@@ -17,6 +17,7 @@ import {
   Users,
   Timer,
   Activity,
+  Moon,
 } from 'lucide-react';
 import { authFetch } from '@/stores/auth-store';
 import { formatDistanceToNow } from 'date-fns';
@@ -74,12 +75,12 @@ const STATUS_CONFIG: Record<
     icon: Coffee,
   },
   IDLE: {
-    emoji: '🟡',
+    emoji: '😴',
     label: 'Idle',
-    color: 'amber',
-    bgClass: 'bg-amber-100 dark:bg-amber-950',
-    textClass: 'text-amber-700 dark:text-amber-300',
-    icon: Clock,
+    color: 'slate',
+    bgClass: 'bg-slate-100 dark:bg-slate-950',
+    textClass: 'text-slate-600 dark:text-slate-400',
+    icon: Moon,
   },
   OFFLINE: {
     emoji: '🔴',
@@ -271,6 +272,7 @@ export function TeamMonitoring() {
 
   const isOnBreak = (status: StatusKey) => status === 'ON_BREAK';
   const isOffline = (status: StatusKey) => status === 'OFFLINE';
+  const isIdle = (status: StatusKey) => status === 'IDLE';
 
   // =========================================================================
   // RENDER

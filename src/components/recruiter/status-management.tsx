@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Rocket, Coffee, CheckCircle, Clock, Play, Pause, RefreshCw } from 'lucide-react'
+import { Rocket, Coffee, CheckCircle, Clock, Play, Pause, RefreshCw, Moon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 // Types
 // ---------------------------------------------------------------------------
 
-type UserStatus = 'LAUNCH' | 'BREAK' | 'ACTIVE' | 'OFFLINE'
+type UserStatus = 'IDLE' | 'LAUNCH' | 'BREAK' | 'ACTIVE' | 'OFFLINE'
 
 interface StatusInfo {
   userId: string
@@ -43,6 +43,15 @@ const STATUS_CONFIG: Record<
     description: string
   }
 > = {
+  IDLE: {
+    label: 'Idle',
+    emoji: '😴',
+    bgClass: 'bg-slate-50 dark:bg-slate-950/40',
+    textClass: 'text-slate-500 dark:text-slate-400',
+    badgeBg: 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-950 dark:text-slate-400 dark:border-slate-800',
+    activeBtnClass: 'bg-slate-600 hover:bg-slate-700 text-white shadow-sm',
+    description: 'No activity',
+  },
   LAUNCH: {
     label: 'Launch',
     emoji: '🚀',
@@ -71,13 +80,13 @@ const STATUS_CONFIG: Record<
     description: 'Ready to call',
   },
   OFFLINE: {
-    label: 'Offline',
-    emoji: '⚫',
+    label: 'Select',
+    emoji: '⚪',
     bgClass: 'bg-gray-50 dark:bg-gray-950/40',
     textClass: 'text-gray-500',
     badgeBg: 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-950 dark:text-gray-400 dark:border-gray-800',
     activeBtnClass: 'bg-gray-600 hover:bg-gray-700 text-white shadow-sm',
-    description: 'Not logged in',
+    description: 'Select your status',
   },
 }
 
@@ -213,6 +222,12 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
 
   const handleStatusSwitch = useCallback(
     async (target: UserStatus) => {
+      // Don't switch to OFFLINE (that's a system status, not user-selectable)
+      if (target === 'OFFLINE') {
+        setConfirmTarget(null)
+        return
+      }
+
       // Don't switch if already on the same status (except LAUNCH can be re-done)
       if (statusInfo && statusInfo.status === target && target !== 'LAUNCH') {
         setConfirmTarget(null)
@@ -258,7 +273,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
 
   const rawActiveElapsed = useCountUp(
     activeTimerStart,
-    !!statusInfo && statusInfo.status !== 'OFFLINE' && statusInfo.status !== 'BREAK',
+    !!statusInfo && statusInfo.status !== 'OFFLINE' && statusInfo.status !== 'BREAK' && statusInfo.status !== 'IDLE',
   )
 
   // Calculate actual active duration: totalActiveDurationMs from API + time since last fetch
@@ -313,7 +328,9 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
               ? 'bg-amber-500'
               : currentStatus === 'ACTIVE'
                 ? 'bg-emerald-500'
-                : 'bg-gray-400'
+                : currentStatus === 'IDLE'
+                  ? 'bg-slate-400'
+                  : 'bg-gray-300'
         }`}
       />
 
@@ -365,7 +382,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
                 Active
               </span>
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                {currentStatus === 'BREAK'
+                {currentStatus === 'BREAK' || currentStatus === 'IDLE' || currentStatus === 'OFFLINE'
                   ? formatDuration(statusInfo?.totalActiveDurationMs ?? 0)
                   : formatDuration(activeElapsedMs)}
               </span>
@@ -397,6 +414,27 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
 
         {/* ── Status Buttons ────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
+          {/* Idle button */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmTarget('IDLE')}
+            disabled={switching}
+            className={
+              currentStatus === 'IDLE'
+                ? STATUS_CONFIG.IDLE.activeBtnClass
+                : 'gap-1.5'
+            }
+          >
+            {switching && confirmTarget === 'IDLE' ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Moon className="h-3.5 w-3.5" />
+            )}
+            😴 Idle
+          </Button>
+
+          {/* Launch button */}
           <Button
             size="sm"
             variant="outline"
@@ -416,6 +454,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             🚀 Launch
           </Button>
 
+          {/* Break button */}
           <Button
             size="sm"
             variant="outline"
@@ -435,6 +474,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             ☕ Break
           </Button>
 
+          {/* Active button */}
           <Button
             size="sm"
             variant="outline"
