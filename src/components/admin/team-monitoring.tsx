@@ -31,15 +31,17 @@ import { RecruiterReport } from '@/components/admin/recruiter-report';
 interface LiveStatus {
   userId: string;
   name: string;
-  status: 'ACTIVE' | 'ON_CALL' | 'ON_BREAK' | 'IDLE' | 'OFFLINE';
+  status: 'ACTIVE' | 'LAUNCH' | 'ON_CALL' | 'ON_BREAK' | 'IDLE' | 'OFFLINE';
   lastActivity: string | null;
   totalHoursToday: number;
   loginTime: string | null;
+  breakStartTime: string | null;
+  totalBreakDurationToday: number;
+  totalActiveDurationToday: number;
 }
 
-interface ActivityResponse {
-  logs: unknown[];
-  liveStatuses: LiveStatus[];
+interface TeamStatusResponse {
+  team: LiveStatus[];
 }
 
 // ---------------------------------------------------------------------------
@@ -53,12 +55,20 @@ const STATUS_CONFIG: Record<
   { emoji: string; label: string; color: string; bgClass: string; textClass: string; icon: typeof Monitor }
 > = {
   ACTIVE: {
-    emoji: '🟢',
+    emoji: '✅',
     label: 'Active',
     color: 'emerald',
     bgClass: 'bg-emerald-100 dark:bg-emerald-950',
     textClass: 'text-emerald-700 dark:text-emerald-300',
     icon: Activity,
+  },
+  LAUNCH: {
+    emoji: '🚀',
+    label: 'Launch',
+    color: 'blue',
+    bgClass: 'bg-blue-100 dark:bg-blue-950',
+    textClass: 'text-blue-700 dark:text-blue-300',
+    icon: Play,
   },
   ON_CALL: {
     emoji: '📞',
@@ -69,8 +79,8 @@ const STATUS_CONFIG: Record<
     icon: Phone,
   },
   ON_BREAK: {
-    emoji: '🟡',
-    label: 'On Break',
+    emoji: '☕',
+    label: 'Break',
     color: 'amber',
     bgClass: 'bg-amber-100 dark:bg-amber-950',
     textClass: 'text-amber-700 dark:text-amber-300',
@@ -85,11 +95,11 @@ const STATUS_CONFIG: Record<
     icon: Moon,
   },
   OFFLINE: {
-    emoji: '🔴',
+    emoji: '⚪',
     label: 'Offline',
-    color: 'red',
-    bgClass: 'bg-red-100 dark:bg-red-950',
-    textClass: 'text-red-700 dark:text-red-300',
+    color: 'gray',
+    bgClass: 'bg-gray-100 dark:bg-gray-950',
+    textClass: 'text-gray-600 dark:text-gray-400',
     icon: UserX,
   },
 };
@@ -97,12 +107,13 @@ const STATUS_CONFIG: Record<
 function getStatusBadgeVariant(status: StatusKey) {
   const map: Record<StatusKey, 'default' | 'secondary' | 'outline' | 'destructive'> = {
     ACTIVE: 'default',
+    LAUNCH: 'default',
     ON_CALL: 'default',
     ON_BREAK: 'secondary',
     IDLE: 'secondary',
-    OFFLINE: 'destructive',
+    OFFLINE: 'outline',
   };
-  return map[status];
+  return map[status] || 'outline';
 }
 
 // ---------------------------------------------------------------------------
@@ -190,14 +201,28 @@ export function TeamMonitoring() {
 
   const fetchStatuses = useCallback(async () => {
     try {
-      const res = await authFetch('/api/activity');
+      // Use the accurate /api/user-status/team endpoint (proper idle/break tracking)
+      const res = await authFetch('/api/user-status/team');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: ActivityResponse = await res.json();
-      setStatuses(data.liveStatuses ?? []);
+      const data = await res.json();
+      const team = data.team || [];
+      // Map API response to LiveStatus format
+      const mapped: LiveStatus[] = team.map((m: Record<string, unknown>) => ({
+        userId: m.userId as string,
+        name: m.name as string,
+        status: (m.status as LiveStatus['status']) || 'OFFLINE',
+        lastActivity: m.lastActivity as string | null,
+        totalHoursToday: Math.round(((m.totalActiveDurationToday as number) || 0) / 3600 * 100) / 100,
+        loginTime: m.loginTime as string | null,
+        breakStartTime: (m.breakStartTime as string | null) || null,
+        totalBreakDurationToday: (m.totalBreakDurationToday as number) || 0,
+        totalActiveDurationToday: (m.totalActiveDurationToday as number) || 0,
+      }));
+      setStatuses(mapped);
       setError(null);
     } catch (err) {
-      console.error('Failed to fetch activity:', err);
-      setError('Failed to load team activity. Retrying…');
+      console.error('Failed to fetch team status:', err);
+      setError('Failed to load team activity. Please try again.');
     } finally {
       setLoading(false);
       setLastRefresh(new Date());
@@ -265,8 +290,9 @@ export function TeamMonitoring() {
 
   const summaryCards: { key: StatusKey; label: string; icon: typeof Monitor }[] = [
     { key: 'ACTIVE', label: 'Active', icon: Activity },
+    { key: 'LAUNCH', label: 'Launch', icon: Play },
     { key: 'ON_CALL', label: 'On Call', icon: Phone },
-    { key: 'ON_BREAK', label: 'On Break', icon: Coffee },
+    { key: 'ON_BREAK', label: 'Break', icon: Coffee },
     { key: 'IDLE', label: 'Idle', icon: Clock },
     { key: 'OFFLINE', label: 'Offline', icon: UserX },
   ];
@@ -275,7 +301,6 @@ export function TeamMonitoring() {
   // Render helpers
   // -----------------------------------------------------------------------
 
-  const isOnBreak = (status: StatusKey) => status === 'ON_BREAK';
   const isOffline = (status: StatusKey) => status === 'OFFLINE';
 
   // =========================================================================
@@ -415,7 +440,6 @@ export function TeamMonitoring() {
           {statuses.map((recruiter) => {
             const cfg = STATUS_CONFIG[recruiter.status];
             const StatusIcon = cfg.icon;
-            const breaking = isOnBreak(recruiter.status);
             const offline = isOffline(recruiter.status);
             const toggling = togglingUserId === recruiter.userId;
 
@@ -455,18 +479,18 @@ export function TeamMonitoring() {
                     {!offline && (
                       <Button
                         size="sm"
-                        variant={breaking ? 'default' : 'outline'}
+                        variant={recruiter.status === 'ON_BREAK' ? 'default' : 'outline'}
                         onClick={() => handleToggleBreak(recruiter)}
                         disabled={toggling}
                         className={
-                          breaking
+                          recruiter.status === 'ON_BREAK'
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white shrink-0'
                             : 'shrink-0'
                         }
                       >
                         {toggling ? (
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : breaking ? (
+                        ) : recruiter.status === 'ON_BREAK' ? (
                           <>
                             <Play className="h-3.5 w-3.5 mr-1" />
                             Resume
@@ -491,10 +515,12 @@ export function TeamMonitoring() {
                       <Timer className="h-3 w-3" />
                       {formatHours(recruiter.totalHoursToday)}
                     </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Activity className="h-3 w-3" />
-                      {relativeTime(recruiter.lastActivity)}
-                    </span>
+                    {recruiter.lastActivity && (
+                      <span className="inline-flex items-center gap-1">
+                        <Activity className="h-3 w-3" />
+                        {relativeTime(recruiter.lastActivity)}
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -522,7 +548,6 @@ export function TeamMonitoring() {
               {statuses.map((recruiter, idx) => {
                 const cfg = STATUS_CONFIG[recruiter.status];
                 const StatusIcon = cfg.icon;
-                const breaking = isOnBreak(recruiter.status);
                 const offline = isOffline(recruiter.status);
                 const toggling = togglingUserId === recruiter.userId;
 
@@ -587,18 +612,18 @@ export function TeamMonitoring() {
                       {!offline ? (
                         <Button
                           size="sm"
-                          variant={breaking ? 'default' : 'outline'}
+                          variant={recruiter.status === 'ON_BREAK' ? 'default' : 'outline'}
                           onClick={() => handleToggleBreak(recruiter)}
                           disabled={toggling}
                           className={
-                            breaking
+                            recruiter.status === 'ON_BREAK'
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                               : ''
                           }
                         >
                           {toggling ? (
                             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          ) : breaking ? (
+                          ) : recruiter.status === 'ON_BREAK' ? (
                             <>
                               <Play className="h-3.5 w-3.5 mr-1" />
                               Resume
