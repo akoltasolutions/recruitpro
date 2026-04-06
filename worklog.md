@@ -382,3 +382,67 @@ Stage Summary:
 - Fix: db.ts now creates fresh PrismaClient in dev mode, caches only in production
 - Announcement creation confirmed working (201 status)
 - Dev server restarted and running on port 3000
+
+---
+Task ID: 16
+Agent: Main Agent
+Task: Fix "1 Issue" red badge — TypeScript compilation errors
+
+Work Log:
+- Identified the red "1 Issue" badge as Next.js 16 Turbopack compilation error indicator
+- Ran `npx tsc --noEmit` and found 3 TypeScript errors in src/:
+  1. `password-input.tsx:5` — `InputProps` not exported from Input component
+  2. `announcements-management.tsx:673` — `onPointerDownOutside` doesn't exist on `AlertDialogContent`
+  3. `recruiter-dashboard.tsx:173` — `userId` prop doesn't exist on `StatusManagementProps`
+- Fixed password-input.tsx: Changed to `React.ComponentProps<typeof Input>` pattern
+- Fixed announcements-management.tsx: Removed unsupported props from AlertDialogContent
+- Fixed recruiter-dashboard.tsx: Removed invalid userId prop from StatusManagement
+- Also cleared corrupted .next Turbopack cache which was causing stale error overlay
+- ESLint passes clean, TypeScript clean (no src/ errors), dev server running clean
+
+Stage Summary:
+- 3 TypeScript errors fixed that were causing the "1 Issue" badge
+- Turbopack cache cleared to remove stale error overlay state
+- All existing features preserved, no breaking changes
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: Add Export Recruiter Report (Excel Download) under Team Monitoring
+
+Work Log:
+- Installed exceljs npm package for .xlsx generation
+- Created `src/app/api/reports/export/route.ts` — backend API endpoint:
+  - GET with `dateFrom`, `dateTo`, `format` query params
+  - Admin-only authentication check
+  - Fetches all active recruiters, activity logs, call records, dispositions
+  - Calculates time hours per status (LOGIN, ACTIVE, BREAK, IDLE, LAUNCH) using IST 08:00-19:00 work window
+  - Pairs consecutive activity log entries to calculate duration periods
+  - Aggregates call stats: Connected, Not Answered, Shortlisted, Other dispositions
+  - Returns JSON preview when `format=json` requested
+  - Generates styled Excel (.xlsx) with ExcelJS: title, date range, headers, data rows with alternating colors, auto-filter
+  - Fixed Turbopack TDZ (Temporal Dead Zone) issue by inlining all helper functions inside GET handler
+- Created `src/components/admin/recruiter-report.tsx` — frontend UI component:
+  - Date filter: "Today" (default) + "Custom Range" with native date inputs
+  - Summary bar: Recruiter count, total login hours, total calls, shortlisted
+  - Preview table: responsive mobile cards + desktop table with all columns
+  - Desktop table includes totals footer row
+  - Export button triggers Excel download via blob URL
+  - Loading skeleton, empty state for no data
+  - Working hours note displayed: "08:00 AM – 07:00 PM IST"
+- Updated `src/components/admin/team-monitoring.tsx`:
+  - Added tab switcher: "Live Status" (original) and "Export Reports" (new)
+  - Imported RecruiterReport component and FileSpreadsheet icon
+  - Wrapped existing live monitoring content in conditional render
+  - Tab bar with pill-style active indicator
+  - All existing live monitoring features completely preserved
+- ESLint passes clean, dev server verified
+- Tested end-to-end: JSON preview returns correct data, Excel file downloads (7.3KB)
+
+Stage Summary:
+- New feature: Export Recruiter Report integrated under Admin Panel → Team Monitoring
+- Tab switcher: "Live Status" | "Export Reports" with pill-style tabs
+- Excel export with: recruiter details, time tracking, call performance, IST work window
+- Date filter: Today (default) + Custom date range
+- All existing features preserved (Live Status, Break toggle, auto-refresh)
+- No modifications to any existing features

@@ -18,9 +18,11 @@ import {
   Timer,
   Activity,
   Moon,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { authFetch } from '@/stores/auth-store';
 import { formatDistanceToNow } from 'date-fns';
+import { RecruiterReport } from '@/components/admin/recruiter-report';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,7 +174,10 @@ function MobileCardSkeleton({ rows = 4 }: { rows?: number }) {
 // Main component
 // ---------------------------------------------------------------------------
 
+type MonitoringTab = 'live' | 'reports';
+
 export function TeamMonitoring() {
+  const [activeTab, setActiveTab] = useState<MonitoringTab>('live');
   const [statuses, setStatuses] = useState<LiveStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
@@ -292,6 +297,34 @@ export function TeamMonitoring() {
           </div>
         </div>
 
+        {/* Tab switcher */}
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'live'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Activity className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Live Status</span>
+            <span className="sm:hidden">Live</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'reports'
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Export Reports</span>
+            <span className="sm:hidden">Reports</span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-3">
           {lastRefresh && (
             <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
@@ -315,6 +348,11 @@ export function TeamMonitoring() {
         </div>
       </div>
 
+      {/* ── Reports Tab ──────────────────────────────────────────────── */}
+      {activeTab === 'reports' && <RecruiterReport />}
+
+      {/* ── Live Status Tab ────────────────────────────────────────────── */}
+      {activeTab === 'live' && <>
       {/* ── Summary cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {summaryCards.map(({ key, label, icon: Icon }) => {
@@ -584,6 +622,7 @@ export function TeamMonitoring() {
           </CardContent>
         </Card>
       )}
+      </>}
     </div>
   );
 }
