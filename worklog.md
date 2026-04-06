@@ -632,3 +632,46 @@ Stage Summary:
 - Idle and Offline status actions confirmed already working in Action dropdown
 - Hours calculation bug fixed — now shows correct values (e.g., 8m instead of 134h)
 - ESLint clean, no regressions
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix recruiter able to make calls while in IDLE status
+
+Work Log:
+- Analyzed screenshot: recruiter in IDLE status was able to call candidates via auto-dialer
+- Found 3 root causes:
+
+  1. **executeCall() status check was inverted** — checked `if (rawStatus && rawStatus !== 'ACTIVE')` which meant empty/null localStorage PASSED the check (null is falsy). When localStorage had no value (user never manually changed status), the check allowed calls regardless of actual status.
+
+  2. **localStorage not synced on initial fetch** — `recruiter_current_status` was only saved to localStorage when user manually clicked a status button. On page load/refresh, even though API returned IDLE, localStorage was empty, so the check passed.
+
+  3. **No status check in handleStartCalling() or startPreCallTimer()** — Only executeCall() had (buggy) check. Users could start calling session or begin countdown timer regardless of status.
+
+- Fixed `auto-dialer.tsx`:
+  - Added `canMakeCalls()` helper that returns true only when status is ACTIVE or LAUNCH
+  - Fixed `executeCall()` to block when localStorage is empty/null AND when status is not ACTIVE/LAUNCH
+  - Changed catch block from "allow call" to "block call" (safer default)
+  - Added status check in `startPreCallTimer()` — blocks countdown from starting
+  - Added status check in `skipPreCallAndDial()` — blocks immediate call during countdown
+  - Added status check in `handleStartCalling()` — blocks entering calling mode
+  - Added status fetch on mount via `/api/user-status` to sync localStorage even when user navigates directly to auto-dialer
+  - Added amber warning banner in list-summary screen when status doesn't allow calling
+
+- Fixed `status-management.tsx`:
+  - Now saves status to localStorage on EVERY fetch (not just manual switch), ensuring auto-dialer always has up-to-date status
+
+- Fixed `recruiter-dashboard.tsx`:
+  - Updated "Calling is disabled" check to allow both ACTIVE and LAUNCH statuses
+  - Updated warning message to mention both Active and Launch
+
+Files Modified:
+1. src/components/recruiter/auto-dialer.tsx - 6 changes (canMakeCalls helper, executeCall fix, 3 new status checks, mount sync, warning banner)
+2. src/components/recruiter/status-management.tsx - localStorage sync on every fetch
+3. src/components/recruiter/recruiter-dashboard.tsx - Allow LAUNCH status for calling
+
+Stage Summary:
+- Recruiters in IDLE, ON_BREAK, or OFFLINE status can NO longer make calls
+- Only ACTIVE and LAUNCH statuses allow calling (both indicate recruiter is working)
+- Status is synced from API on every component mount, not just on manual switch
+- Warning banners shown in both dashboard and auto-dialer when calling is disabled
+- ESLint clean, zero errors, dev server running

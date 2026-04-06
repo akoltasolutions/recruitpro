@@ -211,6 +211,8 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         }
         lastFetchTimeRef.current = Date.now()
         setStatusInfo(data)
+        // Sync status to localStorage so AutoDialer can check it (on every fetch, not just manual switch)
+        try { localStorage.setItem('recruiter_current_status', data.status) } catch { /* ignore */ }
         // Notify parent of actual status on initial fetch (not on subsequent refreshes)
         if (!initialFetchDoneRef.current) {
           initialFetchDoneRef.current = true

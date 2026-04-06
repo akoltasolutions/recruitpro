@@ -245,6 +245,17 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   useEffect(() => {
     fetchCallLists()
     fetchDispositions()
+    // Sync current status from API to localStorage (in case user navigated here directly)
+    authFetch('/api/user-status')
+      .then((res) => {
+        if (res.ok) return res.json()
+      })
+      .then((data) => {
+        if (data?.status) {
+          try { localStorage.setItem('recruiter_current_status', data.status) } catch { /* ignore */ }
+        }
+      })
+      .catch(() => { /* non-blocking */ })
   }, [fetchCallLists, fetchDispositions])
 
   // Cleanup timers & voice recognition
@@ -486,11 +497,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       return
     }
 
-    // ===== STATUS CHECK: Only allow calls when status is ACTIVE =====
+    // ===== STATUS CHECK: Only allow calls when status is ACTIVE or LAUNCH =====
     try {
       const rawStatus = localStorage.getItem('recruiter_current_status')
-      if (rawStatus && rawStatus !== 'ACTIVE') {
-        toast.error('⚠️ Please set your status to Active before making calls', { duration: 3000 })
+      const allowedStatuses = ['ACTIVE', 'LAUNCH']
+      if (!rawStatus || !allowedStatuses.includes(rawStatus)) {
+        const statusLabel = rawStatus || 'not set'
+        toast.error(`⚠️ Status is ${statusLabel}. Please set your status to Active or Launch before making calls.`, { duration: 4000 })
         stopCallTimer()
         callInitiatedRef.current = false
         setCallInitiated(false)
@@ -498,7 +511,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         return
       }
     } catch {
-      // If localStorage read fails, allow the call (non-blocking)
+      // If localStorage read fails, block the call (safer default)
+      toast.error('⚠️ Could not verify your status. Please go to Dashboard and set your status to Active.', { duration: 4000 })
+      stopCallTimer()
+      callInitiatedRef.current = false
+      setCallInitiated(false)
+      clearCallState()
+      return
     }
 
     // Mark call as initiated
@@ -550,6 +569,16 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     toast.info('Opening dialer... Please press Call to connect.', { duration: 2000 })
   }
 
+  // Helper: check if current status allows calling
+  const canMakeCalls = (): boolean => {
+    try {
+      const rawStatus = localStorage.getItem('recruiter_current_status')
+      return !!rawStatus && (rawStatus === 'ACTIVE' || rawStatus === 'LAUNCH')
+    } catch {
+      return false
+    }
+  }
+
   // Start pre-call countdown — when it reaches 0, executeCall is called
   const startPreCallTimer = () => {
     if (!currentCandidate?.phone) {
@@ -559,6 +588,12 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     const phone = cleanPhone(currentCandidate.phone)
     if (!phone || phone.length < 7) {
       toast.error('Invalid phone number')
+      return
+    }
+
+    // Status check BEFORE starting countdown
+    if (!canMakeCalls()) {
+      toast.error('⚠️ Please set your status to Active or Launch before making calls.', { duration: 4000 })
       return
     }
 
@@ -581,6 +616,12 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
   // Skip pre-call countdown and call immediately
   const skipPreCallAndDial = () => {
+    // Status check before calling
+    if (!canMakeCalls()) {
+      cancelPreCallTimer()
+      toast.error('⚠️ Please set your status to Active or Launch before making calls.', { duration: 4000 })
+      return
+    }
     cancelPreCallTimer()
     executeCall()
   }
@@ -843,6 +884,11 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const handleStartCalling = () => {
     if (candidates.length === 0) {
       toast.error('No candidates to call')
+      return
+    }
+    // Status check before entering calling mode
+    if (!canMakeCalls()) {
+      toast.error('⚠️ Please set your status to Active or Launch on the Dashboard before making calls.', { duration: 4000 })
       return
     }
     setCurrentIndex(0)
@@ -1242,14 +1288,24 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   <p className="text-sm text-muted-foreground mt-1">No pending candidates in this list.</p>
                 </div>
               ) : (
-                <Button
-                  size="lg"
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-14 text-base"
-                  onClick={handleStartCalling}
-                >
-                  <Phone className="h-5 w-5 mr-2" />
-                  Start Calling ({totalCandidates} candidates)
-                </Button>
+                <>
+                  {!canMakeCalls() && (
+                    <div className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+                      <p className="text-sm text-amber-700 dark:text-amber-400 font-medium flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        Calling is disabled — Please set your status to <strong>Active</strong> or <strong>Launch</strong> on the Dashboard before making calls.
+                      </p>
+                    </div>
+                  )}
+                  <Button
+                    size="lg"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-14 text-base"
+                    onClick={handleStartCalling}
+                  >
+                    <Phone className="h-5 w-5 mr-2" />
+                    Start Calling ({totalCandidates} candidates)
+                  </Button>
+                </>
               )}
             </CardContent>
           </Card>
