@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Rocket, Coffee, CheckCircle, Clock, Play, Pause, RefreshCw, Moon } from 'lucide-react'
+import { Coffee, CheckCircle, Clock, Play, Pause, RefreshCw, Moon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,7 @@ import { useActivityTracker } from '@/hooks/use-activity-tracker'
 // Types
 // ---------------------------------------------------------------------------
 
-type UserStatus = 'IDLE' | 'LAUNCH' | 'ON_BREAK' | 'ACTIVE' | 'OFFLINE'
+type UserStatus = 'IDLE' | 'LUNCH' | 'ON_BREAK' | 'ACTIVE' | 'OFFLINE'
 
 interface StatusInfo {
   userId: string
@@ -53,14 +53,14 @@ const STATUS_CONFIG: Record<
     activeBtnClass: 'bg-slate-600 hover:bg-slate-700 text-white shadow-sm',
     description: 'No activity',
   },
-  LAUNCH: {
-    label: 'Launch',
-    emoji: '🚀',
+  LUNCH: {
+    label: 'Lunch',
+    emoji: '🍱',
     bgClass: 'bg-blue-50 dark:bg-blue-950/40',
     textClass: 'text-blue-700 dark:text-blue-400',
     badgeBg: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
     activeBtnClass: 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm',
-    description: 'Shift started',
+    description: 'On lunch break',
   },
   ON_BREAK: {
     label: 'Break',
@@ -266,8 +266,8 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         return
       }
 
-      // Don't switch if already on the same status (except LAUNCH can be re-done)
-      if (statusInfo && statusInfo.status === target && target !== 'LAUNCH') {
+      // Don't switch if already on the same status (except LUNCH can be re-done)
+      if (statusInfo && statusInfo.status === target && target !== 'LUNCH') {
         setConfirmTarget(null)
         return
       }
@@ -302,9 +302,9 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Live timers
   // -----------------------------------------------------------------------
 
-  // Active timer: only counts up when status is LAUNCH or ACTIVE (not IDLE or BREAK)
+  // Active timer: only counts up when status is LUNCH or ACTIVE (not IDLE or BREAK)
   // We use totalActiveDurationMs from the API plus elapsed time since last fetch
-  const isActiveTimerStatus = currentStatus === 'LAUNCH' || currentStatus === 'ACTIVE'
+  const isActiveTimerStatus = currentStatus === 'LUNCH' || currentStatus === 'ACTIVE'
 
   // Simple elapsed-since-fetch counter (1-second interval)
   const [liveElapsed, setLiveElapsed] = useState(0)
@@ -366,7 +366,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
       {/* Top color bar */}
       <div
         className={`h-1 ${
-          currentStatus === 'LAUNCH'
+          currentStatus === 'LUNCH'
             ? 'bg-blue-500'
             : currentStatus === 'ON_BREAK'
               ? 'bg-amber-500'
@@ -435,7 +435,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         </div>
 
         {/* ── Live Timer Display ────────────────────────────────────── */}
-        {(currentStatus === 'ACTIVE' || currentStatus === 'ON_BREAK' || currentStatus === 'LAUNCH' || currentStatus === 'IDLE') && (
+        {(currentStatus === 'ACTIVE' || currentStatus === 'ON_BREAK' || currentStatus === 'LUNCH' || currentStatus === 'IDLE') && (
           <div className="mt-4 flex items-center gap-3">
             <div
               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-mono font-medium ${cfg.bgClass} ${cfg.textClass}`}
@@ -483,24 +483,24 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             😴 Idle
           </Button>
 
-          {/* Launch button */}
+          {/* Lunch button */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('LAUNCH')}
+            onClick={() => setConfirmTarget('LUNCH')}
             disabled={switching}
             className={
-              currentStatus === 'LAUNCH'
-                ? STATUS_CONFIG.LAUNCH.activeBtnClass
+              currentStatus === 'LUNCH'
+                ? STATUS_CONFIG.LUNCH.activeBtnClass
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'LAUNCH' ? (
+            {switching && confirmTarget === 'LUNCH' ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Rocket className="h-3.5 w-3.5" />
+              <Coffee className="h-3.5 w-3.5" />
             )}
-            🚀 Launch
+            🍱 Lunch
           </Button>
 
           {/* Break button */}

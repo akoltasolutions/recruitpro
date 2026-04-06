@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     // ── Calculate status hours per recruiter ──────────────────────────
     const calcHours = (logs: typeof allLogs) => {
-      const h = { LOGIN: 0, ACTIVE: 0, ON_CALL: 0, ON_BREAK: 0, IDLE: 0, LAUNCH: 0 };
+      const h = { LOGIN: 0, ACTIVE: 0, ON_CALL: 0, ON_BREAK: 0, IDLE: 0, LUNCH: 0 };
       const sorted = [...logs].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
       for (let i = 0; i < sorted.length; i++) {
         const pStart = sorted[i].createdAt;
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
         if (sk === 'ACTIVE' || sk === 'ON_CALL') bucket = sk;
         else if (sk === 'ON_BREAK' || ak === 'BREAK_START') bucket = 'ON_BREAK';
         else if (sk === 'IDLE' || ak === 'IDLE') bucket = 'IDLE';
-        else if (ak === 'LAUNCH') bucket = 'LAUNCH';
+        else if (ak === 'LUNCH') bucket = 'LUNCH';
 
         const cur = new Date(pStart);
         while (cur < eEnd) {
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         activeHours: Math.round(sh.ACTIVE * 100) / 100,
         breakHours: Math.round(sh.ON_BREAK * 100) / 100,
         idleHours: Math.round(sh.IDLE * 100) / 100,
-        launchHours: Math.round(sh.LAUNCH * 100) / 100,
+        lunchHours: Math.round(sh.LUNCH * 100) / 100,
         totalCalls: calls.length, connected, notAnswered, shortlisted,
         otherDispositions: other,
       };
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     const hRow = sheet.addRow([
       'S.No', 'Recruiter Name', 'Email', 'Phone',
-      'Login Hours', 'Active Hours', 'Break Hours', 'Idle Hours', 'Launch Hours',
+      'Login Hours', 'Active Hours', 'Break Hours', 'Idle Hours', 'Lunch Hours',
       'Total Calls', 'Connected', 'Not Answered', 'Shortlisted', 'Other',
     ]);
     hRow.eachCell((cell) => {
@@ -180,7 +180,7 @@ export async function GET(request: NextRequest) {
       const otherCt = Object.values(row.otherDispositions).reduce((a, b) => a + b, 0);
       const dr = sheet.addRow([
         idx + 1, row.name, row.email, row.phone,
-        row.totalLoginHours, row.activeHours, row.breakHours, row.idleHours, row.launchHours,
+        row.totalLoginHours, row.activeHours, row.breakHours, row.idleHours, row.lunchHours,
         row.totalCalls, row.connected, row.notAnswered, row.shortlisted, otherCt,
       ]);
       if (idx % 2 === 1) {

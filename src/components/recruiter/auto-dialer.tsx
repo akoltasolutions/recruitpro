@@ -497,13 +497,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       return
     }
 
-    // ===== STATUS CHECK: Only allow calls when status is ACTIVE or LAUNCH =====
+    // ===== STATUS CHECK: Only allow calls when status is ACTIVE or LUNCH =====
     try {
       const rawStatus = localStorage.getItem('recruiter_current_status')
-      const allowedStatuses = ['ACTIVE', 'LAUNCH']
+      const allowedStatuses = ['ACTIVE', 'LUNCH']
       if (!rawStatus || !allowedStatuses.includes(rawStatus)) {
         const statusLabel = rawStatus || 'not set'
-        toast.error(`⚠️ Status is ${statusLabel}. Please set your status to Active or Launch before making calls.`, { duration: 4000 })
+        toast.error(`⚠️ Status is ${statusLabel}. Please set your status to Active or Lunch before making calls.`, { duration: 4000 })
         stopCallTimer()
         callInitiatedRef.current = false
         setCallInitiated(false)
@@ -512,7 +512,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       }
     } catch {
       // If localStorage read fails, block the call (safer default)
-      toast.error('⚠️ Could not verify your status. Please go to Dashboard and set your status to Active.', { duration: 4000 })
+      toast.error('⚠️ Could not verify your status. Please go to Dashboard and set your status to Active or Lunch.', { duration: 4000 })
       stopCallTimer()
       callInitiatedRef.current = false
       setCallInitiated(false)
@@ -573,7 +573,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const canMakeCalls = (): boolean => {
     try {
       const rawStatus = localStorage.getItem('recruiter_current_status')
-      return !!rawStatus && (rawStatus === 'ACTIVE' || rawStatus === 'LAUNCH')
+      return !!rawStatus && (rawStatus === 'ACTIVE' || rawStatus === 'LUNCH')
     } catch {
       return false
     }
@@ -593,7 +593,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
     // Status check BEFORE starting countdown
     if (!canMakeCalls()) {
-      toast.error('⚠️ Please set your status to Active or Launch before making calls.', { duration: 4000 })
+      toast.error('⚠️ Please set your status to Active or Lunch before making calls.', { duration: 4000 })
       return
     }
 
@@ -619,7 +619,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Status check before calling
     if (!canMakeCalls()) {
       cancelPreCallTimer()
-      toast.error('⚠️ Please set your status to Active or Launch before making calls.', { duration: 4000 })
+      toast.error('⚠️ Please set your status to Active or Lunch before making calls.', { duration: 4000 })
       return
     }
     cancelPreCallTimer()
@@ -888,7 +888,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
     // Status check before entering calling mode
     if (!canMakeCalls()) {
-      toast.error('⚠️ Please set your status to Active or Launch on the Dashboard before making calls.', { duration: 4000 })
+      toast.error('⚠️ Please set your status to Active or Lunch on the Dashboard before making calls.', { duration: 4000 })
       return
     }
     setCurrentIndex(0)
@@ -1293,7 +1293,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     <div className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
                       <p className="text-sm text-amber-700 dark:text-amber-400 font-medium flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 shrink-0" />
-                        Calling is disabled — Please set your status to <strong>Active</strong> or <strong>Launch</strong> on the Dashboard before making calls.
+                        Calling is disabled — Please set your status to <strong>Active</strong> or <strong>Lunch</strong> on the Dashboard before making calls.
                       </p>
                     </div>
                   )}

@@ -68,7 +68,7 @@ function calculateMemberStatus(
   }
 
   // Calculate total idle duration from IDLE action pairs
-  // An IDLE or LOGIN log starts the idle period; LAUNCH, ACTIVE, or BREAK_START ends it
+  // An IDLE or LOGIN log starts the idle period; LUNCH, ACTIVE, or BREAK_START ends it
   let totalIdleDurationMs = 0;
   let idleStart: Date | null = null;
 
@@ -76,7 +76,7 @@ function calculateMemberStatus(
     if (log.action === 'IDLE' || log.action === 'LOGIN') {
       idleStart = log.createdAt;
     } else if (
-      (log.action === 'LAUNCH' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
+      (log.action === 'LUNCH' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
       idleStart
     ) {
       totalIdleDurationMs += log.createdAt.getTime() - idleStart.getTime();
@@ -102,8 +102,8 @@ function calculateMemberStatus(
   let status = 'OFFLINE';
 
   if (latestLog) {
-    if (latestLog.action === 'LAUNCH') {
-      status = 'LAUNCH';
+    if (latestLog.action === 'LUNCH') {
+      status = 'LUNCH';
     } else if (latestLog.action === 'LOGIN') {
       // Old login entries treated as IDLE (default state)
       status = 'IDLE';

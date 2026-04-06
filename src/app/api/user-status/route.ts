@@ -73,7 +73,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
   }
 
   // Calculate total idle duration from IDLE action pairs
-  // An IDLE log starts the idle period; a LAUNCH, ACTIVE, or BREAK_START ends it
+  // An IDLE log starts the idle period; a LUNCH, ACTIVE, or BREAK_START ends it
   let totalIdleDurationMs = 0;
   let idleStart: Date | null = null;
 
@@ -81,7 +81,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     if (log.action === 'IDLE' || log.action === 'LOGIN') {
       idleStart = log.createdAt;
     } else if (
-      (log.action === 'LAUNCH' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
+      (log.action === 'LUNCH' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
       idleStart
     ) {
       totalIdleDurationMs += log.createdAt.getTime() - idleStart.getTime();
@@ -108,9 +108,9 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
   let status = 'OFFLINE';
 
   if (latestLog) {
-    if (latestLog.action === 'LAUNCH') {
-      // Explicit user-initiated Launch
-      status = 'LAUNCH';
+    if (latestLog.action === 'LUNCH') {
+      // Explicit user-initiated Lunch
+      status = 'LUNCH';
     } else if (latestLog.action === 'LOGIN') {
       // Old login entries are treated as IDLE (default state)
       status = 'IDLE';
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/user-status — Update user status (IDLE, LAUNCH, BREAK, ACTIVE)
+// POST /api/user-status — Update user status (IDLE, LUNCH, BREAK, ACTIVE)
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -171,10 +171,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { status } = body;
 
-    const validStatuses = ['IDLE', 'LAUNCH', 'ON_BREAK', 'ACTIVE'];
+    const validStatuses = ['IDLE', 'LUNCH', 'ON_BREAK', 'ACTIVE'];
     if (!status || !validStatuses.includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: IDLE, LAUNCH, ON_BREAK, ACTIVE' },
+        { error: 'Invalid status. Must be one of: IDLE, LUNCH, ON_BREAK, ACTIVE' },
         { status: 400 }
       );
     }
@@ -201,9 +201,9 @@ export async function POST(request: NextRequest) {
         action = 'IDLE';
         logStatus = 'IDLE';
         break;
-      case 'LAUNCH':
-        action = 'LAUNCH';
-        logStatus = 'ACTIVE';
+      case 'LUNCH':
+        action = 'LUNCH';
+        logStatus = 'LUNCH';
         break;
       case 'ON_BREAK':
         // Prevent going to ON_BREAK if already on break

@@ -4,14 +4,14 @@ import { authenticateRequest } from '@/lib/auth-middleware';
 
 // Whitelist of valid actions for activity logging
 const VALID_ACTIONS = [
-  'LOGIN', 'LOGOUT', 'BREAK_START', 'BREAK_END', 'LAUNCH',
+  'LOGIN', 'LOGOUT', 'BREAK_START', 'BREAK_END', 'LUNCH',
   'IDLE', 'CALL_START', 'CALL_END', 'STATUS_CHANGE',
 ] as const;
 
 // Whitelist of valid statuses for activity logging
 const VALID_STATUSES = [
   'ACTIVE', 'ON_BREAK', 'ON_CALL', 'IDLE', 'OFFLINE',
-  'LAUNCH',
+  'LUNCH',
 ] as const;
 
 // POST /api/activity — Log an activity event (login, logout, break, status change)

@@ -40,7 +40,7 @@ import { RecruiterReport } from '@/components/admin/recruiter-report';
 interface LiveStatus {
   userId: string;
   name: string;
-  status: 'ACTIVE' | 'LAUNCH' | 'ON_CALL' | 'ON_BREAK' | 'IDLE' | 'OFFLINE';
+  status: 'ACTIVE' | 'LUNCH' | 'ON_CALL' | 'ON_BREAK' | 'IDLE' | 'OFFLINE';
   lastActivity: string | null;
   totalHoursToday: number;
   loginTime: string | null;
@@ -71,13 +71,13 @@ const STATUS_CONFIG: Record<
     textClass: 'text-emerald-700 dark:text-emerald-300',
     icon: Activity,
   },
-  LAUNCH: {
-    emoji: '🚀',
-    label: 'Launch',
+  LUNCH: {
+    emoji: '🍱',
+    label: 'Lunch',
     color: 'blue',
     bgClass: 'bg-blue-100 dark:bg-blue-950',
     textClass: 'text-blue-700 dark:text-blue-300',
-    icon: Play,
+    icon: Coffee,
   },
   ON_CALL: {
     emoji: '📞',
@@ -116,7 +116,7 @@ const STATUS_CONFIG: Record<
 function getStatusBadgeVariant(status: StatusKey) {
   const map: Record<StatusKey, 'default' | 'secondary' | 'outline' | 'destructive'> = {
     ACTIVE: 'default',
-    LAUNCH: 'default',
+    LUNCH: 'default',
     ON_CALL: 'default',
     ON_BREAK: 'secondary',
     IDLE: 'secondary',
@@ -254,8 +254,8 @@ export function TeamMonitoring() {
   // -----------------------------------------------------------------------
 
   const handleSetStatus = async (recruiter: LiveStatus, newStatus: StatusKey) => {
-    // Don't set to the same status (except LAUNCH can be re-done)
-    if (recruiter.status === newStatus && newStatus !== 'LAUNCH') return;
+    // Don't set to the same status (except LUNCH can be re-done)
+    if (recruiter.status === newStatus && newStatus !== 'LUNCH') return;
     setTogglingUserId(recruiter.userId);
 
     let action: string;
@@ -289,8 +289,8 @@ export function TeamMonitoring() {
             });
           } catch { /* ignore */ }
         }
-        action = 'LAUNCH';
-        status = 'ACTIVE';
+        action = 'LUNCH';
+        status = 'LUNCH';
         break;
       default:
         setTogglingUserId(null);
@@ -341,7 +341,7 @@ export function TeamMonitoring() {
 
   const summaryCards: { key: StatusKey; label: string; icon: typeof Monitor }[] = [
     { key: 'ACTIVE', label: 'Active', icon: Activity },
-    { key: 'LAUNCH', label: 'Launch', icon: Play },
+    { key: 'LUNCH', label: 'Lunch', icon: Coffee },
     { key: 'ON_CALL', label: 'On Call', icon: Phone },
     { key: 'ON_BREAK', label: 'Break', icon: Coffee },
     { key: 'IDLE', label: 'Idle', icon: Clock },
@@ -547,7 +547,7 @@ export function TeamMonitoring() {
                                 Resume
                               </DropdownMenuItem>
                             )}
-                            {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LAUNCH' && (
+                            {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LUNCH' && (
                               <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
                                 <Activity className="h-4 w-4 mr-2 text-emerald-600" />
                                 Set Active
@@ -705,7 +705,7 @@ export function TeamMonitoring() {
                                   Resume
                                 </DropdownMenuItem>
                               )}
-                              {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LAUNCH' && (
+                              {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LUNCH' && (
                                 <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
                                   <Activity className="h-4 w-4 mr-2 text-emerald-600" />
                                   Set Active

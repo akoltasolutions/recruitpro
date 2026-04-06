@@ -32,7 +32,7 @@ interface ReportRow {
   activeHours: number
   breakHours: number
   idleHours: number
-  launchHours: number
+  lunchHours: number
   totalCalls: number
   connected: number
   notAnswered: number
@@ -431,7 +431,7 @@ export function RecruiterReport() {
               <span className="text-center">Active</span>
               <span className="text-center">Break</span>
               <span className="text-center">Idle</span>
-              <span className="text-center">Launch</span>
+              <span className="text-center">Lunch</span>
               <span className="text-center">Calls</span>
               <span className="text-center">Conn.</span>
               <span className="text-center">Short.</span>
@@ -455,7 +455,7 @@ export function RecruiterReport() {
                   <span className="text-center text-xs text-emerald-600">{formatH(row.activeHours)}</span>
                   <span className="text-center text-xs text-amber-600">{formatH(row.breakHours)}</span>
                   <span className="text-center text-xs text-slate-500">{formatH(row.idleHours)}</span>
-                  <span className="text-center text-xs text-blue-600">{formatH(row.launchHours)}</span>
+                  <span className="text-center text-xs text-blue-600">{formatH(row.lunchHours)}</span>
                   <span className="text-center text-xs font-semibold">{row.totalCalls}</span>
                   <span className="text-center text-xs">{row.connected}</span>
                   <span className="text-center text-xs">{row.shortlisted}</span>
@@ -472,7 +472,7 @@ export function RecruiterReport() {
                 <span className="text-center text-xs">{formatH(totalActiveH)}</span>
                 <span className="text-center text-xs">{formatH(report.reduce((s, r) => s + r.breakHours, 0))}</span>
                 <span className="text-center text-xs">{formatH(report.reduce((s, r) => s + r.idleHours, 0))}</span>
-                <span className="text-center text-xs">{formatH(report.reduce((s, r) => s + r.launchHours, 0))}</span>
+                <span className="text-center text-xs">{formatH(report.reduce((s, r) => s + r.lunchHours, 0))}</span>
                 <span className="text-center text-xs">{totalCalls}</span>
                 <span className="text-center text-xs">{report.reduce((s, r) => s + r.connected, 0)}</span>
                 <span className="text-center text-xs">{totalShortlisted}</span>
