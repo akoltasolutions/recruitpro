@@ -170,7 +170,6 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
 
       {/* Status Management — Launch / Break / Active */}
       <StatusManagement
-        userId={userId}
         onStatusChange={(status) => setUserStatus(status)}
       />
 

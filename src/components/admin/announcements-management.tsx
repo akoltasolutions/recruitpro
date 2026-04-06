@@ -669,10 +669,7 @@ export function AnnouncementsManagement() {
           if (!open) setDeleteTarget(null)
         }}
       >
-        <AlertDialogContent
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Announcement</AlertDialogTitle>
             <AlertDialogDescription>
