@@ -186,6 +186,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   const [confirmTarget, setConfirmTarget] = useState<UserStatus | null>(null)
   const mountedRef = useRef(true)
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const idleStartedAtRef = useRef<string | null>(null)
 
   // -----------------------------------------------------------------------
   // Fetch current status
@@ -197,6 +198,12 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: StatusInfo = await res.json()
       if (mountedRef.current) {
+        // Track when the IDLE period started (for live idle timer display)
+        if (data.status === 'IDLE' && !idleStartedAtRef.current) {
+          idleStartedAtRef.current = new Date().toISOString()
+        } else if (data.status !== 'IDLE') {
+          idleStartedAtRef.current = null
+        }
         setStatusInfo(data)
       }
     } catch {
@@ -305,6 +312,12 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
     statusInfo?.status === 'BREAK',
   )
 
+  // Idle timer: counts from when the status was last set to IDLE
+  const idleElapsedMs = useCountUp(
+    idleStartedAtRef.current,
+    statusInfo?.status === 'IDLE',
+  )
+
   // Total break duration today
   const totalBreakTodayMs = statusInfo
     ? statusInfo.status === 'BREAK'
@@ -408,7 +421,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         </div>
 
         {/* ── Live Timer Display ────────────────────────────────────── */}
-        {(currentStatus === 'ACTIVE' || currentStatus === 'BREAK' || currentStatus === 'LAUNCH') && (
+        {(currentStatus === 'ACTIVE' || currentStatus === 'BREAK' || currentStatus === 'LAUNCH' || currentStatus === 'IDLE') && (
           <div className="mt-4 flex items-center gap-3">
             <div
               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-mono font-medium ${cfg.bgClass} ${cfg.textClass}`}
@@ -417,6 +430,11 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
                 <>
                   <Pause className="h-3.5 w-3.5" />
                   Break: {formatDuration(breakElapsedMs)}
+                </>
+              ) : currentStatus === 'IDLE' ? (
+                <>
+                  <Moon className="h-3.5 w-3.5" />
+                  Idle: {formatDuration(idleElapsedMs)}
                 </>
               ) : (
                 <>
