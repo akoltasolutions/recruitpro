@@ -112,6 +112,26 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'candidateId is required' }, { status: 400 });
     }
 
+    // Ownership check: non-admin users can only modify candidates in their assigned call lists
+    if (auth.role !== 'ADMIN') {
+      const candidate = await db.candidate.findUnique({
+        where: { id: candidateId },
+        select: { callListId: true },
+      });
+      if (!candidate) {
+        return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+      }
+      const assignment = await db.callListAssignment.findFirst({
+        where: {
+          callListId: candidate.callListId,
+          recruiterId: auth.userId,
+        },
+      });
+      if (!assignment) {
+        return NextResponse.json({ error: 'Access denied: candidate is not in your assigned call list' }, { status: 403 });
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (pipelineStage) {
       const validStages = ['NEW', 'SHORTLISTED', 'FOLLOW_UP', 'INTERVIEWED', 'JOINED', 'BACKOUT'];
@@ -136,12 +156,12 @@ export async function PATCH(request: NextRequest) {
       updateData.notes = notes;
     }
 
-    const candidate = await db.candidate.update({
+    const updatedCandidate = await db.candidate.update({
       where: { id: candidateId },
       data: updateData,
     });
 
-    return NextResponse.json({ candidate });
+    return NextResponse.json({ candidate: updatedCandidate });
   } catch (error) {
     console.error('Pipeline update error:', error);
     const msg = error instanceof Error ? error.message : String(error);

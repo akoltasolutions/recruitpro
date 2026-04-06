@@ -277,7 +277,6 @@ export function TeamMonitoring() {
 
   const isOnBreak = (status: StatusKey) => status === 'ON_BREAK';
   const isOffline = (status: StatusKey) => status === 'OFFLINE';
-  const isIdle = (status: StatusKey) => status === 'IDLE';
 
   // =========================================================================
   // RENDER

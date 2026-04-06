@@ -153,8 +153,8 @@ export function Settings({ userId, onLogout }: SettingsProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword }),
       })
-      const data = await res.json()
       if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Failed to change password' }))
         toast.error(data.error || 'Failed to change password')
         setSavingPassword(false)
         return
@@ -220,6 +220,7 @@ export function Settings({ userId, onLogout }: SettingsProps) {
     localStorage.removeItem('recruiter-call-delay')
     localStorage.removeItem('auth-storage')
     toast.success('Cache cleared. Please log in again.')
+    onLogout()
   }
 
   if (loading) {

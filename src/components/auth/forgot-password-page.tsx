@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Mail, Phone, ArrowLeft, Loader2, Headphones,
-  KeyRound, ShieldCheck, CheckCircle2, Copy, RefreshCw, Eye, EyeOff, AlertCircle, WifiOff,
+  KeyRound, ShieldCheck, CheckCircle2, Copy, RefreshCw, Eye, EyeOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { isValidEmail, isValidPhone } from '@/lib/utils'

@@ -321,7 +321,7 @@ export function UserManagement() {
     )
   }
 
-  function ToggleBadge({ on, label }: { on: boolean; label: string }) {
+  function ToggleBadge({ on }: { on: boolean }) {
     return on ? (
       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
         ON

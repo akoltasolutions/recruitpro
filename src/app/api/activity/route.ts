@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest } from '@/lib/auth-middleware';
 
+// Whitelist of valid actions for activity logging
+const VALID_ACTIONS = [
+  'LOGIN', 'LOGOUT', 'BREAK_START', 'BREAK_END', 'LAUNCH',
+  'IDLE', 'CALL_START', 'CALL_END', 'STATUS_CHANGE',
+] as const;
+
+// Whitelist of valid statuses for activity logging
+const VALID_STATUSES = [
+  'ACTIVE', 'ON_BREAK', 'ON_CALL', 'IDLE', 'OFFLINE',
+  'LAUNCH',
+] as const;
+
 // POST /api/activity — Log an activity event (login, logout, break, status change)
 export async function POST(request: NextRequest) {
   try {
@@ -15,9 +27,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'action and status are required' }, { status: 400 });
     }
 
+    // Validate action against whitelist
+    if (!VALID_ACTIONS.includes(action)) {
+      return NextResponse.json(
+        { error: `Invalid action. Must be one of: ${VALID_ACTIONS.join(', ')}` },
+        { status: 400 },
+      );
+    }
+
+    // Validate status against whitelist
+    if (!VALID_STATUSES.includes(status)) {
+      return NextResponse.json(
+        { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` },
+        { status: 400 },
+      );
+    }
+
+    // Admin can log activity for other users (e.g., break toggling)
+    let targetUserId = auth.userId;
+    if (metadata?.targetUserId && auth.role === 'ADMIN') {
+      targetUserId = metadata.targetUserId;
+    }
+
     const activityLog = await db.activityLog.create({
       data: {
-        userId: auth.userId,
+        userId: targetUserId,
         action,
         status,
         metadata: metadata ? JSON.stringify(metadata) : null,

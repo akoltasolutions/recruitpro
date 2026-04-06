@@ -15,10 +15,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Delete the user entirely (rejection = account removed)
-    await db.user.delete({ where: { id } });
+    // Deactivate the user instead of deleting (preserves audit trail)
+    await db.user.update({
+      where: { id },
+      data: { isActive: false },
+    });
 
-    return NextResponse.json({ message: `Registration for "${user.name}" has been rejected and the account has been removed.` });
+    return NextResponse.json({ message: `Registration for "${user.name}" has been rejected and the account has been deactivated.` });
   } catch (error) {
     console.error('Reject user error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

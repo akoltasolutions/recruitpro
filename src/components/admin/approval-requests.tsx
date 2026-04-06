@@ -33,6 +33,7 @@ export function ApprovalRequests() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [rejectConfirm, setRejectConfirm] = useState<PendingUser | null>(null)
+  const [approveConfirm, setApproveConfirm] = useState<PendingUser | null>(null)
 
   const fetchPendingUsers = useCallback(async () => {
     setLoading(true)
@@ -51,16 +52,18 @@ export function ApprovalRequests() {
 
   useEffect(() => { fetchPendingUsers() }, [fetchPendingUsers])
 
-  const handleApprove = async (user: PendingUser) => {
+  const handleApprove = async () => {
+    if (!approveConfirm) return
     setActionLoading(true)
     try {
-      const res = await authFetch(`/api/users/${user.id}/approve`, { method: 'POST' })
+      const res = await authFetch(`/api/users/${approveConfirm.id}/approve`, { method: 'POST' })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: 'Approval failed' }))
         throw new Error(err.message || 'Approval failed')
       }
-      toast.success(`"${user.name}" has been approved! They can now log in.`)
+      toast.success(`"${approveConfirm.name}" has been approved! They can now log in.`)
       setDetailOpen(false)
+      setApproveConfirm(null)
       fetchPendingUsers()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to approve user')
@@ -168,7 +171,7 @@ export function ApprovalRequests() {
                   <Button
                     size="sm"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-                    onClick={() => handleApprove(user)}
+                    onClick={() => setApproveConfirm(user)}
                     disabled={actionLoading}
                   >
                     {actionLoading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
@@ -227,7 +230,7 @@ export function ApprovalRequests() {
               </div>
               <p className="text-xs text-muted-foreground">
                 <strong>Approving</strong> will activate the account and allow the recruiter to log in.
-                <strong>Rejecting</strong> will permanently remove the account.
+                <strong>Rejecting</strong> will deactivate the account.
               </p>
             </div>
           )}
@@ -245,7 +248,7 @@ export function ApprovalRequests() {
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => handleApprove(detailUser!)}
+              onClick={() => { setDetailOpen(false); setApproveConfirm(detailUser) }}
               disabled={actionLoading}
             >
               {actionLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
@@ -255,13 +258,28 @@ export function ApprovalRequests() {
         </DialogContent>
       </Dialog>
 
+      {/* Approve Confirmation */}
+      <ConfirmDialog
+        open={!!approveConfirm}
+        onOpenChange={(open) => !open && setApproveConfirm(null)}
+        title="Approve Registration"
+        description={`Are you sure you want to approve "${approveConfirm?.name}"? They will be able to log in and access the recruiting tools.`}
+        confirmLabel="Approve"
+        variant="default"
+        onConfirm={() => {
+          if (approveConfirm) {
+            handleApprove()
+          }
+        }}
+      />
+
       {/* Reject Confirmation */}
       <ConfirmDialog
         open={!!rejectConfirm}
         onOpenChange={(open) => !open && setRejectConfirm(null)}
         title="Reject Registration"
-        description={`Are you sure you want to reject "${rejectConfirm?.name}"? This will permanently delete their account. This action cannot be undone.`}
-        confirmLabel="Reject & Delete"
+        description={`Are you sure you want to reject "${rejectConfirm?.name}"? This will deactivate their account. This action cannot be undone.`}
+        confirmLabel="Reject"
         variant="destructive"
         onConfirm={() => {
           if (rejectConfirm) {
@@ -272,5 +290,4 @@ export function ApprovalRequests() {
     </div>
   )
 }
-
 

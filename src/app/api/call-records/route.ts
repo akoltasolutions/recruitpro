@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         clientId: clientId || null,
         customClientName: customClientName || null,
         notes: notes || null,
-        callDuration: callDuration || 0,
+        callDuration: Math.max(0, callDuration || 0),
         callStatus: callStatus || 'COMPLETED',
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         f2fInterviewDate: f2fInterviewDate ? new Date(f2fInterviewDate) : null,

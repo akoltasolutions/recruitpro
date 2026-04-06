@@ -62,10 +62,10 @@ export function isStrongPassword(password: string): { valid: boolean; message: s
   return { valid: true, message: '' }
 }
 
-/** Signup password: min 6 chars */
+/** Signup password: min 8 chars, at least one letter and one number (matches backend requirement) */
 export function isSignupPassword(password: string): { valid: boolean; message: string } {
-  if (password.length < 6) {
-    return { valid: false, message: 'Password must be at least 6 characters.' }
+  if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
+    return { valid: false, message: 'Password must be at least 8 characters with at least one letter and one number.' }
   }
   return { valid: true, message: '' }
 }

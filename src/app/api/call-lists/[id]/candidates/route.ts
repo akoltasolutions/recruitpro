@@ -7,6 +7,20 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const auth = await authenticateRequest(_request);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await params;
+
+    // Ownership check: non-admin users can only view candidates in their assigned call lists
+    if (auth.role !== 'ADMIN') {
+      const assignment = await db.callListAssignment.findFirst({
+        where: {
+          callListId: id,
+          recruiterId: auth.userId,
+        },
+      });
+      if (!assignment) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+    }
+
     const candidates = await db.candidate.findMany({
       where: { callListId: id },
       include: { callRecords: { orderBy: { calledAt: 'desc' }, take: 1 } },
@@ -24,6 +38,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const auth = await authenticateRequest(request);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { id } = await params;
+
+    // Ownership check: non-admin users can only add candidates to their assigned call lists
+    if (auth.role !== 'ADMIN') {
+      const assignment = await db.callListAssignment.findFirst({
+        where: {
+          callListId: id,
+          recruiterId: auth.userId,
+        },
+      });
+      if (!assignment) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+    }
+
     const candidates = await request.json();
 
     const created = await db.candidate.createMany({

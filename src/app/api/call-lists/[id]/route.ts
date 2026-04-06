@@ -28,6 +28,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const auth = await authenticateRequest(request);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (auth.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     const { id } = await params;
     const { name, description, syncInterval, googleSheetsUrl, googleSheetGid } = await request.json();
 

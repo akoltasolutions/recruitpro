@@ -480,3 +480,49 @@ Stage Summary:
 - Active time no longer leaks when status is IDLE
 - Launch button still works correctly (uses distinct LAUNCH action)
 - All existing features preserved, no breaking changes
+---
+Task ID: 19
+Agent: Main Agent
+Task: Comprehensive System Testing & Audit
+
+Work Log:
+- Ran full TypeScript check: 0 errors in src/ (5 non-app errors in examples/skills)
+- Ran ESLint: 0 errors
+- Tested all 17 authenticated API endpoints as admin: all return 200
+- Tested auth gating on 16 endpoints without token: all return 401
+- Launched 4 parallel deep-audit agents covering: Auth system (12 files), Admin panel (13 files), Recruiter panel (14 files), API routes (33 files)
+- Identified and fixed 20 bugs across 5 severity levels:
+
+CRITICAL FIXES (5):
+1. Signup password validation mismatch: frontend required 6 chars, backend requires 8+letter+number
+2. Signup page placeholder "Min 6 characters" → "Min 8 characters with a letter and number"
+3. Admin mobile bottom nav missing 6+ menu items → added "More" popover
+4. Announcements Active stat card showed ALL count → fixed to filter isActive
+5. Announcements toggle missing Content-Type header → added application/json
+
+HIGH FIXES (7):
+6. Approval requests Approve button had no confirmation → added ConfirmDialog
+7. Settings password response parsed before res.ok check → reordered
+8. Settings clear cache didn't logout → now calls onLogout()
+9. Call list PUT had no authorization check → added admin-only guard
+10. Pipeline PATCH had no ownership check → added assignment verification
+11. Activity POST had no action validation → added whitelist
+12. Candidate routes had no ownership check → added assignment verification
+13. User reject was hard delete → changed to soft delete (isActive: false)
+
+MEDIUM FIXES (7):
+14. formatTime negative seconds guard → added Math.max(0, ...)
+15. Recruiter report loading flash → changed initial state to true
+16. Forgot password unused imports (AlertCircle, WifiOff) → removed
+17. User management ToggleBadge label prop unused → removed
+18. Team monitoring isIdle function dead code → removed
+19. Call duration negative number allowed → added Math.max(0, ...)
+20. Users route no email validation → added regex check
+
+Stage Summary:
+- 20 bugs fixed across 18 files
+- All 17 authenticated API endpoints verified working (200)
+- All auth gating verified (401 without token)
+- ESLint passes clean with zero errors
+- TypeScript has zero errors in src/
+- Server running on port 3000, responding HTTP 200

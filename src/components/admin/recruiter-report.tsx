@@ -170,7 +170,7 @@ export function RecruiterReport() {
   const [customFrom, setCustomFrom] = useState(todayIST())
   const [customTo, setCustomTo] = useState(todayIST())
   const [report, setReport] = useState<ReportRow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
 
   // -------------------------------------------------------------------------

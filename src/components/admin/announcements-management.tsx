@@ -215,6 +215,7 @@ export function AnnouncementsManagement() {
     try {
       const res = await authFetch(`/api/announcements/${announcement.id}`, {
         method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !announcement.isActive }),
       })
       if (!res.ok) {
@@ -316,7 +317,7 @@ export function AnnouncementsManagement() {
                 Active
               </span>
             </div>
-            <p className="text-2xl font-bold mt-1">{announcements.length}</p>
+            <p className="text-2xl font-bold mt-1">{announcements.filter(a => a.isActive).length}</p>
           </CardContent>
         </Card>
         <Card className="bg-muted/50">

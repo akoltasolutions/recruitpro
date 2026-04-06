@@ -10,12 +10,13 @@ import {
   SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Tag, PhoneCall, MessageSquare, Building2, Users, LogOut,
-  Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone,
+  Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone, MoreHorizontal,
 } from 'lucide-react'
 
 const menuItems = [
@@ -32,6 +33,11 @@ const menuItems = [
   { key: 'settings', label: 'Settings', icon: Settings },
 ]
 
+// First 5 items shown directly in bottom nav
+const bottomNavItems = menuItems.slice(0, 5)
+// Remaining items shown in "More" popover
+const moreNavItems = menuItems.slice(5)
+
 interface AdminLayoutProps {
   activePage: string
   onNavigate: (page: string) => void
@@ -42,6 +48,7 @@ interface AdminLayoutProps {
 export function AdminLayout({ activePage, onNavigate, onLogout, children }: AdminLayoutProps) {
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const sidebarContent = (
     <>
@@ -130,7 +137,7 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
         <main className="p-4 pb-24">{children}</main>
         <nav className="fixed bottom-0 left-0 right-0 z-[10000] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-            {menuItems.slice(0, 5).map((item) => (
+            {bottomNavItems.map((item) => (
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
@@ -143,26 +150,42 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                 <span className="truncate max-w-[56px]">{item.label.split(' ')[0]}</span>
               </button>
             ))}
-            <button
-              onClick={() => onNavigate('users')}
-              className={cn(
-                'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
-                activePage === 'users' ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <Users className="h-5 w-5" />
-              <span>Users</span>
-            </button>
-            <button
-              onClick={() => onNavigate('approvals')}
-              className={cn(
-                'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
-                activePage === 'approvals' ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <UserCheck className="h-5 w-5" />
-              <span>Approvals</span>
-            </button>
+            {/* More menu for remaining items */}
+            <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
+                    moreNavItems.some(item => item.key === activePage) ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                  <span>More</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="center" className="w-56 p-2 mb-2">
+                <div className="space-y-1">
+                  {moreNavItems.map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        onNavigate(item.key)
+                        setMoreOpen(false)
+                      }}
+                      className={cn(
+                        'flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm transition-colors',
+                        activePage === item.key
+                          ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400'
+                          : 'text-foreground hover:bg-muted'
+                      )}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </nav>
       </div>
