@@ -221,7 +221,7 @@ export function TeamMonitoring() {
         name: m.name as string,
         status: (m.status as LiveStatus['status']) || 'OFFLINE',
         lastActivity: m.lastActivity as string | null,
-        totalHoursToday: Math.round(((m.totalActiveDurationToday as number) || 0) / 3600 * 100) / 100,
+        totalHoursToday: Math.round(((m.totalActiveDurationToday as number) || 0) / 3600000 * 100) / 100,
         loginTime: m.loginTime as string | null,
         breakStartTime: (m.breakStartTime as string | null) || null,
         totalBreakDurationToday: (m.totalBreakDurationToday as number) || 0,

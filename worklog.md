@@ -610,3 +610,25 @@ Stage Summary:
 - Admin can now set any recruiter to Idle, Break, Active, or Offline from the Action dropdown
 - Smart menu: hides current status option, shows Resume only when on break
 - ESLint clean, no regressions
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix hours calculation bug in Team Monitoring + verify Idle/Offline status actions
+
+Work Log:
+- Verified that Idle and Offline status actions are already implemented in the Action dropdown (from Task ID 3)
+- Action dropdown contains: Resume (when ON_BREAK), Set Active, Set Break, Set Idle (when not already IDLE), Set Offline (red, always shown)
+- Backend fully supports: IDLE and LOGOUT actions in VALID_ACTIONS, IDLE and OFFLINE in VALID_STATUSES
+- handleSetStatus function correctly maps: IDLE→action:'IDLE', OFFLINE→action:'LOGOUT'
+- Admin can target other users via metadata.targetUserId
+- Discovered and fixed hours calculation bug: was dividing milliseconds by 3600 instead of 3,600,000 (ms per hour)
+- This caused absurd values like 134h and 900h for what should be minutes
+- Fixed in team-monitoring.tsx line 224: `/3600` → `/3600000`
+
+Files Modified:
+1. src/components/admin/team-monitoring.tsx - Fixed totalHoursToday calculation (ms/3600000)
+
+Stage Summary:
+- Idle and Offline status actions confirmed already working in Action dropdown
+- Hours calculation bug fixed — now shows correct values (e.g., 8m instead of 134h)
+- ESLint clean, no regressions
