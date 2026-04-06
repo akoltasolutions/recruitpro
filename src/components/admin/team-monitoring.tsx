@@ -19,7 +19,16 @@ import {
   Activity,
   Moon,
   FileSpreadsheet,
+  ChevronDown,
+  LogOut,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { authFetch } from '@/stores/auth-store';
 import { formatDistanceToNow } from 'date-fns';
 import { RecruiterReport } from '@/components/admin/recruiter-report';
@@ -241,20 +250,60 @@ export function TeamMonitoring() {
   }, [fetchStatuses]);
 
   // -----------------------------------------------------------------------
-  // Break / Resume toggle
+  // Admin status change handler (for any recruiter)
   // -----------------------------------------------------------------------
 
-  const handleToggleBreak = async (recruiter: LiveStatus) => {
-    const goingOnBreak = recruiter.status !== 'ON_BREAK';
+  const handleSetStatus = async (recruiter: LiveStatus, newStatus: StatusKey) => {
+    // Don't set to the same status (except LAUNCH can be re-done)
+    if (recruiter.status === newStatus && newStatus !== 'LAUNCH') return;
     setTogglingUserId(recruiter.userId);
+
+    let action: string;
+    let status: string;
+
+    switch (newStatus) {
+      case 'ON_BREAK':
+        action = 'BREAK_START';
+        status = 'ON_BREAK';
+        break;
+      case 'IDLE':
+        action = 'IDLE';
+        status = 'IDLE';
+        break;
+      case 'OFFLINE':
+        action = 'LOGOUT';
+        status = 'OFFLINE';
+        break;
+      case 'ACTIVE':
+        // If currently on break, end the break first
+        if (recruiter.status === 'ON_BREAK') {
+          try {
+            await authFetch('/api/activity', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'BREAK_END',
+                status: 'ACTIVE',
+                metadata: { targetUserId: recruiter.userId },
+              }),
+            });
+          } catch { /* ignore */ }
+        }
+        action = 'LAUNCH';
+        status = 'ACTIVE';
+        break;
+      default:
+        setTogglingUserId(null);
+        return;
+    }
 
     try {
       const res = await authFetch('/api/activity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: goingOnBreak ? 'BREAK_START' : 'BREAK_END',
-          status: goingOnBreak ? 'ON_BREAK' : 'ACTIVE',
+          action,
+          status,
           metadata: { targetUserId: recruiter.userId },
         }),
       });
@@ -265,12 +314,14 @@ export function TeamMonitoring() {
       setStatuses((prev) =>
         prev.map((s) =>
           s.userId === recruiter.userId
-            ? { ...s, status: goingOnBreak ? 'ON_BREAK' : ('ACTIVE' as StatusKey) }
+            ? { ...s, status: newStatus as StatusKey }
             : s,
         ),
       );
     } catch (err) {
-      console.error('Failed to toggle break:', err);
+      console.error(`Failed to set status to ${newStatus}:`, err);
+      // Revert optimistic update on error
+      fetchStatuses();
     } finally {
       setTogglingUserId(null);
     }
@@ -475,33 +526,58 @@ export function TeamMonitoring() {
                       </div>
                     </div>
 
-                    {/* Action button */}
-                    {!offline && (
-                      <Button
-                        size="sm"
-                        variant={recruiter.status === 'ON_BREAK' ? 'default' : 'outline'}
-                        onClick={() => handleToggleBreak(recruiter)}
-                        disabled={toggling}
-                        className={
-                          recruiter.status === 'ON_BREAK'
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shrink-0'
-                            : 'shrink-0'
-                        }
-                      >
-                        {toggling ? (
+                    {/* Action dropdown */}
+                    {!offline ? (
+                      toggling ? (
+                        <Button size="sm" variant="outline" disabled className="shrink-0">
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        ) : recruiter.status === 'ON_BREAK' ? (
-                          <>
-                            <Play className="h-3.5 w-3.5 mr-1" />
-                            Resume
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="h-3.5 w-3.5 mr-1" />
-                            Break
-                          </>
-                        )}
-                      </Button>
+                        </Button>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="shrink-0 gap-1">
+                              <ChevronDown className="h-3.5 w-3.5" />
+                              Action
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            {recruiter.status === 'ON_BREAK' && (
+                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+                                <Play className="h-4 w-4 mr-2 text-emerald-600" />
+                                Resume
+                              </DropdownMenuItem>
+                            )}
+                            {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LAUNCH' && (
+                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+                                <Activity className="h-4 w-4 mr-2 text-emerald-600" />
+                                Set Active
+                              </DropdownMenuItem>
+                            )}
+                            {recruiter.status !== 'ON_BREAK' && (
+                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ON_BREAK')}>
+                                <Coffee className="h-4 w-4 mr-2 text-amber-600" />
+                                Set Break
+                              </DropdownMenuItem>
+                            )}
+                            {recruiter.status !== 'IDLE' && (
+                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'IDLE')}>
+                                <Moon className="h-4 w-4 mr-2 text-slate-500" />
+                                Set Idle
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleSetStatus(recruiter, 'OFFLINE')}
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                            >
+                              <LogOut className="h-4 w-4 mr-2" />
+                              Set Offline
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </div>
 
@@ -607,34 +683,57 @@ export function TeamMonitoring() {
                       {relativeTime(recruiter.lastActivity)}
                     </span>
 
-                    {/* Action button */}
+                    {/* Action dropdown */}
                     <div className="text-right">
                       {!offline ? (
-                        <Button
-                          size="sm"
-                          variant={recruiter.status === 'ON_BREAK' ? 'default' : 'outline'}
-                          onClick={() => handleToggleBreak(recruiter)}
-                          disabled={toggling}
-                          className={
-                            recruiter.status === 'ON_BREAK'
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                              : ''
-                          }
-                        >
-                          {toggling ? (
+                        toggling ? (
+                          <Button size="sm" variant="outline" disabled>
                             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          ) : recruiter.status === 'ON_BREAK' ? (
-                            <>
-                              <Play className="h-3.5 w-3.5 mr-1" />
-                              Resume
-                            </>
-                          ) : (
-                            <>
-                              <Pause className="h-3.5 w-3.5 mr-1" />
-                              Break
-                            </>
-                          )}
-                        </Button>
+                          </Button>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="outline" className="gap-1">
+                                <ChevronDown className="h-3.5 w-3.5" />
+                                Action
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              {recruiter.status === 'ON_BREAK' && (
+                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+                                  <Play className="h-4 w-4 mr-2 text-emerald-600" />
+                                  Resume
+                                </DropdownMenuItem>
+                              )}
+                              {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LAUNCH' && (
+                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+                                  <Activity className="h-4 w-4 mr-2 text-emerald-600" />
+                                  Set Active
+                                </DropdownMenuItem>
+                              )}
+                              {recruiter.status !== 'ON_BREAK' && (
+                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ON_BREAK')}>
+                                  <Coffee className="h-4 w-4 mr-2 text-amber-600" />
+                                  Set Break
+                                </DropdownMenuItem>
+                              )}
+                              {recruiter.status !== 'IDLE' && (
+                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'IDLE')}>
+                                  <Moon className="h-4 w-4 mr-2 text-slate-500" />
+                                  Set Idle
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleSetStatus(recruiter, 'OFFLINE')}
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+                              >
+                                <LogOut className="h-4 w-4 mr-2" />
+                                Set Offline
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

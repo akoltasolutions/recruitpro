@@ -588,3 +588,25 @@ Stage Summary:
 - 23 bugs fixed across 20 files
 - 0 regressions (ESLint + TypeScript clean, all API tests pass)
 - Remaining deferred items: brute-force protection (needs Redis), hardcoded HMAC secret (needs env setup), race conditions in auto-dialer (needs architectural refactor)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Add Idle and Offline status actions to Team Monitoring
+
+Work Log:
+- Replaced single Break/Resume button with DropdownMenu in both mobile cards and desktop table
+- Added handleSetStatus handler supporting: ACTIVE, ON_BREAK, IDLE, OFFLINE
+- Each status option is contextually shown/hidden based on current recruiter status
+- "Set Offline" shown in red to indicate it's a destructive action
+- Added LOGOUT action → OFFLINE status mapping in both user-status routes
+
+Files Modified:
+1. src/components/admin/team-monitoring.tsx - Added DropdownMenu with Idle/Break/Active/Offline actions
+2. src/app/api/user-status/route.ts - Added LOGOUT → OFFLINE status mapping
+3. src/app/api/user-status/team/route.ts - Added LOGOUT → OFFLINE status mapping
+
+Stage Summary:
+- Admin can now set any recruiter to Idle, Break, Active, or Offline from the Action dropdown
+- Smart menu: hides current status option, shows Resume only when on break
+- ESLint clean, no regressions

@@ -120,6 +120,8 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
       status = 'ACTIVE';
     } else if (latestLog.action === 'IDLE') {
       status = 'IDLE';
+    } else if (latestLog.action === 'LOGOUT') {
+      status = 'OFFLINE';
     } else if (latestLog.status === 'ON_BREAK') {
       status = 'ON_BREAK';
     } else if (latestLog.status === 'ACTIVE') {
