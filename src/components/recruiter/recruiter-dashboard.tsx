@@ -207,10 +207,10 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
-        {userStatus !== 'ACTIVE' && userStatus !== 'LUNCH' ? (
+        {userStatus !== 'ACTIVE' ? (
           <div className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
             <p className="text-sm text-amber-700 dark:text-amber-400 font-medium">
-              ⚠️ Calling is disabled — Please set your status to <strong>Active</strong> or <strong>Lunch</strong> to start making calls.
+              ⚠️ Calling is disabled — Please set your status to <strong>Active</strong> to start making calls.
             </p>
           </div>
         ) : (

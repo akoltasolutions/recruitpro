@@ -547,7 +547,7 @@ export function TeamMonitoring() {
                                 Resume
                               </DropdownMenuItem>
                             )}
-                            {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LUNCH' && (
+                            {recruiter.status !== 'ACTIVE' && (
                               <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
                                 <Activity className="h-4 w-4 mr-2 text-emerald-600" />
                                 Set Active
@@ -705,7 +705,7 @@ export function TeamMonitoring() {
                                   Resume
                                 </DropdownMenuItem>
                               )}
-                              {recruiter.status !== 'ACTIVE' && recruiter.status !== 'LUNCH' && (
+                              {recruiter.status !== 'ACTIVE' && (
                                 <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
                                   <Activity className="h-4 w-4 mr-2 text-emerald-600" />
                                   Set Active

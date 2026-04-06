@@ -200,7 +200,7 @@ export function useActivityTracker({
 
   // ---- 5. Reset call activity timer on status changes ───────────────────
   useEffect(() => {
-    if (currentStatus === 'ACTIVE' || currentStatus === 'LUNCH') {
+    if (currentStatus === 'ACTIVE') {
       resetCallActivity()
     }
   }, [currentStatus])

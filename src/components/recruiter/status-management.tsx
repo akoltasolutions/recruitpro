@@ -302,9 +302,9 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Live timers
   // -----------------------------------------------------------------------
 
-  // Active timer: only counts up when status is LUNCH or ACTIVE (not IDLE or BREAK)
+  // Active timer: only counts up when status is ACTIVE (not IDLE, LUNCH, or BREAK)
   // We use totalActiveDurationMs from the API plus elapsed time since last fetch
-  const isActiveTimerStatus = currentStatus === 'LUNCH' || currentStatus === 'ACTIVE'
+  const isActiveTimerStatus = currentStatus === 'ACTIVE'
 
   // Simple elapsed-since-fetch counter (1-second interval)
   const [liveElapsed, setLiveElapsed] = useState(0)
