@@ -55,14 +55,15 @@ export async function POST(request: NextRequest) {
 
     const token = createToken(user.id);
 
-    // Log login activity for recruiter tracking
+    // Log login activity for recruiter tracking — default to IDLE so time
+    // does not start counting until the recruiter explicitly picks a status.
     if (user.role === 'RECRUITER') {
       try {
         await db.activityLog.create({
           data: {
             userId: user.id,
-            action: 'LOGIN',
-            status: 'ACTIVE',
+            action: 'IDLE',
+            status: 'IDLE',
             userAgent: request.headers.get('user-agent') || null,
           },
         });

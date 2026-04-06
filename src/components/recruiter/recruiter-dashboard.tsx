@@ -79,7 +79,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
   const [callRecords, setCallRecords] = useState<CallRecord[]>([])
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [userStatus, setUserStatus] = useState<string>('LAUNCH')
+  const [userStatus, setUserStatus] = useState<string>('IDLE')
 
   const initialSelected = useRef(false)
 

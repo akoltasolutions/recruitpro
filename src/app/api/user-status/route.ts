@@ -39,9 +39,8 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     };
   }
 
-  // Find login time (first LOGIN action)
-  const loginLog = logs.find((l) => l.action === 'LOGIN');
-  const loginTime = loginLog?.createdAt?.toISOString() || null;
+  // Find login time — use the first activity log of the day (any action)
+  const loginTime = logs.length > 0 ? logs[0].createdAt?.toISOString() || null : null;
 
   // Calculate total break duration from BREAK_START / BREAK_END pairs
   let totalBreakDurationMs = 0;
@@ -63,12 +62,34 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     totalBreakDurationMs += Date.now() - breakStart.getTime();
   }
 
+  // Calculate total idle duration from IDLE action pairs
+  // An IDLE log starts the idle period; a LOGIN, ACTIVE, or BREAK_START ends it
+  let totalIdleDurationMs = 0;
+  let idleStart: Date | null = null;
+
+  for (const log of logs) {
+    if (log.action === 'IDLE') {
+      idleStart = log.createdAt;
+    } else if (
+      (log.action === 'LOGIN' || log.action === 'ACTIVE' || log.action === 'BREAK_START') &&
+      idleStart
+    ) {
+      totalIdleDurationMs += log.createdAt.getTime() - idleStart.getTime();
+      idleStart = null;
+    }
+  }
+
+  // If currently idle, include current idle duration
+  if (idleStart) {
+    totalIdleDurationMs += Date.now() - idleStart.getTime();
+  }
+
   // Calculate total active duration:
-  // From first LOGIN to now, minus total break duration
+  // From first activity to now, minus total break and idle durations
   let totalActiveDurationMs = 0;
   if (loginTime) {
     const loginDate = new Date(loginTime);
-    totalActiveDurationMs = Date.now() - loginDate.getTime() - totalBreakDurationMs;
+    totalActiveDurationMs = Date.now() - loginDate.getTime() - totalBreakDurationMs - totalIdleDurationMs;
     if (totalActiveDurationMs < 0) totalActiveDurationMs = 0;
   }
 
