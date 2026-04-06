@@ -189,6 +189,8 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   const idleStartedAtRef = useRef<string | null>(null)
   // Track when the API last returned data — used to add live elapsed time
   const lastFetchTimeRef = useRef<number>(0)
+  // Track whether the initial fetch has completed (for calling onStatusChange once)
+  const initialFetchDoneRef = useRef(false)
 
   // -----------------------------------------------------------------------
   // Fetch current status
@@ -209,13 +211,18 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         }
         lastFetchTimeRef.current = Date.now()
         setStatusInfo(data)
+        // Notify parent of actual status on initial fetch (not on subsequent refreshes)
+        if (!initialFetchDoneRef.current) {
+          initialFetchDoneRef.current = true
+          onStatusChange?.(data.status)
+        }
       }
     } catch {
       toast.error('Failed to load status')
     } finally {
       if (mountedRef.current) setLoading(false)
     }
-  }, [])
+  }, [onStatusChange])
 
   // Initial load + auto-refresh every 60s
   useEffect(() => {

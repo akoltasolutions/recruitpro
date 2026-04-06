@@ -62,7 +62,9 @@ export async function POST(request: NextRequest) {
       data: {
         password: hashedPassword,
         resetToken: null,
+        resetTokenExpires: null,
         otpCode: null,
+        otpExpires: null,
       },
     });
 

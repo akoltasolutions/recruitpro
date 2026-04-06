@@ -30,6 +30,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
+    // Validate phone format if provided (10-12 digits after stripping non-digits)
+    if (phone) {
+      const digitsOnly = phone.replace(/\D/g, '');
+      if (digitsOnly.length < 10 || digitsOnly.length > 12) {
+        return NextResponse.json({ error: 'Phone number must be 10-12 digits' }, { status: 400 });
+      }
+    }
+
     const hashedPassword = await hashPassword(password);
 
     // Create recruiter with isActive: false → requires admin approval

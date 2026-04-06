@@ -179,12 +179,20 @@ export function UserManagement() {
       toast.error('Password is required for new users')
       return
     }
-    if (!editingUser && formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+    if (!editingUser && formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters with a letter and a number')
       return
     }
-    if (editingUser && formData.password && formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+    if (!editingUser && (!/[a-zA-Z]/.test(formData.password) || !/\d/.test(formData.password))) {
+      toast.error('Password must contain at least one letter and one number')
+      return
+    }
+    if (editingUser && formData.password && formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters with a letter and a number')
+      return
+    }
+    if (editingUser && formData.password && (!/[a-zA-Z]/.test(formData.password) || !/\d/.test(formData.password))) {
+      toast.error('Password must contain at least one letter and one number')
       return
     }
 
@@ -321,14 +329,14 @@ export function UserManagement() {
     )
   }
 
-  function ToggleBadge({ on }: { on: boolean }) {
+  function ToggleBadge({ on, label }: { on: boolean; label: string }) {
     return on ? (
       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-        ON
+        {label} ON
       </Badge>
     ) : (
       <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950 dark:text-red-400 dark:border-red-800">
-        OFF
+        {label} OFF
       </Badge>
     )
   }
@@ -586,7 +594,7 @@ export function UserManagement() {
                 <Input
                   id="user-password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder={editingUser ? '••••••••' : 'Enter password (min 6 chars)'}
+                  placeholder={editingUser ? '••••••••' : 'Min 8 chars with a letter and number'}
                   value={formData.password}
                   onChange={(e) => setFormData((f) => ({ ...f, password: e.target.value }))}
                   className="pr-10"
@@ -604,8 +612,8 @@ export function UserManagement() {
                   }
                 </button>
               </div>
-              {!editingUser && formData.password && formData.password.length < 6 && (
-                <p className="text-xs text-amber-600">Password must be at least 6 characters</p>
+              {!editingUser && formData.password && (formData.password.length < 8 || !/[a-zA-Z]/.test(formData.password) || !/\d/.test(formData.password)) && (
+                <p className="text-xs text-amber-600">Password must be at least 8 characters with a letter and a number</p>
               )}
             </div>
 

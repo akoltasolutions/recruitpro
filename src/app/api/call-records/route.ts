@@ -14,7 +14,12 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     const where: Record<string, unknown> = {};
-    if (recruiterId) where.recruiterId = recruiterId;
+    // Non-admin users can only see their own call records
+    if (auth.role !== 'ADMIN') {
+      where.recruiterId = auth.userId;
+    } else if (recruiterId) {
+      where.recruiterId = recruiterId;
+    }
     if (callListId) where.candidate = { callListId };
     if (dispositionType) where.disposition = { type: dispositionType };
     if (dateFrom || dateTo) {
@@ -56,6 +61,12 @@ export async function POST(request: NextRequest) {
 
     if (!candidateId || !recruiterId) {
       return NextResponse.json({ error: 'candidateId and recruiterId are required' }, { status: 400 });
+    }
+
+    // Validate callStatus against whitelist
+    const VALID_CALL_STATUSES = ['COMPLETED', 'SKIPPED', 'SCHEDULED', 'FAILED'];
+    if (callStatus && !VALID_CALL_STATUSES.includes(callStatus)) {
+      return NextResponse.json({ error: 'Invalid callStatus. Must be one of: COMPLETED, SKIPPED, SCHEDULED, FAILED' }, { status: 400 });
     }
 
     const callRecord = await db.callRecord.create({

@@ -271,7 +271,20 @@ export function CandidatePipeline() {
 
   const openWhatsApp = (phone: string) => {
     const formatted = formatPhoneForWhatsApp(phone)
-    window.location.href = `https://wa.me/${formatted}`
+    const url = `https://wa.me/${formatted}`
+    // Use hidden anchor click so Android WebView shouldOverrideUrlLoading fires
+    try {
+      const a = document.createElement('a')
+      a.href = url
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => { try { document.body.removeChild(a) } catch { /* ignore */ } }, 300)
+    } catch {
+      window.location.href = url
+    }
   }
 
   // ── Filtered candidates (client-side on top of server search) ──

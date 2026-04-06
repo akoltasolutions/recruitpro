@@ -555,10 +555,10 @@ export function AnnouncementsManagement() {
         <DialogContent
           onPointerDownOutside={(e) => {
             // Prevent dialog from closing when interacting with content inside on Android WebView
-            e.preventDefault()
+            if (window.innerWidth < 768) e.preventDefault()
           }}
           onInteractOutside={(e) => {
-            e.preventDefault()
+            if (window.innerWidth < 768) e.preventDefault()
           }}
           onOpenAutoFocus={(e) => {
             // Prevent auto-focus on mobile to avoid keyboard popup issues

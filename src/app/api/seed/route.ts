@@ -144,11 +144,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Log credentials server-side only — never returned in response
+    console.log('Seed complete. Admin: admin@recruitment.com / admin123 | Recruiter: john@recruitment.com / recruiter123');
+
     return NextResponse.json({
       success: true,
-      message: 'Database seeded successfully',
-      admin: { email: 'admin@recruitment.com' },
-      recruiter: { email: 'john@recruitment.com' },
+      message: 'Database seeded',
     });
   } catch (error) {
     console.error('Seed error:', error);

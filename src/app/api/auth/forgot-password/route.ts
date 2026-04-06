@@ -58,10 +58,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return NextResponse.json({
+      const response: Record<string, string> = {
         message: 'If an account exists, a reset code has been sent.',
-        resetCode: token,
-      });
+      };
+      if (process.env.NODE_ENV !== 'production') {
+        response.resetCode = token;
+      }
+      return NextResponse.json(response);
     }
 
     // method === 'phone'
@@ -112,10 +115,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    const response: Record<string, string> = {
       message: 'If an account exists, a reset code has been sent.',
-      otp,
-    });
+    };
+    if (process.env.NODE_ENV !== 'production') {
+      response.otp = otp;
+    }
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Forgot password error:', error);
     return NextResponse.json(

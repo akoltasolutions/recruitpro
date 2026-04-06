@@ -56,14 +56,38 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const updateData: Record<string, unknown> = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.email !== undefined) updateData.email = data.email;
+
+    // Validate email format and uniqueness
+    if (data.email !== undefined) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(data.email)) {
+        return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+      }
+      const normalizedEmail = data.email.trim().toLowerCase();
+      if (normalizedEmail !== existing.email) {
+        const emailTaken = await db.user.findFirst({ where: { email: normalizedEmail, id: { not: id } } });
+        if (emailTaken) {
+          return NextResponse.json({ error: 'Email is already in use by another account' }, { status: 409 });
+        }
+      }
+      updateData.email = normalizedEmail;
+    }
+
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.callModeOn !== undefined) updateData.callModeOn = data.callModeOn;
     if (data.whatsappAccess !== undefined) updateData.whatsappAccess = data.whatsappAccess;
     if (data.uploadPermission !== undefined) updateData.uploadPermission = data.uploadPermission;
     if (data.createListPermission !== undefined) updateData.createListPermission = data.createListPermission;
-    if (data.password) updateData.password = await hashPassword(data.password);
+
+    // Validate password strength before hashing
+    if (data.password) {
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+      if (!passwordRegex.test(data.password)) {
+        return NextResponse.json({ error: 'Password must be at least 8 characters with at least 1 letter and 1 number' }, { status: 400 });
+      }
+      updateData.password = await hashPassword(data.password);
+    }
 
     const user = await db.user.update({ where: { id }, data: updateData });
     const { password: _, ...safeUser } = user;

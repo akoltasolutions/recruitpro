@@ -10,6 +10,13 @@ export async function GET(request: NextRequest) {
     }
 
     const callLists = await db.callList.findMany({
+      where: auth.role !== 'ADMIN' ? {
+        assignments: {
+          some: {
+            recruiterId: auth.userId,
+          },
+        },
+      } : undefined,
       include: {
         candidates: true,
         assignments: {
@@ -32,6 +39,17 @@ export async function POST(request: NextRequest) {
     const auth = await authenticateRequest(request);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check createListPermission (admins can always create)
+    if (auth.role !== 'ADMIN') {
+      const user = await db.user.findUnique({
+        where: { id: auth.userId },
+        select: { createListPermission: true },
+      });
+      if (!user?.createListPermission) {
+        return NextResponse.json({ error: 'You do not have permission to create call lists' }, { status: 403 });
+      }
     }
 
     const {

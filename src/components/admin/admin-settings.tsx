@@ -65,7 +65,7 @@ export function AdminSettings({ userId }: AdminSettingsProps) {
           setNameValue(u.name || '')
           setEmailValue(u.email || '')
           setPhoneValue(u.phone || '')
-          updateUser(u)
+          useAuthStore.getState().updateUser(u)
         }
       } catch {
         const currentUser = useAuthStore.getState().user

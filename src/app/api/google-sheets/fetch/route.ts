@@ -161,6 +161,15 @@ export async function POST(request: NextRequest) {
     }
 
     const sheetGid = gid || '0';
+
+    // Validate sheetGid — must be numeric to prevent injection
+    if (!/^\d+$/.test(sheetGid)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid sheet GID. Must be a non-negative integer.' },
+        { status: 400 },
+      );
+    }
+
     const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=${sheetGid}`;
 
     // Fetch with timeout (15 seconds)

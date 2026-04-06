@@ -126,6 +126,7 @@ export function CreateCallingList({ userId, onNavigate }: Props) {
     setLoading(true)
     try {
       const res = await authFetch('/api/call-lists')
+      if (!res.ok) throw new Error('Failed to fetch call lists')
       const json = await res.json()
       // Client-side filter: only show lists assigned to this recruiter or created by them
       const myLists = (json.callLists || []).filter(

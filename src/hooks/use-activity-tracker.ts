@@ -32,7 +32,7 @@ const CHECK_INTERVAL_MS = 15_000 // 15 seconds
 // ---------------------------------------------------------------------------
 
 interface UseActivityTrackerOptions {
-  /** Current recruiter status (IDLE | LAUNCH | BREAK | ACTIVE | OFFLINE) */
+  /** Current recruiter status (IDLE | LAUNCH | ON_BREAK | ACTIVE | OFFLINE) */
   currentStatus: string
   /** Called when the hook decides to auto-switch to IDLE */
   onAutoIdle: () => void

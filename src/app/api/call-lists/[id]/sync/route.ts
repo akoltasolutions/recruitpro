@@ -156,6 +156,11 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Only admins can trigger sync
+    if (auth.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Access denied. Only admins can trigger sync.' }, { status: 403 });
+    }
+
     const { id } = await params;
 
     // Find the call list and verify it has Google Sheets config

@@ -34,8 +34,6 @@ interface Recruiter {
   email: string
 }
 
-const today = format(new Date(), 'yyyy-MM-dd')
-
 function formatCallDuration(seconds: number): string {
   if (seconds <= 0) return '0s'
   const duration = intervalToDuration({ start: 0, end: seconds * 1000 })
@@ -58,6 +56,7 @@ function getDispositionBadge(type: string | undefined | null): string {
 }
 
 export function TeamPerformance() {
+  const today = format(new Date(), 'yyyy-MM-dd')
   const [recruiters, setRecruiters] = useState<Recruiter[]>([])
   const [selectedRecruiter, setSelectedRecruiter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState<string>(today)

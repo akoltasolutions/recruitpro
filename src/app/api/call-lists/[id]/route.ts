@@ -17,6 +17,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       },
     });
     if (!callList) return NextResponse.json({ error: 'Call list not found' }, { status: 404 });
+
+    // Non-admin users can only view call lists assigned to them
+    if (auth.role !== 'ADMIN') {
+      const isAssigned = callList.assignments.some((a: { recruiterId: string }) => a.recruiterId === auth.userId);
+      if (!isAssigned) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+    }
+
     return NextResponse.json({ callList });
   } catch (error) {
     console.error('Get call list error:', error);

@@ -5,8 +5,6 @@ import { StatsCard } from '@/components/shared/stats-card'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Calendar } from '@/components/ui/calendar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -14,10 +12,9 @@ import {
 } from '@/components/ui/table'
 import {
   PhoneCall, Clock, CheckCircle, XCircle, MessageSquare, LayoutDashboard,
-  CalendarDays, TrendingUp, Trophy,
+  TrendingUp, Trophy,
 } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 
@@ -53,8 +50,8 @@ interface DashboardData {
 
 export function AdminDashboard() {
   const [period, setPeriod] = useState('daily')
-  const [customFrom, setCustomFrom] = useState<Date | undefined>()
-  const [customTo, setCustomTo] = useState<Date | undefined>()
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -63,7 +60,7 @@ export function AdminDashboard() {
     try {
       let url = `/api/dashboard?period=${period}`
       if (period === 'custom' && customFrom && customTo) {
-        url += `&from=${customFrom.toISOString()}&to=${customTo.toISOString()}`
+        url += `&from=${new Date(customFrom).toISOString()}&to=${new Date(customTo).toISOString()}`
       }
       const res = await authFetch(url)
       if (!res.ok) throw new Error('Failed to fetch')
@@ -88,7 +85,7 @@ export function AdminDashboard() {
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={period}
-            onChange={(e) => { if (e.target.value !== 'custom') setPeriod(e.target.value) }}
+            onChange={(e) => setPeriod(e.target.value)}
             className="w-[130px] rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="daily">Daily</option>
@@ -98,28 +95,18 @@ export function AdminDashboard() {
           </select>
           {period === 'custom' && (
             <>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {customFrom ? format(customFrom, 'MMM dd') : 'From'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} />
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {customTo ? format(customTo, 'MMM dd') : 'To'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={customTo} onSelect={setCustomTo} />
-                </PopoverContent>
-              </Popover>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
               <Button size="sm" onClick={fetchDashboard} disabled={!customFrom || !customTo}>Apply</Button>
             </>
           )}

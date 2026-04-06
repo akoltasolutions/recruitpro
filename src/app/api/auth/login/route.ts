@@ -28,27 +28,30 @@ export async function POST(request: NextRequest) {
 
     const user = await db.user.findUnique({ where: { email: trimmedEmail } });
 
-    // User not registered
+    // User not registered — log specific reason server-side, return generic message to client
     if (!user) {
+      console.error('Login attempt for unregistered email:', trimmedEmail);
       return NextResponse.json(
-        { error: 'User is not registered. Please sign up or contact admin.', code: 'USER_NOT_FOUND' },
-        { status: 404 }
+        { error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' },
+        { status: 401 }
       );
     }
 
-    // Account disabled/inactive
+    // Account disabled/inactive — log specific reason server-side, return generic message to client
     if (!user.isActive) {
+      console.error('Login attempt on inactive account:', trimmedEmail);
       return NextResponse.json(
-        { error: 'Your account is inactive. Please contact the administrator.', code: 'ACCOUNT_INACTIVE' },
-        { status: 403 }
+        { error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' },
+        { status: 401 }
       );
     }
 
-    // Wrong password
+    // Wrong password — log specific reason server-side, return generic message to client
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
+      console.error('Login attempt with wrong password for:', trimmedEmail);
       return NextResponse.json(
-        { error: 'Incorrect password. Please try again.', code: 'WRONG_PASSWORD' },
+        { error: 'Invalid email or password', code: 'INVALID_CREDENTIALS' },
         { status: 401 }
       );
     }
