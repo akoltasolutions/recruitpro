@@ -1,0 +1,59 @@
+# ═══════════════════════════════════════════════════════════════
+#  RECRUITPRO — AUTO DEPLOY TO AWS EC2
+#  Triggers automatically when you push to 'main' branch
+# ═══════════════════════════════════════════════════════════════
+
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Step 1: Get the code ───────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Step 2: Connect to your EC2 server and deploy ─────────
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "========================================="
+            echo "  RECRUITPRO AUTO-DEPLOY STARTED"
+            echo "========================================="
+
+            # Go to project directory
+            cd /home/ubuntu/recruitpro
+
+            # Pull latest code from GitHub
+            echo "[1/5] Pulling latest code..."
+            git pull origin main
+
+            # Install any new packages
+            echo "[2/5] Installing packages..."
+            bun install --frozen-lockfile 2>/dev/null || bun install
+
+            # Push database schema changes (if any)
+            echo "[3/5] Updating database schema..."
+            bun run db:push
+
+            # Build the app
+            echo "[4/5] Building app for production..."
+            bun run build
+
+            # Restart the app with PM2
+            echo "[5/5] Restarting app..."
+            pm2 restart recruitpro || pm2 start server.js --name recruitpro --interpreter bun
+
+            echo "========================================="
+            echo "  DEPLOY COMPLETE!"
+            echo "  App is live at: https://app.akolta.com"
+            echo "========================================="
