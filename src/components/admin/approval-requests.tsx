@@ -224,7 +224,7 @@ export function ApprovalRequests() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Registered</p>
-                    <p className="font-medium">{new Date(detailUser.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="font-medium">{new Date(detailUser.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</p>
                   </div>
                 </div>
               </div>

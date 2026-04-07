@@ -137,7 +137,7 @@ function formatDuration(ms: number): string {
 function formatLoginTime(dateStr: string | null): string {
   if (!dateStr) return '—'
   try {
-    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
   } catch {
     return '—'
   }

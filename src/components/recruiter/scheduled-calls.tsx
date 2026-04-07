@@ -177,7 +177,7 @@ export function ScheduledCalls({ userId, onNavigate }: ScheduledCallsProps) {
                                 getScheduledTimeColor(record.scheduledAt!)
                               )}
                             >
-                              {record.scheduledAt ? format(new Date(record.scheduledAt), 'HH:mm') : ''}
+                              {record.scheduledAt ? format(new Date(record.scheduledAt), 'hh:mm a') : ''}
                             </Badge>
                           </div>
 

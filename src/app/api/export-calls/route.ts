@@ -135,15 +135,17 @@ export async function GET(request: NextRequest) {
 
 /**
  * Format a Date to a human-readable date-time string suitable for Excel.
- * Output: "YYYY-MM-DD HH:mm:ss"
+ * Output: "YYYY-MM-DD hh:mm:ss AM/PM"
  */
 function formatDateTime(date: Date): string {
   const d = new Date(date);
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  const hours = String(d.getHours()).padStart(2, '0');
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  return `${year}-${month}-${day} ${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
 }

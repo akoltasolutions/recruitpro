@@ -307,7 +307,7 @@ export function CallHistory({ userId }: CallHistoryProps) {
                   </TableCell>
                   <TableCell className="text-sm">{record.client?.name || '—'}</TableCell>
                   <TableCell className="font-mono text-sm">{formatDuration(record.callDuration)}</TableCell>
-                  <TableCell className="text-sm">{format(new Date(record.calledAt), 'MMM d, HH:mm')}</TableCell>
+                  <TableCell className="text-sm">{format(new Date(record.calledAt), 'MMM d, hh:mm a')}</TableCell>
                   <TableCell className="max-w-[200px]">
                     <p className="text-sm text-muted-foreground truncate">
                       {record.notes || '—'}
@@ -398,7 +398,7 @@ export function CallHistory({ userId }: CallHistoryProps) {
 
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(record.calledAt), 'MMM d, yyyy HH:mm')}
+                    {format(new Date(record.calledAt), 'MMM d, yyyy hh:mm a')}
                   </p>
                   {record.notes && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
