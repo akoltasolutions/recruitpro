@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Download, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface LoginPageProps {
@@ -158,6 +158,21 @@ export function LoginPage({ onSwitch, onForgotPassword }: LoginPageProps) {
                 <button type="button" onClick={onSwitch} className="text-emerald-600 hover:underline font-medium">
                   Create account
                 </button>
+              </p>
+            </div>
+
+            {/* Android App Download */}
+            <div className="w-full border-t pt-4 mt-2">
+              <a
+                href="/api/download-apk"
+                className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-all text-sm font-medium"
+              >
+                <Smartphone className="h-4 w-4" />
+                Download Android App
+                <Download className="h-3.5 w-3.5" />
+              </a>
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                Install the RecruitPro app on your Android phone for the best calling experience
               </p>
             </div>
           </CardFooter>
