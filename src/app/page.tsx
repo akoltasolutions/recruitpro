@@ -17,6 +17,7 @@ import { TeamPerformance } from '@/components/admin/team-performance'
 import { TeamMonitoring } from '@/components/admin/team-monitoring'
 import { AdminSettings } from '@/components/admin/admin-settings'
 import { AnnouncementsManagement } from '@/components/admin/announcements-management'
+import { ScreenMonitor } from '@/components/admin/screen-monitor'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { AutoDialer } from '@/components/recruiter/auto-dialer'
@@ -25,11 +26,12 @@ import { ScheduledCalls } from '@/components/recruiter/scheduled-calls'
 import { Settings } from '@/components/recruiter/settings'
 import { CandidatePipeline } from '@/components/recruiter/candidate-pipeline'
 import { CreateCallingList } from '@/components/recruiter/create-calling-list'
+import { ScreenShareHandler } from '@/components/recruiter/screen-share-handler'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
 type AuthView = 'login' | 'signup' | 'forgot-password'
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals' | 'settings' | 'announcements'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'screen-monitor' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals' | 'settings' | 'announcements'
 type RecruiterPage = 'home' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
@@ -186,6 +188,7 @@ function AppContent() {
         case 'dashboard': return <AdminDashboard />
         case 'team-performance': return <TeamPerformance />
         case 'team-monitoring': return <TeamMonitoring />
+        case 'screen-monitor': return <ScreenMonitor />
         case 'dispositions': return <DispositionManagement />
         case 'call-lists': return <CallListManagement userId={user.id} />
         case 'templates': return <MessageTemplates />
@@ -221,6 +224,7 @@ function AppContent() {
 
   return (
     <RecruiterLayout activePage={recruiterPage} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} onLogout={handleLogout}>
+      <ScreenShareHandler />
       {renderRecruiterPage()}
     </RecruiterLayout>
   )
