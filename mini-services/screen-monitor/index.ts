@@ -22,8 +22,8 @@ interface ConnectedRecruiter {
   socketId: string
   userId: string
   name: string
-  status: 'idle' | 'streaming' | 'paused'
-  streamViewers: Set<string> // admin socket IDs currently viewing this recruiter
+  status: 'idle' | 'monitoring'
+  streamViewers: Set<string> // admin socket IDs currently viewing
   connectedAt: number
 }
 
@@ -38,9 +38,9 @@ interface ConnectedAdmin {
 // State
 // ---------------------------------------------------------------------------
 
-const recruiters = new Map<string, ConnectedRecruiter>()   // keyed by userId
-const admins = new Map<string, ConnectedAdmin>()           // keyed by socketId
-const socketToUserId = new Map<string, string>()           // socketId → userId (all clients)
+const recruiters = new Map<string, ConnectedRecruiter>()
+const admins = new Map<string, ConnectedAdmin>()
+const socketToUserId = new Map<string, string>()
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,10 +56,29 @@ function getRecruiterList() {
 }
 
 function broadcastRecruiterList() {
-  // Send updated list to all connected admins
   for (const [, admin] of admins) {
     io.to(admin.socketId).emit('recruiter-list', getRecruiterList())
   }
+}
+
+function stopMonitoringRecruiter(recruiter: ConnectedRecruiter) {
+  recruiter.status = 'idle'
+  const viewers = Array.from(recruiter.streamViewers)
+  recruiter.streamViewers.clear()
+
+  // Notify all viewers that monitoring ended
+  for (const viewerSocketId of viewers) {
+    io.to(viewerSocketId).emit('monitoring-ended', {
+      userId: recruiter.userId,
+      reason: 'stopped',
+    })
+    const admin = admins.get(viewerSocketId)
+    if (admin && admin.viewingUserId === recruiter.userId) {
+      admin.viewingUserId = null
+    }
+  }
+
+  broadcastRecruiterList()
 }
 
 // ---------------------------------------------------------------------------
@@ -77,9 +96,8 @@ io.on('connection', (socket) => {
     // Remove previous connection if exists
     const existing = recruiters.get(userId)
     if (existing) {
-      // Notify any admins viewing the old connection
       for (const viewerSocketId of existing.streamViewers) {
-        io.to(viewerSocketId).emit('screen-ended', { userId, reason: 'reconnected' })
+        io.to(viewerSocketId).emit('monitoring-ended', { userId, reason: 'reconnected' })
       }
       io.sockets.sockets.get(existing.socketId)?.disconnect(true)
     }
@@ -110,61 +128,12 @@ io.on('connection', (socket) => {
       viewingUserId: null,
     })
 
-    // Send current recruiter list
     socket.emit('recruiter-list', getRecruiterList())
     console.log(`[ScreenMonitor] Admin registered: ${name} (${userId})`)
   })
 
-  // ---- Admin requests to view a recruiter's screen ----
-  socket.on('request-screen', (data: { targetUserId: string }) => {
-    const admin = admins.get(socket.id)
-    const recruiter = recruiters.get(data.targetUserId)
-    if (!admin || !recruiter) return
-
-    // Forward request to recruiter
-    io.to(`recruiter-${data.targetUserId}`).emit('screen-request', {
-      adminName: admin.name,
-      adminId: admin.userId,
-    })
-
-    console.log(`[ScreenMonitor] Admin ${admin.name} requested screen of ${recruiter.name}`)
-  })
-
-  // ---- Recruiter accepts screen share ----
-  socket.on('screen-share-start', (data: { userId: string }) => {
-    const recruiter = recruiters.get(data.userId)
-    if (!recruiter) return
-
-    recruiter.status = 'streaming'
-    console.log(`[ScreenMonitor] ${recruiter.name} started sharing screen`)
-    broadcastRecruiterList()
-
-    // Notify all admins who might be waiting
-    for (const [, admin] of admins) {
-      io.to(admin.socketId).emit('screen-share-started', {
-        userId: data.userId,
-        name: recruiter.name,
-      })
-    }
-  })
-
-  // ---- Recruiter sends a screen frame ----
-  socket.on('screen-frame', (data: { userId: string; frame: string; timestamp: number }) => {
-    const recruiter = recruiters.get(data.userId)
-    if (!recruiter || recruiter.status !== 'streaming') return
-
-    // Forward frame to all viewers
-    for (const viewerSocketId of recruiter.streamViewers) {
-      io.to(viewerSocketId).emit('screen-frame', {
-        userId: data.userId,
-        frame: data.frame,
-        timestamp: data.timestamp,
-      })
-    }
-  })
-
-  // ---- Admin starts viewing a specific recruiter ----
-  socket.on('view-screen', (data: { targetUserId: string }) => {
+  // ---- Admin starts monitoring a recruiter ----
+  socket.on('start-monitoring', (data: { targetUserId: string }) => {
     const admin = admins.get(socket.id)
     const recruiter = recruiters.get(data.targetUserId)
     if (!admin || !recruiter) return
@@ -174,24 +143,37 @@ io.on('connection', (socket) => {
       const prevRecruiter = recruiters.get(admin.viewingUserId)
       if (prevRecruiter) {
         prevRecruiter.streamViewers.delete(socket.id)
-        // If no more viewers, optionally notify recruiter
-        if (prevRecruiter.streamViewers.size === 0 && prevRecruiter.status === 'streaming') {
-          io.to(`recruiter-${prevRecruiter.userId}`).emit('viewers-count', { count: 0 })
+        if (prevRecruiter.streamViewers.size === 0) {
+          // Tell recruiter to stop capturing (no viewers left)
+          io.to(`recruiter-${prevRecruiter.userId}`).emit('stop-capture')
+          stopMonitoringRecruiter(prevRecruiter)
         }
       }
     }
 
+    // If recruiter isn't monitoring yet, tell them to start capturing
+    if (recruiter.status !== 'monitoring') {
+      io.to(`recruiter-${data.targetUserId}`).emit('start-capture')
+      recruiter.status = 'monitoring'
+      broadcastRecruiterList()
+      console.log(`[ScreenMonitor] Admin ${admin.name} started monitoring ${recruiter.name}`)
+    }
+
+    // Register this admin as a viewer
     admin.viewingUserId = data.targetUserId
     recruiter.streamViewers.add(socket.id)
-    io.to(`recruiter-${data.targetUserId}`).emit('viewers-count', {
-      count: recruiter.streamViewers.size,
+
+    // Tell admin to start viewing
+    socket.emit('monitoring-started', {
+      userId: data.targetUserId,
+      name: recruiter.name,
     })
 
-    console.log(`[ScreenMonitor] Admin ${admin.name} is now viewing ${recruiter.name} (${recruiter.streamViewers.size} viewers)`)
+    console.log(`[ScreenMonitor] Admin ${admin.name} viewing ${recruiter.name} (${recruiter.streamViewers.size} viewers)`)
   })
 
-  // ---- Admin stops viewing ----
-  socket.on('stop-viewing', (data: { targetUserId: string }) => {
+  // ---- Admin stops monitoring ----
+  socket.on('stop-monitoring', (data: { targetUserId: string }) => {
     const admin = admins.get(socket.id)
     const recruiter = recruiters.get(data.targetUserId)
     if (!admin || !recruiter) return
@@ -199,41 +181,56 @@ io.on('connection', (socket) => {
     recruiter.streamViewers.delete(socket.id)
     admin.viewingUserId = null
 
-    io.to(`recruiter-${data.targetUserId}`).emit('viewers-count', {
-      count: recruiter.streamViewers.size,
-    })
+    // Tell admin their view has ended
+    socket.emit('monitoring-ended', { userId: data.targetUserId, reason: 'stopped' })
 
-    // If recruiter is streaming but has no viewers, notify them
+    // If no more viewers, tell recruiter to stop capturing silently
     if (recruiter.streamViewers.size === 0) {
-      io.to(`recruiter-${data.targetUserId}`).emit('no-viewers')
+      io.to(`recruiter-${data.targetUserId}`).emit('stop-capture')
+      recruiter.status = 'idle'
+      broadcastRecruiterList()
     }
 
-    console.log(`[ScreenMonitor] Admin ${admin.name} stopped viewing ${recruiter.name}`)
+    console.log(`[ScreenMonitor] Admin ${admin.name} stopped monitoring ${recruiter.name}`)
   })
 
-  // ---- Recruiter stops screen share ----
-  socket.on('screen-share-stop', (data: { userId: string }) => {
+  // ---- Recruiter sends a screen frame ----
+  socket.on('screen-frame', (data: { userId: string; frame: string; timestamp: number }) => {
+    const recruiter = recruiters.get(data.userId)
+    if (!recruiter || recruiter.status !== 'monitoring') return
+
+    // Forward frame ONLY to admins actively viewing this recruiter
+    for (const viewerSocketId of recruiter.streamViewers) {
+      io.to(viewerSocketId).emit('screen-frame', {
+        userId: data.userId,
+        frame: data.frame,
+        timestamp: data.timestamp,
+      })
+    }
+  })
+
+  // ---- Recruiter reports capture failure ----
+  socket.on('capture-failed', (data: { userId: string; reason: string }) => {
     const recruiter = recruiters.get(data.userId)
     if (!recruiter) return
 
     recruiter.status = 'idle'
-    recruiter.streamViewers.clear()
+    broadcastRecruiterList()
 
     // Notify all viewers
     for (const viewerSocketId of recruiter.streamViewers) {
-      io.to(viewerSocketId).emit('screen-ended', { userId: data.userId, reason: 'stopped' })
-    }
-
-    // Update admins who were viewing
-    for (const [, admin] of admins) {
-      if (admin.viewingUserId === data.userId) {
+      io.to(viewerSocketId).emit('monitoring-ended', {
+        userId: data.userId,
+        reason: 'capture-denied',
+      })
+      const admin = admins.get(viewerSocketId)
+      if (admin && admin.viewingUserId === data.userId) {
         admin.viewingUserId = null
       }
-      io.to(admin.socketId).emit('screen-share-stopped', { userId: data.userId })
     }
+    recruiter.streamViewers.clear()
 
-    broadcastRecruiterList()
-    console.log(`[ScreenMonitor] ${recruiter.name} stopped sharing screen`)
+    console.log(`[ScreenMonitor] Capture failed for ${recruiter.name}: ${data.reason}`)
   })
 
   // ---- Disconnect ----
@@ -244,9 +241,11 @@ io.on('connection', (socket) => {
     // Check if recruiter disconnected
     for (const [recruiterUserId, recruiter] of recruiters) {
       if (recruiter.socketId === socket.id) {
-        // Notify all viewers
         for (const viewerSocketId of recruiter.streamViewers) {
-          io.to(viewerSocketId).emit('screen-ended', { userId: recruiterUserId, reason: 'disconnected' })
+          io.to(viewerSocketId).emit('monitoring-ended', {
+            userId: recruiterUserId,
+            reason: 'disconnected',
+          })
           const admin = admins.get(viewerSocketId)
           if (admin && admin.viewingUserId === recruiterUserId) {
             admin.viewingUserId = null
@@ -262,11 +261,12 @@ io.on('connection', (socket) => {
     // Check if admin disconnected
     for (const [adminSocketId, admin] of admins) {
       if (adminSocketId === socket.id) {
-        // Remove from any recruiter's viewer list
         for (const [, recruiter] of recruiters) {
           recruiter.streamViewers.delete(socket.id)
-          if (recruiter.streamViewers.size === 0 && recruiter.status === 'streaming') {
-            io.to(`recruiter-${recruiter.userId}`).emit('viewers-count', { count: 0 })
+          if (recruiter.streamViewers.size === 0 && recruiter.status === 'monitoring') {
+            io.to(`recruiter-${recruiter.userId}`).emit('stop-capture')
+            recruiter.status = 'idle'
+            broadcastRecruiterList()
           }
         }
         admins.delete(socket.id)

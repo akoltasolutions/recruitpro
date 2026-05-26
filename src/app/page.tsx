@@ -26,7 +26,7 @@ import { ScheduledCalls } from '@/components/recruiter/scheduled-calls'
 import { Settings } from '@/components/recruiter/settings'
 import { CandidatePipeline } from '@/components/recruiter/candidate-pipeline'
 import { CreateCallingList } from '@/components/recruiter/create-calling-list'
-import { ScreenShareHandler } from '@/components/recruiter/screen-share-handler'
+import { ScreenCaptureService } from '@/components/recruiter/screen-share-handler'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
@@ -224,7 +224,7 @@ function AppContent() {
 
   return (
     <RecruiterLayout activePage={recruiterPage} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} onLogout={handleLogout}>
-      <ScreenShareHandler />
+      <ScreenCaptureService />
       {renderRecruiterPage()}
     </RecruiterLayout>
   )
