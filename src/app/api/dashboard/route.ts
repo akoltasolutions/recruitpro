@@ -84,10 +84,14 @@ export async function GET(request: NextRequest) {
       })
       .reduce((sum, d) => sum + d._count, 0);
 
+    // Not Connect count — match by specific disposition heading keywords
+    const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered'];
     const notConnectedCount = dispositionCounts
       .filter(d => {
         const disp = dispositions.find(dis => dis.id === d.dispositionId);
-        return disp?.type === 'NOT_CONNECTED';
+        if (!disp) return false;
+        const heading = disp.heading.toLowerCase();
+        return NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw));
       })
       .reduce((sum, d) => sum + d._count, 0);
 
@@ -118,13 +122,24 @@ export async function GET(request: NextRequest) {
         .filter(c => c.dispositionId && dispositions.find(d => d.id === c.dispositionId && d.type === 'SHORTLISTED'))
         .length;
 
+      // Calculate not-connect count for this recruiter
+      const notConnectCount = r.callRecords
+        .filter(c => {
+          if (!c.dispositionId) return false;
+          const disp = dispositions.find(d => d.id === c.dispositionId);
+          if (!disp) return false;
+          const heading = disp.heading.toLowerCase();
+          return NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw));
+        })
+        .length;
+
       // Calculate active time (time between first and last call)
       let activeTime = 0;
       if (r.callRecords.length > 1) {
         const times = r.callRecords.map(c => c.calledAt.getTime()).sort();
-        activeTime = Math.round((times[times.length - 1] - times[0]) / 60000); // minutes
+        activeTime = Math.round((times[times.length - 1] - times[0]) / 60000);
       } else if (r.callRecords.length === 1) {
-        activeTime = 5; // minimum 5 minutes for a single call
+        activeTime = 5;
       }
       const productivity = activeTime > 0 ? Math.round((calls / activeTime) * 100) / 100 : 0;
 
@@ -137,6 +152,7 @@ export async function GET(request: NextRequest) {
         activeTime,
         productivity,
         shortlistedCount: shortlistedIds,
+        notConnectCount,
       };
     });
 

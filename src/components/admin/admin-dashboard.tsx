@@ -155,10 +155,10 @@ export function AdminDashboard() {
               iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
             />
             <StatsCard
-              title="Not Connected"
+              title="Not Connect"
               value={data?.notConnectedCount ?? 0}
               icon={XCircle}
-              description="Failed attempts"
+              description="Switched Off / Invalid / Busy / Failed / Not Answered"
               iconColor="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
             />
             <StatsCard

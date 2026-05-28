@@ -53,6 +53,16 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Not Connect count — match by specific disposition heading keywords
+    const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered'];
+    const notConnectCount = dispositionSummary.reduce((sum, d) => {
+      const disp = dispositions.find((dis) => dis.id === d.dispositionId);
+      if (!disp) return sum;
+      const heading = disp.heading.toLowerCase();
+      const isMatch = NOT_CONNECT_KEYWORDS.some((kw) => heading.includes(kw));
+      return isMatch ? sum + d._count : sum;
+    }, 0);
+
     // Today's follow-ups (candidates with followUpDate today, scoped to assigned lists)
     const assignedListIds = (await db.callListAssignment.findMany({
       where: { recruiterId },
@@ -104,6 +114,7 @@ export async function GET(request: NextRequest) {
       todayCompleted,
       totalDuration,
       statusSummary,
+      notConnectCount,
       todayFollowUps,
       followUpCandidates,
       scheduledToday,

@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Phone, Clock, CheckCircle, Calendar, List, ChevronRight, Play, GitBranch, UserCheck, MessageSquare, TrendingUp } from 'lucide-react'
+import { Phone, Clock, CheckCircle, Calendar, List, ChevronRight, Play, GitBranch, UserCheck, MessageSquare, TrendingUp, XCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -59,6 +59,7 @@ interface DailyStats {
   todayCalls: number
   todayCompleted: number
   totalDuration: number
+  notConnectCount: number
   statusSummary: { disposition: string; type: string; count: number }[]
   todayFollowUps: number
   followUpCandidates: { id: string; name: string; phone: string; role: string | null; followUpDate: string; notes: string | null }[]
@@ -174,7 +175,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
       />
 
       {/* Stats Cards — Daily Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatsCard
           title="Today's Calls"
           value={dailyStats?.todayCalls ?? 0}
@@ -188,6 +189,13 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
           icon={CheckCircle}
           description="Logged with outcome"
           iconColor="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+        />
+        <StatsCard
+          title="Not Connect"
+          value={dailyStats?.notConnectCount ?? 0}
+          icon={XCircle}
+          description="Switched Off / Busy / Not Answered"
+          iconColor="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
         />
         <StatsCard
           title="Today's Follow-ups"

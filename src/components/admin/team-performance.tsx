@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw } from 'lucide-react'
+import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw, XCircle, Timer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
@@ -121,6 +121,7 @@ export function TeamPerformance() {
   }
 
   // ─── Stats ───
+  const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered']
   const stats = useMemo(() => {
     const totalCalls = callRecords.length
     const connected = callRecords.filter(
@@ -129,7 +130,12 @@ export function TeamPerformance() {
     const totalDuration = callRecords.reduce((sum, r) => sum + r.callDuration, 0)
     const avgDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0
     const uniqueCandidates = new Set(callRecords.map(r => r.candidate.phone)).size
-    return { totalCalls, connected, avgDuration, uniqueCandidates }
+    const notConnect = callRecords.filter(r => {
+      if (!r.disposition) return false
+      const heading = r.disposition.heading.toLowerCase()
+      return NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw))
+    }).length
+    return { totalCalls, connected, avgDuration, totalDuration, uniqueCandidates, notConnect }
   }, [callRecords])
 
   // ─── Pagination ───
@@ -277,7 +283,7 @@ export function TeamPerformance() {
       </div>
 
       {/* ─── Stats Row ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
             <Phone className="h-4 w-4 text-muted-foreground" />
@@ -291,6 +297,20 @@ export function TeamPerformance() {
             <span className="text-xs text-muted-foreground font-medium">Connected</span>
           </div>
           <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : stats.connected}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <div className="flex items-center gap-2 mb-1">
+            <XCircle className="h-4 w-4 text-red-600" />
+            <span className="text-xs text-muted-foreground font-medium">Not Connect</span>
+          </div>
+          <p className="text-2xl font-bold text-red-600">{loading ? '—' : stats.notConnect}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <div className="flex items-center gap-2 mb-1">
+            <Timer className="h-4 w-4 text-purple-600" />
+            <span className="text-xs text-muted-foreground font-medium">Total Talk Time</span>
+          </div>
+          <p className="text-2xl font-bold text-purple-600">{loading ? '—' : formatCallDuration(stats.totalDuration)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
