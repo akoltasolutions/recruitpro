@@ -8,3 +8,4 @@ bun install v1.3.14 (0d9b296a)
 [screen-monitor] Running bun run dev...
 $ bun --hot index.ts
 [ScreenMonitor] WebSocket server running on port 3004
+error: Module not found '/home/z/my-project/mini-services/screen-monitor/index.ts'
