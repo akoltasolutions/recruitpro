@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw, XCircle, Timer } from 'lucide-react'
+import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw, XCircle, CheckCircle, Timer, TrendingUp } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
@@ -42,6 +42,15 @@ function formatCallDuration(seconds: number): string {
   if (duration.minutes && duration.minutes > 0) parts.push(`${duration.minutes}m`)
   if (duration.seconds && duration.seconds > 0) parts.push(`${duration.seconds}s`)
   return parts.join(' ') || '0s'
+}
+
+function formatActiveHours(activeMinutes: number): string {
+  if (activeMinutes <= 0) return '0h'
+  const hrs = Math.floor(activeMinutes / 60)
+  const mins = Math.round(activeMinutes % 60)
+  if (hrs > 0 && mins > 0) return `${hrs}.${mins}h`
+  if (hrs > 0) return `${hrs}h`
+  return `${mins}m`
 }
 
 function getDispositionBadge(type: string | undefined | null): string {
@@ -120,22 +129,27 @@ export function TeamPerformance() {
     fetchData()
   }
 
-  // ─── Stats ───
+  // ─── Stats (matching Admin Dashboard) ───
   const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered']
   const stats = useMemo(() => {
     const totalCalls = callRecords.length
-    const connected = callRecords.filter(
-      r => r.disposition?.type === 'CONNECTED' || r.callStatus === 'COMPLETED'
-    ).length
     const totalDuration = callRecords.reduce((sum, r) => sum + r.callDuration, 0)
-    const avgDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0
-    const uniqueCandidates = new Set(callRecords.map(r => r.candidate.phone)).size
-    const notConnect = callRecords.filter(r => {
+    const avgTalkTime = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0
+    const notConnected = callRecords.filter(r => {
       if (!r.disposition) return false
       const heading = r.disposition.heading.toLowerCase()
       return NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw))
     }).length
-    return { totalCalls, connected, avgDuration, totalDuration, uniqueCandidates, notConnect }
+    const shortlisted = callRecords.filter(r => r.disposition?.type === 'SHORTLISTED').length
+    // Active Hours — time between first and last call (same logic as Admin Dashboard)
+    let activeMinutes = 0
+    if (callRecords.length > 1) {
+      const times = callRecords.map(r => new Date(r.calledAt).getTime()).sort()
+      activeMinutes = Math.round((times[times.length - 1] - times[0]) / 60000)
+    } else if (callRecords.length === 1) {
+      activeMinutes = 5
+    }
+    return { totalCalls, avgTalkTime, totalDuration, activeMinutes, shortlisted, notConnected }
   }, [callRecords])
 
   // ─── Pagination ───
@@ -282,49 +296,49 @@ export function TeamPerformance() {
         </div>
       </div>
 
-      {/* ─── Stats Row ─── */}
+      {/* ─── Stats Row (matching Admin Dashboard) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
-            <Phone className="h-4 w-4 text-muted-foreground" />
+            <Phone className="h-4 w-4 text-emerald-600" />
             <span className="text-xs text-muted-foreground font-medium">Total Calls</span>
           </div>
           <p className="text-2xl font-bold">{loading ? '—' : stats.totalCalls}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
-            <User className="h-4 w-4 text-emerald-600" />
-            <span className="text-xs text-muted-foreground font-medium">Connected</span>
+            <Clock className="h-4 w-4 text-blue-600" />
+            <span className="text-xs text-muted-foreground font-medium">Avg Talk Time</span>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : stats.connected}</p>
-        </div>
-        <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <XCircle className="h-4 w-4 text-red-600" />
-            <span className="text-xs text-muted-foreground font-medium">Not Connect</span>
-          </div>
-          <p className="text-2xl font-bold text-red-600">{loading ? '—' : stats.notConnect}</p>
+          <p className="text-2xl font-bold text-blue-600">{loading ? '—' : formatCallDuration(stats.avgTalkTime)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
             <Timer className="h-4 w-4 text-purple-600" />
-            <span className="text-xs text-muted-foreground font-medium">Total Talk Time</span>
+            <span className="text-xs text-muted-foreground font-medium">Total Call Time</span>
           </div>
           <p className="text-2xl font-bold text-purple-600">{loading ? '—' : formatCallDuration(stats.totalDuration)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground font-medium">Avg Duration</span>
+            <TrendingUp className="h-4 w-4 text-orange-600" />
+            <span className="text-xs text-muted-foreground font-medium">Active Hours</span>
           </div>
-          <p className="text-2xl font-bold">{loading ? '—' : formatCallDuration(stats.avgDuration)}</p>
+          <p className="text-2xl font-bold text-orange-600">{loading ? '—' : formatActiveHours(stats.activeMinutes)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
           <div className="flex items-center gap-2 mb-1">
-            <User className="h-4 w-4 text-blue-600" />
-            <span className="text-xs text-muted-foreground font-medium">Unique Candidates</span>
+            <CheckCircle className="h-4 w-4 text-emerald-600" />
+            <span className="text-xs text-muted-foreground font-medium">Shortlisted</span>
           </div>
-          <p className="text-2xl font-bold text-blue-600">{loading ? '—' : stats.uniqueCandidates}</p>
+          <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : stats.shortlisted}</p>
+        </div>
+        <div className="rounded-lg border p-4 bg-card">
+          <div className="flex items-center gap-2 mb-1">
+            <XCircle className="h-4 w-4 text-red-600" />
+            <span className="text-xs text-muted-foreground font-medium">Not Connected</span>
+          </div>
+          <p className="text-2xl font-bold text-red-600">{loading ? '—' : stats.notConnected}</p>
         </div>
       </div>
 

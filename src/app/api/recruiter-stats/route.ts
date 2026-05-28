@@ -34,6 +34,22 @@ export async function GET(request: NextRequest) {
       _sum: { callDuration: true },
     });
     const totalDuration = durationResult._sum.callDuration || 0;
+    const avgTalkTime = todayCalls > 0 ? Math.round(totalDuration / todayCalls) : 0;
+
+    // Active Hours — time between first and last call today
+    const todayCallRecords = await db.callRecord.findMany({
+      where: { recruiterId, calledAt: { gte: dayStart, lte: dayEnd } },
+      select: { calledAt: true },
+      orderBy: { calledAt: 'asc' },
+    });
+    let activeMinutes = 0;
+    if (todayCallRecords.length > 1) {
+      const firstTime = todayCallRecords[0].calledAt.getTime();
+      const lastTime = todayCallRecords[todayCallRecords.length - 1].calledAt.getTime();
+      activeMinutes = Math.round((lastTime - firstTime) / 60000);
+    } else if (todayCallRecords.length === 1) {
+      activeMinutes = 5;
+    }
 
     // Disposition summary today
     const dispositionSummary = await db.callRecord.groupBy({
@@ -55,12 +71,18 @@ export async function GET(request: NextRequest) {
 
     // Not Connect count — match by specific disposition heading keywords
     const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered'];
-    const notConnectCount = dispositionSummary.reduce((sum, d) => {
+    const notConnectedCount = dispositionSummary.reduce((sum, d) => {
       const disp = dispositions.find((dis) => dis.id === d.dispositionId);
       if (!disp) return sum;
       const heading = disp.heading.toLowerCase();
       const isMatch = NOT_CONNECT_KEYWORDS.some((kw) => heading.includes(kw));
       return isMatch ? sum + d._count : sum;
+    }, 0);
+
+    // Shortlisted count
+    const shortlistedCount = dispositionSummary.reduce((sum, d) => {
+      const disp = dispositions.find((dis) => dis.id === d.dispositionId);
+      return disp?.type === 'SHORTLISTED' ? sum + d._count : sum;
     }, 0);
 
     // Today's follow-ups (candidates with followUpDate today, scoped to assigned lists)
@@ -113,8 +135,11 @@ export async function GET(request: NextRequest) {
       todayCalls,
       todayCompleted,
       totalDuration,
+      avgTalkTime,
+      activeMinutes,
+      shortlistedCount,
+      notConnectedCount,
       statusSummary,
-      notConnectCount,
       todayFollowUps,
       followUpCandidates,
       scheduledToday,

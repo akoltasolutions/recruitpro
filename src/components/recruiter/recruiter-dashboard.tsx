@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Phone, Clock, CheckCircle, Calendar, List, ChevronRight, Play, GitBranch, UserCheck, MessageSquare, TrendingUp, XCircle } from 'lucide-react'
+import { Phone, Clock, CheckCircle, Calendar, List, ChevronRight, Play, GitBranch, UserCheck, MessageSquare, TrendingUp, XCircle, Timer } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -59,7 +59,10 @@ interface DailyStats {
   todayCalls: number
   todayCompleted: number
   totalDuration: number
-  notConnectCount: number
+  avgTalkTime: number
+  activeMinutes: number
+  shortlistedCount: number
+  notConnectedCount: number
   statusSummary: { disposition: string; type: string; count: number }[]
   todayFollowUps: number
   followUpCandidates: { id: string; name: string; phone: string; role: string | null; followUpDate: string; notes: string | null }[]
@@ -68,10 +71,22 @@ interface DailyStats {
 }
 
 function formatDuration(seconds: number): string {
+  if (seconds <= 0) return '0s'
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
   if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
+function formatActiveHours(activeMinutes: number): string {
+  if (activeMinutes <= 0) return '0h'
+  const hrs = Math.floor(activeMinutes / 60)
+  const mins = Math.round(activeMinutes % 60)
+  if (hrs > 0 && mins > 0) return `${hrs}.${mins}h`
+  if (hrs > 0) return `${hrs}h`
+  return `${mins}m`
 }
 
 export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardProps) {
@@ -174,42 +189,49 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
         onStatusChange={(status) => setUserStatus(status)}
       />
 
-      {/* Stats Cards — Daily Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Stats Cards — matching Admin Dashboard */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatsCard
-          title="Today's Calls"
+          title="Total Calls"
           value={dailyStats?.todayCalls ?? 0}
           icon={Phone}
           description="Completed today"
           iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
         />
         <StatsCard
-          title="With Disposition"
-          value={dailyStats?.todayCompleted ?? 0}
-          icon={CheckCircle}
-          description="Logged with outcome"
+          title="Avg Talk Time"
+          value={formatDuration(dailyStats?.avgTalkTime ?? 0)}
+          icon={Clock}
+          description="Per call average"
           iconColor="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
         />
         <StatsCard
-          title="Not Connect"
-          value={dailyStats?.notConnectCount ?? 0}
+          title="Total Call Time"
+          value={formatDuration(dailyStats?.totalDuration ?? 0)}
+          icon={Timer}
+          description="Cumulative time"
+          iconColor="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400"
+        />
+        <StatsCard
+          title="Active Hours"
+          value={formatActiveHours(dailyStats?.activeMinutes ?? 0)}
+          icon={TrendingUp}
+          description="Active calling time"
+          iconColor="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400"
+        />
+        <StatsCard
+          title="Shortlisted"
+          value={dailyStats?.shortlistedCount ?? 0}
+          icon={CheckCircle}
+          description="Successful referrals"
+          iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+        />
+        <StatsCard
+          title="Not Connected"
+          value={dailyStats?.notConnectedCount ?? 0}
           icon={XCircle}
           description="Switched Off / Busy / Not Answered"
           iconColor="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
-        />
-        <StatsCard
-          title="Today's Follow-ups"
-          value={dailyStats?.todayFollowUps ?? 0}
-          icon={Calendar}
-          description="Due today"
-          iconColor="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-        />
-        <StatsCard
-          title="Talk Time"
-          value={formatDuration(dailyStats?.totalDuration ?? 0)}
-          icon={TrendingUp}
-          description="Total today"
-          iconColor="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400"
         />
       </div>
 

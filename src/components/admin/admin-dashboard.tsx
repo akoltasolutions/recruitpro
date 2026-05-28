@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import {
   PhoneCall, Clock, CheckCircle, XCircle, MessageSquare, LayoutDashboard,
-  TrendingUp, Trophy,
+  TrendingUp, Trophy, Timer,
 } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { toast } from 'sonner'
@@ -134,16 +134,16 @@ export function AdminDashboard() {
               iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
             />
             <StatsCard
-              title="Avg Call Time"
+              title="Avg Talk Time"
               value={formatTime(data?.avgCallTime ?? 0)}
               icon={Clock}
               description="Per call average"
               iconColor="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
             />
             <StatsCard
-              title="Total Call Duration"
+              title="Total Call Time"
               value={formatTime(data?.totalCallDuration ?? 0)}
-              icon={Clock}
+              icon={Timer}
               description="Cumulative time"
               iconColor="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400"
             />
@@ -155,7 +155,7 @@ export function AdminDashboard() {
               iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
             />
             <StatsCard
-              title="Not Connect"
+              title="Not Connected"
               value={data?.notConnectedCount ?? 0}
               icon={XCircle}
               description="Switched Off / Invalid / Busy / Failed / Not Answered"
