@@ -26,7 +26,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({ where: { email: trimmedEmail } });
+    const user = await db.user.findUnique({
+      where: { email: trimmedEmail },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            subscriptionStatus: true,
+            maxUsers: true,
+            maxNumbers: true,
+            dailyUploadLimit: true,
+          },
+        },
+      },
+    });
 
     // User not registered — log specific reason server-side, return generic message to client
     if (!user) {
@@ -75,8 +91,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { password: _, ...safeUser } = user;
-    return NextResponse.json({ user: safeUser, token });
+    const { password: _, organization, ...safeUser } = user;
+    return NextResponse.json({ user: safeUser, token, organization: organization || null });
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

@@ -1,7 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type UserRole = 'ADMIN' | 'RECRUITER';
+export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'USER';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  email: string;
+  phone?: string;
+  isActive: boolean;
+  subscriptionStatus: string;
+  maxUsers: number;
+  maxNumbers: number;
+  dailyUploadLimit: number;
+}
 
 export interface User {
   id: string;
@@ -15,15 +28,19 @@ export interface User {
   whatsappAccess: boolean;
   uploadPermission: boolean;
   createListPermission: boolean;
+  organizationId?: string;
+  designation?: string;
 }
 
 interface AuthState {
   user: User | null;
+  organization: Organization | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User, token: string, organization?: Organization | null) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
+  updateOrganization: (org: Partial<Organization>) => void;
 }
 
 /**
@@ -57,23 +74,30 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
+      organization: null,
       token: null,
       isAuthenticated: false,
-      login: (user, token) =>
+      login: (user, token, organization = null) =>
         set({
           user,
+          organization,
           token,
           isAuthenticated: true,
         }),
       logout: () =>
         set({
           user: null,
+          organization: null,
           token: null,
           isAuthenticated: false,
         }),
       updateUser: (updates) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
+        })),
+      updateOrganization: (updates) =>
+        set((state) => ({
+          organization: state.organization ? { ...state.organization, ...updates } : null,
         })),
     }),
     {

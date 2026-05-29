@@ -18,12 +18,30 @@ export function createToken(userId: string): string {
   return Buffer.from(`${payload}:${signature}`).toString('base64');
 }
 
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface AuthContext {
+  userId: string;
+  role: string;
+  organizationId: string | null;
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    isActive: boolean;
+    subscriptionStatus: string;
+    maxUsers: number;
+    maxNumbers: number;
+    dailyUploadLimit: number;
+  } | null;
+}
+
 /**
  * Authenticate a request by checking the Authorization header token.
  * Token format: base64(userId:timestamp:signature)
- * Returns { userId, role } or null if invalid.
+ * Returns full AuthContext including organization info, or null if invalid.
  */
-export async function authenticateRequest(request: NextRequest): Promise<{ userId: string; role: string } | null> {
+export async function authenticateRequest(request: NextRequest): Promise<AuthContext | null> {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -57,25 +75,75 @@ export async function authenticateRequest(request: NextRequest): Promise<{ userI
       return null;
     }
 
-    // Verify user exists and is active
+    // Verify user exists and is active, and include organization data
     const user = await db.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, isActive: true },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+        organizationId: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            isActive: true,
+            subscriptionStatus: true,
+            maxUsers: true,
+            maxNumbers: true,
+            dailyUploadLimit: true,
+          },
+        },
+      },
     });
 
     if (!user || !user.isActive) {
       return null;
     }
 
-    return { userId: user.id, role: user.role };
+    // SUPER_ADMIN users may not have an organizationId — that's allowed
+    return {
+      userId: user.id,
+      role: user.role,
+      organizationId: user.organizationId,
+      organization: user.organization
+        ? {
+            id: user.organization.id,
+            name: user.organization.name,
+            slug: user.organization.slug,
+            isActive: user.organization.isActive,
+            subscriptionStatus: user.organization.subscriptionStatus,
+            maxUsers: user.organization.maxUsers,
+            maxNumbers: user.organization.maxNumbers,
+            dailyUploadLimit: user.organization.dailyUploadLimit,
+          }
+        : null,
+    };
   } catch {
     return null;
   }
 }
 
+// ── Helper functions ──────────────────────────────────────────────────────
+
 /**
- * Require admin role. Returns error response if not admin.
+ * Check if the authenticated user has SUPER_ADMIN role.
+ */
+export function requireSuperAdmin(auth: AuthContext): boolean {
+  return auth.role === 'SUPER_ADMIN';
+}
+
+/**
+ * Check if the authenticated user is a SUPER_ADMIN or ORG_ADMIN.
+ */
+export function requireOrgAdmin(auth: AuthContext): boolean {
+  return auth.role === 'SUPER_ADMIN' || auth.role === 'ORG_ADMIN';
+}
+
+/**
+ * @deprecated Use requireSuperAdmin(auth) or requireOrgAdmin(auth) instead.
  */
 export function requireAdmin(role: string): boolean {
-  return role === 'ADMIN';
+  return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'ORG_ADMIN';
 }
