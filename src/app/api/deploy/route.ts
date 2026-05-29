@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { execSync } from 'child_process';
-import path from 'path';
-
-// GitHub webhook secret for verification (optional but recommended)
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'recruitpro-webhook-secret-2024';
+import { spawn } from 'child_process';
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook signature (GitHub sends X-Hub-Signature-256)
-    const signature = request.headers.get('x-hub-signature-256');
     const githubEvent = request.headers.get('x-github-event');
 
     // Only respond to push events
@@ -38,41 +32,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Ignored: not main branch' });
     }
 
-    // Execute deploy script
-    const deployScript = path.join(process.cwd(), 'deploy.sh');
+    // Run deploy.sh detached in background so the webhook can respond
+    // before PM2 deletes the running process
+    const deployLog = '/home/ubuntu/recruitpro/logs/deploy-webhook.log';
 
-    console.log('[Deploy Webhook] Starting deployment...');
+    const child = spawn(
+      'bash',
+      ['-c', `nohup bash /home/ubuntu/recruitpro/deploy.sh > ${deployLog} 2>&1 & echo $!`],
+      {
+        detached: true,
+        stdio: 'ignore',
+        shell: true,
+        env: { ...process.env },
+      }
+    );
 
-    try {
-      const output = execSync(`bash ${deployScript}`, {
-        cwd: process.cwd(),
-        timeout: 300000, // 5 minutes max
-        env: {
-          ...process.env,
-          PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-        },
-        stdio: 'pipe',
-        encoding: 'utf-8',
-      });
+    child.unref();
 
-      console.log(`[Deploy Webhook] Success:\n${output}`);
-
-      return NextResponse.json({
-        success: true,
-        message: 'Deployment completed successfully',
-        output: output.trim(),
-      });
-    } catch (deployError: unknown) {
-      const error = deployError as { stdout?: string; stderr?: string; message?: string };
-      console.error(`[Deploy Webhook] Error:\n${error.stdout}\n${error.stderr}`);
-
-      return NextResponse.json({
-        success: false,
-        message: 'Deployment failed',
-        output: (error.stdout || '').trim(),
-        error: (error.stderr || '').trim(),
-      }, { status: 500 });
-    }
+    return NextResponse.json({
+      success: true,
+      message: 'Deployment started in background',
+      log: deployLog,
+    });
   } catch (error) {
     console.error('[Deploy Webhook] Unexpected error:', error);
     return NextResponse.json(
