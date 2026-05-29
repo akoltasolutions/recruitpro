@@ -61,6 +61,15 @@ log "Step 3: Syncing database schema..."
 bunx prisma db push
 log "Database synced."
 
+# Step 3b: Run tenant migration (backfill organizationId on existing rows)
+log "Step 3b: Running tenant migration..."
+if [ -f prisma/migrate-tenant.ts ]; then
+    bun run prisma/migrate-tenant.ts
+    log "Tenant migration complete."
+else
+    log "No migration script found, skipping."
+fi
+
 # Step 4a: Stop PM2 before build to free memory (~911MB server)
 log "Step 4a: Stopping PM2 to free memory for build..."
 pm2 stop recruitpro 2>/dev/null || true

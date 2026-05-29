@@ -208,12 +208,12 @@ model User {
 model Client {
   id             String   @id @default(cuid())
   name           String
-  organizationId String
+  organizationId String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
 }
 
@@ -222,13 +222,13 @@ model Disposition {
   heading        String
   type           String   // SHORTLISTED, CONNECTED, NOT_CONNECTED, NOT_INTERESTED
   isActive       Boolean  @default(true)
-  organizationId String
+  organizationId String?
   projectId      String?
   sortOrder      Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        CallingProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
 }
@@ -239,7 +239,7 @@ model CallList {
   description      String?
   source           String    @default("MANUAL") // MANUAL, CSV, XLSX, COPY_PASTE, GOOGLE_SHEETS
   createdBy        String
-  organizationId   String
+  organizationId   String?
   projectId        String?
   googleSheetsUrl  String?
   googleSheetGid   String?
@@ -248,7 +248,7 @@ model CallList {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project          CallingProject?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   candidates       Candidate[]
   assignments       CallListAssignment[]
@@ -257,7 +257,7 @@ model CallList {
 model Candidate {
   id             String   @id @default(cuid())
   callListId     String
-  organizationId String
+  organizationId String?
   name           String
   phone          String
   email          String?
@@ -277,7 +277,7 @@ model Candidate {
   updatedAt      DateTime @updatedAt
 
   callList       CallList      @relation(fields: [callListId], references: [id], onDelete: Cascade)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
 }
 
@@ -285,12 +285,12 @@ model CallListAssignment {
   id             String   @id @default(cuid())
   callListId     String
   recruiterId    String
-  organizationId String
+  organizationId String?
   assignedAt     DateTime @default(now())
 
   callList       CallList     @relation(fields: [callListId], references: [id], onDelete: Cascade)
   recruiter      User         @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model CallRecord {
@@ -299,7 +299,7 @@ model CallRecord {
   recruiterId     String
   dispositionId  String?
   clientId       String?
-  organizationId String
+  organizationId String?
   notes          String?
   callDuration   Int      @default(0)
   callStatus     String   @default("COMPLETED") // COMPLETED, FAILED, SKIPPED, SCHEDULED
@@ -314,7 +314,7 @@ model CallRecord {
   recruiter      User         @relation(fields: [recruiterId], references: [id])
   disposition    Disposition? @relation(fields: [dispositionId], references: [id])
   client         Client?      @relation(fields: [clientId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model MessageTemplate {
@@ -323,11 +323,11 @@ model MessageTemplate {
   type           String   // NOT_ANSWERED, SHORTLISTED, CUSTOM
   content        String   // supports {{candidate_name}}, {{recruiter_name}}, {{role}}, {{location}}
   isActive       Boolean  @default(true)
-  organizationId String
+  organizationId String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model WhatsAppMessage {
@@ -338,10 +338,10 @@ model WhatsAppMessage {
   message        String
   status         String   @default("SENT") // SENT, FAILED, PENDING
   sentAt         DateTime @default(now())
-  organizationId String
+  organizationId String?
 
   recruiter      User         @relation(fields: [recruiterId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model Announcement {
