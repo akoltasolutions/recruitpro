@@ -6,15 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Smartphone } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Smartphone, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface LoginPageProps {
   onSwitch: () => void
   onForgotPassword?: () => void
+  onRegister?: () => void
 }
 
-export function LoginPage({ onSwitch, onForgotPassword }: LoginPageProps) {
+export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -160,6 +161,20 @@ export function LoginPage({ onSwitch, onForgotPassword }: LoginPageProps) {
                 </button>
               </p>
             </div>
+
+            {/* Register your company link */}
+            {onRegister && (
+              <div className="w-full border-t pt-4 mt-0">
+                <button
+                  type="button"
+                  onClick={onRegister}
+                  className="flex items-center justify-center gap-2 w-full text-sm text-emerald-600 hover:text-emerald-700 font-medium transition-colors py-1"
+                >
+                  <Building2 className="h-4 w-4" />
+                  Register your company
+                </button>
+              </div>
+            )}
 
             {/* Android App Download — Coming Soon */}
             <div className="w-full border-t pt-4 mt-2">

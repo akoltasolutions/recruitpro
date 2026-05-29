@@ -29,8 +29,10 @@ const menuItems = [
   { key: 'clients', label: 'Client Name', icon: Building2 },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'users', label: 'User Management', icon: Users },
+  { key: 'team-enhanced', label: 'Team Management', icon: Users },
   { key: 'approvals', label: 'Approval Requests', icon: UserCheck },
   { key: 'settings', label: 'Settings', icon: Settings },
+  { key: 'organization-settings', label: 'Organization Settings', icon: Building2 },
 ]
 
 // First 5 items shown directly in bottom nav

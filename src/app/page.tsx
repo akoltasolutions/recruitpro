@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { LoginPage } from '@/components/auth/login-page'
 import { SignupPage } from '@/components/auth/signup-page'
+import { RegisterPage } from '@/components/auth/register-page'
 import { ForgotPasswordPage } from '@/components/auth/forgot-password-page'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { AdminDashboard } from '@/components/admin/admin-dashboard'
@@ -17,6 +18,8 @@ import { TeamPerformance } from '@/components/admin/team-performance'
 import { TeamMonitoring } from '@/components/admin/team-monitoring'
 import { AdminSettings } from '@/components/admin/admin-settings'
 import { AnnouncementsManagement } from '@/components/admin/announcements-management'
+import { TeamManagementEnhanced } from '@/components/admin/team-management-enhanced'
+import { OrganizationSettings } from '@/components/admin/organization-settings'
 import { SuperAdminLayout } from '@/components/super-admin/super-admin-layout'
 import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
 import { OrganizationManagement } from '@/components/super-admin/organization-management'
@@ -32,8 +35,8 @@ import { CreateCallingList } from '@/components/recruiter/create-calling-list'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
-type AuthView = 'login' | 'signup' | 'forgot-password'
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals' | 'settings' | 'announcements'
+type AuthView = 'login' | 'signup' | 'register' | 'forgot-password'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements'
 type SuperAdminPage = 'dashboard' | 'organizations' | 'plans' | 'settings'
 type RecruiterPage = 'home' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
@@ -82,6 +85,9 @@ function AppContent() {
     setRecruiterPage('home')
     setSuperAdminPage('dashboard')
   }
+
+  const handleGoToLogin = () => setAuthView('login')
+  const handleGoToRegister = () => setAuthView('register')
 
   // ==================== GLOBAL ANDROID WEBVIEW BRIDGE ====================
   useEffect(() => {
@@ -177,13 +183,16 @@ function AppContent() {
 
   // Auth screens
   if (!isAuthenticated || !user) {
+    if (authView === 'register') {
+      return <RegisterPage onBack={handleGoToLogin} />
+    }
     if (authView === 'signup') {
-      return <SignupPage onSwitch={() => setAuthView('login')} />
+      return <SignupPage onSwitch={handleGoToLogin} />
     }
     if (authView === 'forgot-password') {
-      return <ForgotPasswordPage onBack={() => setAuthView('login')} />
+      return <ForgotPasswordPage onBack={handleGoToLogin} />
     }
-    return <LoginPage onSwitch={() => setAuthView('signup')} onForgotPassword={() => setAuthView('forgot-password')} />
+    return <LoginPage onSwitch={() => setAuthView('signup')} onForgotPassword={() => setAuthView('forgot-password')} onRegister={handleGoToRegister} />
   }
 
   // Super Admin Panel
@@ -220,6 +229,8 @@ function AppContent() {
         case 'approvals': return <ApprovalRequests />
         case 'settings': return <AdminSettings userId={user.id} />
         case 'announcements': return <AnnouncementsManagement />
+        case 'team-enhanced': return <TeamManagementEnhanced />
+        case 'organization-settings': return <OrganizationSettings />
         default: return <AdminDashboard />
       }
     }
