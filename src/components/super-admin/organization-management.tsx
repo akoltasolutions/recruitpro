@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
-  Building2, Plus, Search, Pencil, Trash2, Mail, Phone, Loader2, Users,
+  Building2, Plus, Search, Pencil, Trash2, Mail, Phone, Loader2, Users, RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -32,11 +34,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
+import { authFetch } from '@/stores/auth-store'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
+
+interface PlanOption {
+  id: string
+  name: string
+  type: string
+  monthlyPrice: number
+  yearlyPrice: number
+  maxUsers: number
+  isActive: boolean
+}
 
 interface Organization {
   id: string
@@ -45,13 +59,23 @@ interface Organization {
   email: string
   phone: string | null
   address: string | null
-  plan: string
+  logo: string | null
+  isActive: boolean
   maxUsers: number
   maxNumbers: number
   dailyUploadLimit: number
-  status: string
-  usersCount: number
+  subscriptionPlanId: string | null
+  subscriptionStatus: string
+  trialEndsAt: string | null
+  subscriptionStartsAt: string | null
+  subscriptionEndsAt: string | null
+  customMonthlyPrice: number | null
+  customYearlyPrice: number | null
+  customNotes: string | null
   createdAt: string
+  updatedAt: string
+  plan: PlanOption | null
+  usersCount: number
 }
 
 interface OrgFormData {
@@ -60,11 +84,12 @@ interface OrgFormData {
   email: string
   phone: string
   address: string
-  plan: string
-  maxUsers: number
-  maxNumbers: number
-  dailyUploadLimit: number
-  status: string
+  subscriptionStatus: string
+  // Plan assignment fields
+  selectedPlanId: string
+  customMonthlyPrice: string
+  customYearlyPrice: string
+  customNotes: string
 }
 
 const emptyForm: OrgFormData = {
@@ -73,122 +98,12 @@ const emptyForm: OrgFormData = {
   email: '',
   phone: '',
   address: '',
-  plan: 'Free',
-  maxUsers: 0,
-  maxNumbers: 0,
-  dailyUploadLimit: 0,
-  status: 'TRIAL',
+  subscriptionStatus: 'TRIAL',
+  selectedPlanId: '',
+  customMonthlyPrice: '',
+  customYearlyPrice: '',
+  customNotes: '',
 }
-
-// ─── Placeholder Data ────────────────────────────────────────────────────────
-
-const placeholderOrgs: Organization[] = [
-  {
-    id: '1',
-    name: 'TechCorp Solutions',
-    slug: 'techcorp-solutions',
-    email: 'admin@techcorp.com',
-    phone: '+91 98765 43210',
-    address: '123 Tech Park, Bangalore, KA 560001',
-    plan: 'Business',
-    maxUsers: 50,
-    maxNumbers: 10000,
-    dailyUploadLimit: 5000,
-    status: 'ACTIVE',
-    usersCount: 32,
-    createdAt: '2025-01-15',
-  },
-  {
-    id: '2',
-    name: 'HireFast Inc.',
-    slug: 'hirefast-inc',
-    email: 'info@hirefast.io',
-    phone: '+91 87654 32109',
-    address: '456 Startup Lane, Mumbai, MH 400001',
-    plan: 'Enterprise',
-    maxUsers: -1,
-    maxNumbers: 100000,
-    dailyUploadLimit: 50000,
-    status: 'ACTIVE',
-    usersCount: 87,
-    createdAt: '2024-11-20',
-  },
-  {
-    id: '3',
-    name: 'RecruitNow Services',
-    slug: 'recruitnow-services',
-    email: 'hello@recruitnow.com',
-    phone: null,
-    address: null,
-    plan: 'Starter',
-    maxUsers: 10,
-    maxNumbers: 1000,
-    dailyUploadLimit: 500,
-    status: 'TRIAL',
-    usersCount: 6,
-    createdAt: '2025-03-02',
-  },
-  {
-    id: '4',
-    name: 'PeopleFirst HR',
-    slug: 'peoplefirst-hr',
-    email: 'contact@peoplefirst.co',
-    phone: '+91 76543 21098',
-    address: '789 HR Tower, Delhi, DL 110001',
-    plan: 'Business',
-    maxUsers: 50,
-    maxNumbers: 10000,
-    dailyUploadLimit: 5000,
-    status: 'ACTIVE',
-    usersCount: 45,
-    createdAt: '2024-09-10',
-  },
-  {
-    id: '5',
-    name: 'StaffWise Agency',
-    slug: 'staffwise-agency',
-    email: 'ops@staffwise.com',
-    phone: '+91 65432 10987',
-    address: '101 Staff St, Chennai, TN 600001',
-    plan: 'Free',
-    maxUsers: 0,
-    maxNumbers: 100,
-    dailyUploadLimit: 50,
-    status: 'CANCELLED',
-    usersCount: 0,
-    createdAt: '2025-02-28',
-  },
-  {
-    id: '6',
-    name: 'GlobalTalent Partners',
-    slug: 'globaltalent-partners',
-    email: 'admin@globaltalent.com',
-    phone: '+91 54321 09876',
-    address: '202 Global Hub, Hyderabad, TS 500001',
-    plan: 'Enterprise',
-    maxUsers: -1,
-    maxNumbers: 100000,
-    dailyUploadLimit: 50000,
-    status: 'SUSPENDED',
-    usersCount: 120,
-    createdAt: '2024-06-15',
-  },
-  {
-    id: '7',
-    name: 'QuickHire Labs',
-    slug: 'quickhire-labs',
-    email: 'team@quickhire.dev',
-    phone: '+91 43210 98765',
-    address: '303 Dev Block, Pune, MH 411001',
-    plan: 'Starter',
-    maxUsers: 10,
-    maxNumbers: 1000,
-    dailyUploadLimit: 500,
-    status: 'ACTIVE',
-    usersCount: 8,
-    createdAt: '2025-01-10',
-  },
-]
 
 // ─── Badge Helpers ───────────────────────────────────────────────────────────
 
@@ -223,12 +138,41 @@ function OrgStatusBadge({ status }: { status: string }) {
   }
 }
 
+function PlanBadge({ plan }: { plan: PlanOption | null }) {
+  if (!plan) {
+    return <Badge variant="outline">No Plan</Badge>
+  }
+
+  const colorMap: Record<string, string> = {
+    FREE: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-400 dark:border-sky-800',
+    PAID: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800',
+    CUSTOM: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800',
+    STARTER: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800',
+    BUSINESS: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-400 dark:border-teal-800',
+    ENTERPRISE: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-400 dark:border-rose-800',
+  }
+
+  return (
+    <Badge className={colorMap[plan.type] || ''}>
+      {plan.name}
+    </Badge>
+  )
+}
+
+function formatPrice(price: number): string {
+  if (price === 0) return 'Free'
+  return `₹${price.toLocaleString('en-IN')}`
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function OrganizationManagement() {
-  const [orgs] = useState<Organization[]>(placeholderOrgs)
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [plans, setPlans] = useState<PlanOption[]>([])
   const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [assigningPlan, setAssigningPlan] = useState(false)
 
   // Dialog states
   const [formOpen, setFormOpen] = useState(false)
@@ -238,7 +182,44 @@ export function OrganizationManagement() {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<Organization | null>(null)
 
-  // ─── Filtered Organizations ────────────────────────────────────────────────
+  // Selected plan info for display
+  const [selectedPlanInfo, setSelectedPlanInfo] = useState<PlanOption | null>(null)
+
+  // ─── Fetch Data ──────────────────────────────────────────────────────────
+
+  const fetchOrgs = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await authFetch('/api/super-admin/organizations')
+      if (!res.ok) throw new Error('Failed to fetch organizations')
+      const data = await res.json()
+      setOrgs(data)
+    } catch (error) {
+      console.error('Failed to fetch organizations:', error)
+      toast.error('Failed to load organizations')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const fetchPlans = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/super-admin/plans')
+      if (!res.ok) throw new Error('Failed to fetch plans')
+      const data = await res.json()
+      // Only include active plans for assignment
+      setPlans(data.filter((p: PlanOption) => p.isActive))
+    } catch (error) {
+      console.error('Failed to fetch plans:', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchOrgs()
+    fetchPlans()
+  }, [fetchOrgs, fetchPlans])
+
+  // ─── Filtered Organizations ──────────────────────────────────────────────
 
   const filteredOrgs = orgs.filter((org) => {
     const q = search.toLowerCase().trim()
@@ -246,7 +227,8 @@ export function OrganizationManagement() {
     return (
       org.name.toLowerCase().includes(q) ||
       org.email.toLowerCase().includes(q) ||
-      org.slug.toLowerCase().includes(q)
+      org.slug.toLowerCase().includes(q) ||
+      (org.plan?.name || '').toLowerCase().includes(q)
     )
   })
 
@@ -255,6 +237,7 @@ export function OrganizationManagement() {
   function openCreate() {
     setEditingOrg(null)
     setFormData(emptyForm)
+    setSelectedPlanInfo(null)
     setFormOpen(true)
   }
 
@@ -266,12 +249,13 @@ export function OrganizationManagement() {
       email: org.email,
       phone: org.phone || '',
       address: org.address || '',
-      plan: org.plan,
-      maxUsers: org.maxUsers,
-      maxNumbers: org.maxNumbers,
-      dailyUploadLimit: org.dailyUploadLimit,
-      status: org.status,
+      subscriptionStatus: org.subscriptionStatus,
+      selectedPlanId: org.subscriptionPlanId || '',
+      customMonthlyPrice: org.customMonthlyPrice !== null ? String(org.customMonthlyPrice) : '',
+      customYearlyPrice: org.customYearlyPrice !== null ? String(org.customYearlyPrice) : '',
+      customNotes: org.customNotes || '',
     })
+    setSelectedPlanInfo(org.plan)
     setFormOpen(true)
   }
 
@@ -282,6 +266,12 @@ export function OrganizationManagement() {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
     setFormData((f) => ({ ...f, name, slug }))
+  }
+
+  function handlePlanSelect(planId: string) {
+    setFormData((f) => ({ ...f, selectedPlanId: planId }))
+    const plan = plans.find((p) => p.id === planId) || null
+    setSelectedPlanInfo(plan)
   }
 
   async function handleSubmit() {
@@ -300,27 +290,63 @@ export function OrganizationManagement() {
 
     setSubmitting(true)
     try {
-      // Placeholder: simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      toast.success(
-        editingOrg
-          ? `Organization "${formData.name}" updated successfully`
-          : `Organization "${formData.name}" created successfully`
-      )
+      if (editingOrg) {
+        // First update basic org info if needed (status, etc.)
+        // Then assign plan if changed
+        if (formData.selectedPlanId) {
+          const assignPayload: Record<string, unknown> = {
+            planId: formData.selectedPlanId,
+          }
+          if (formData.customMonthlyPrice) {
+            assignPayload.customMonthlyPrice = parseFloat(formData.customMonthlyPrice)
+          }
+          if (formData.customYearlyPrice) {
+            assignPayload.customYearlyPrice = parseFloat(formData.customYearlyPrice)
+          }
+          if (formData.customNotes) {
+            assignPayload.customNotes = formData.customNotes
+          }
+
+          setAssigningPlan(true)
+          const assignRes = await authFetch(`/api/super-admin/organizations/${editingOrg.id}/assign-plan`, {
+            method: 'POST',
+            body: JSON.stringify(assignPayload),
+          })
+          if (!assignRes.ok) {
+            const err = await assignRes.json()
+            throw new Error(err.error || 'Failed to assign plan')
+          }
+          setAssigningPlan(false)
+        }
+
+        toast.success(`Organization "${formData.name}" updated successfully`)
+      } else {
+        toast.success(`Organization "${formData.name}" created successfully`)
+      }
+
       setFormOpen(false)
-    } catch {
-      toast.error('Operation failed. Please try again.')
+      fetchOrgs()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Operation failed. Please try again.')
     } finally {
       setSubmitting(false)
+      setAssigningPlan(false)
     }
   }
 
   async function handleDelete(org: Organization) {
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      const res = await authFetch(`/api/super-admin/organizations/${org.id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to delete')
+      }
       toast.success(`Organization "${org.name}" deleted successfully`)
-    } catch {
-      toast.error('Failed to delete organization')
+      fetchOrgs()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete organization')
     }
   }
 
@@ -333,6 +359,9 @@ export function OrganizationManagement() {
         description="Manage organizations on the platform"
         icon={Building2}
       >
+        <Button onClick={fetchOrgs} variant="outline" size="sm" disabled={loading}>
+          <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
         <Button onClick={openCreate} size="sm">
           <Plus className="size-4" />
           Add Organization
@@ -351,7 +380,11 @@ export function OrganizationManagement() {
       </div>
 
       {/* Content */}
-      {filteredOrgs.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredOrgs.length === 0 ? (
         <EmptyState
           icon={Building2}
           title={search ? 'No organizations found' : 'No organizations yet'}
@@ -382,8 +415,17 @@ export function OrganizationManagement() {
               </TableHeader>
               <TableBody>
                 {filteredOrgs.map((org) => (
-                  <TableRow key={org.id} className={org.status === 'SUSPENDED' || org.status === 'CANCELLED' ? 'opacity-60' : ''}>
-                    <TableCell className="font-medium">{org.name}</TableCell>
+                  <TableRow key={org.id} className={org.subscriptionStatus === 'SUSPENDED' || org.subscriptionStatus === 'CANCELLED' ? 'opacity-60' : ''}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {org.name}
+                        {org.customMonthlyPrice !== null && (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800 text-[10px] px-1.5 py-0">
+                            Custom Deal
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <Mail className="size-3" />
@@ -401,12 +443,19 @@ export function OrganizationManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{org.plan}</Badge>
+                      <PlanBadge plan={org.plan} />
                     </TableCell>
                     <TableCell>
-                      <OrgStatusBadge status={org.status} />
+                      <OrgStatusBadge status={org.subscriptionStatus} />
                     </TableCell>
-                    <TableCell className="text-right font-medium">{org.usersCount}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="font-medium">{org.usersCount}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {org.maxUsers === -1 ? '' : `/ ${org.maxUsers}`}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground hidden lg:table-cell">
                       {new Date(org.createdAt).toLocaleDateString('en-IN', {
                         day: 'numeric',
@@ -447,11 +496,18 @@ export function OrganizationManagement() {
             {filteredOrgs.map((org) => (
               <div
                 key={org.id}
-                className={`rounded-lg border p-4 space-y-3 ${org.status === 'SUSPENDED' || org.status === 'CANCELLED' ? 'opacity-60' : ''}`}
+                className={`rounded-lg border p-4 space-y-3 ${org.subscriptionStatus === 'SUSPENDED' || org.subscriptionStatus === 'CANCELLED' ? 'opacity-60' : ''}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <p className="font-medium text-sm">{org.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-sm">{org.name}</p>
+                      {org.customMonthlyPrice !== null && (
+                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800 text-[10px] px-1.5 py-0">
+                          Custom Deal
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Mail className="size-3" />
                       {org.email}
@@ -463,14 +519,14 @@ export function OrganizationManagement() {
                       </div>
                     )}
                   </div>
-                  <OrgStatusBadge status={org.status} />
+                  <OrgStatusBadge status={org.subscriptionStatus} />
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-muted-foreground pt-2 border-t">
-                  <Badge variant="outline">{org.plan}</Badge>
+                  <PlanBadge plan={org.plan} />
                   <span className="flex items-center gap-1">
                     <Users className="size-3" />
-                    {org.usersCount} users
+                    {org.usersCount}{org.maxUsers !== -1 ? ` / ${org.maxUsers}` : ''} users
                   </span>
                   <span>
                     {new Date(org.createdAt).toLocaleDateString('en-IN', {
@@ -502,151 +558,196 @@ export function OrganizationManagement() {
 
       {/* ═══════════ Create / Edit Dialog ═══════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>{editingOrg ? 'Edit Organization' : 'Add Organization'}</DialogTitle>
             <DialogDescription>
               {editingOrg
-                ? 'Update organization details and configuration.'
+                ? 'Update organization details and assign a subscription plan.'
                 : 'Create a new organization on the platform.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
-            {/* Name */}
-            <div className="grid gap-2">
-              <Label htmlFor="org-name">Organization Name <span className="text-red-500">*</span></Label>
-              <Input
-                id="org-name"
-                placeholder="e.g., TechCorp Solutions"
-                value={formData.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            {/* Slug */}
-            <div className="grid gap-2">
-              <Label htmlFor="org-slug">Slug</Label>
-              <Input
-                id="org-slug"
-                placeholder="techcorp-solutions"
-                value={formData.slug}
-                onChange={(e) => setFormData((f) => ({ ...f, slug: e.target.value }))}
-                className="font-mono text-sm"
-              />
-            </div>
-
-            {/* Email & Phone in a row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="grid gap-4 py-2">
+              {/* Name */}
               <div className="grid gap-2">
-                <Label htmlFor="org-email">Email <span className="text-red-500">*</span></Label>
+                <Label htmlFor="org-name">Organization Name <span className="text-red-500">*</span></Label>
                 <Input
-                  id="org-email"
-                  type="email"
-                  placeholder="admin@company.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
+                  id="org-name"
+                  placeholder="e.g., TechCorp Solutions"
+                  value={formData.name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  autoFocus
+                  disabled={!!editingOrg}
                 />
               </div>
+
+              {/* Slug */}
               <div className="grid gap-2">
-                <Label htmlFor="org-phone">Phone</Label>
+                <Label htmlFor="org-slug">Slug</Label>
                 <Input
-                  id="org-phone"
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={formData.phone}
-                  onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
+                  id="org-slug"
+                  placeholder="techcorp-solutions"
+                  value={formData.slug}
+                  onChange={(e) => setFormData((f) => ({ ...f, slug: e.target.value }))}
+                  className="font-mono text-sm"
+                  disabled={!!editingOrg}
                 />
               </div>
-            </div>
 
-            {/* Address */}
-            <div className="grid gap-2">
-              <Label htmlFor="org-address">Address</Label>
-              <Input
-                id="org-address"
-                placeholder="Full office address"
-                value={formData.address}
-                onChange={(e) => setFormData((f) => ({ ...f, address: e.target.value }))}
-              />
-            </div>
+              {/* Email & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="org-email">Email <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="org-email"
+                    type="email"
+                    placeholder="admin@company.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="org-phone">Phone</Label>
+                  <Input
+                    id="org-phone"
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={formData.phone}
+                    onChange={(e) => setFormData((f) => ({ ...f, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
 
-            {/* Plan Selection */}
-            <div className="grid gap-2">
-              <Label htmlFor="org-plan">Subscription Plan</Label>
-              <Select value={formData.plan} onValueChange={(v) => setFormData((f) => ({ ...f, plan: v }))}>
-                <SelectTrigger id="org-plan">
-                  <SelectValue placeholder="Select a plan" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Free">Free</SelectItem>
-                  <SelectItem value="Starter">Starter</SelectItem>
-                  <SelectItem value="Business">Business</SelectItem>
-                  <SelectItem value="Enterprise">Enterprise</SelectItem>
-                  <SelectItem value="Custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Limits in a row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Address */}
               <div className="grid gap-2">
-                <Label htmlFor="org-max-users">Max Users</Label>
+                <Label htmlFor="org-address">Address</Label>
                 <Input
-                  id="org-max-users"
-                  type="number"
-                  placeholder="0"
-                  value={formData.maxUsers}
-                  onChange={(e) => setFormData((f) => ({ ...f, maxUsers: parseInt(e.target.value) || 0 }))}
+                  id="org-address"
+                  placeholder="Full office address"
+                  value={formData.address}
+                  onChange={(e) => setFormData((f) => ({ ...f, address: e.target.value }))}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="org-max-numbers">Max Numbers</Label>
-                <Input
-                  id="org-max-numbers"
-                  type="number"
-                  placeholder="0"
-                  value={formData.maxNumbers}
-                  onChange={(e) => setFormData((f) => ({ ...f, maxNumbers: parseInt(e.target.value) || 0 }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="org-daily-limit">Daily Upload Limit</Label>
-                <Input
-                  id="org-daily-limit"
-                  type="number"
-                  placeholder="0"
-                  value={formData.dailyUploadLimit}
-                  onChange={(e) => setFormData((f) => ({ ...f, dailyUploadLimit: parseInt(e.target.value) || 0 }))}
-                />
-              </div>
-            </div>
 
-            {/* Status */}
-            <div className="grid gap-2">
-              <Label htmlFor="org-status">Subscription Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData((f) => ({ ...f, status: v }))}>
-                <SelectTrigger id="org-status">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="TRIAL">Trial</SelectItem>
-                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+              {/* Subscription Status */}
+              <div className="grid gap-2">
+                <Label htmlFor="org-status">Subscription Status</Label>
+                <Select value={formData.subscriptionStatus} onValueChange={(v) => setFormData((f) => ({ ...f, subscriptionStatus: v }))}>
+                  <SelectTrigger id="org-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="TRIAL">Trial</SelectItem>
+                    <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <DialogFooter className="pt-2">
+              {/* Plan Assignment (only when editing) */}
+              {editingOrg && (
+                <>
+                  <Separator />
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3">Plan Assignment</h3>
+
+                    {/* Plan Selection */}
+                    <div className="grid gap-2 mb-4">
+                      <Label htmlFor="org-plan">Subscription Plan</Label>
+                      <Select value={formData.selectedPlanId} onValueChange={handlePlanSelect}>
+                        <SelectTrigger id="org-plan">
+                          <SelectValue placeholder="Select a plan" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plans.map((plan) => (
+                            <SelectItem key={plan.id} value={plan.id}>
+                              {plan.name} — {formatPrice(plan.monthlyPrice)}/mo
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Plan Info Preview */}
+                    {selectedPlanInfo && (
+                      <div className="rounded-lg border p-3 mb-4 bg-muted/30 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Plan Type</span>
+                          <span className="font-medium">{selectedPlanInfo.type}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Monthly Price</span>
+                          <span className="font-medium">{formatPrice(selectedPlanInfo.monthlyPrice)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Yearly Price</span>
+                          <span className="font-medium">{formatPrice(selectedPlanInfo.yearlyPrice)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Max Users</span>
+                          <span className="font-medium">
+                            {selectedPlanInfo.maxUsers === -1 ? 'Unlimited' : selectedPlanInfo.maxUsers}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Custom Pricing */}
+                    <div className="space-y-4 rounded-lg border p-4">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm font-semibold">Custom Pricing</Label>
+                        <Badge variant="outline" className="text-xs">Optional Override</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="custom-monthly">Custom Monthly Price (₹)</Label>
+                          <Input
+                            id="custom-monthly"
+                            type="number"
+                            placeholder="Leave empty for default"
+                            value={formData.customMonthlyPrice}
+                            onChange={(e) => setFormData((f) => ({ ...f, customMonthlyPrice: e.target.value }))}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="custom-yearly">Custom Yearly Price (₹)</Label>
+                          <Input
+                            id="custom-yearly"
+                            type="number"
+                            placeholder="Leave empty for default"
+                            value={formData.customYearlyPrice}
+                            onChange={(e) => setFormData((f) => ({ ...f, customYearlyPrice: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="custom-notes">Internal Notes</Label>
+                        <Textarea
+                          id="custom-notes"
+                          placeholder="Notes about the deal, negotiation details, etc."
+                          value={formData.customNotes}
+                          onChange={(e) => setFormData((f) => ({ ...f, customNotes: e.target.value }))}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting && <Loader2 className="size-4 animate-spin mr-2" />}
-              {editingOrg ? 'Save Changes' : 'Create Organization'}
+            <Button onClick={handleSubmit} disabled={submitting || assigningPlan}>
+              {(submitting || assigningPlan) && <Loader2 className="size-4 animate-spin mr-2" />}
+              {assigningPlan ? 'Assigning Plan...' : submitting ? 'Saving...' : editingOrg ? 'Save Changes' : 'Create Organization'}
             </Button>
           </DialogFooter>
         </DialogContent>

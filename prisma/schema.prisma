@@ -24,6 +24,12 @@ model SubscriptionPlan {
   isActive        Boolean  @default(true)
   isDefault       Boolean  @default(false)
   features        String   @default("[]") // JSON array of feature strings
+  trialDays         Int      @default(0)           // number of trial days
+  monthlyCallLimit  Int      @default(0)           // max calls per month, -1 = unlimited
+  storageLimit      Int      @default(0)           // MB, -1 = unlimited
+  isUnlimited       Boolean  @default(false)       // master unlimited toggle
+  featureAccess     String   @default("{}")        // JSON: granular feature toggles
+  sortOrder         Int      @default(0)           // display order
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -47,6 +53,9 @@ model Organization {
   trialEndsAt           DateTime?
   subscriptionStartsAt  DateTime?
   subscriptionEndsAt    DateTime?
+  customMonthlyPrice    Float?
+  customYearlyPrice     Float?
+  customNotes           String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
