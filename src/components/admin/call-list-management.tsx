@@ -14,8 +14,15 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -23,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   PhoneCall, Plus, Trash2, Users, Eye, FileSpreadsheet, Pencil, FileText,
   UserPlus, ClipboardPaste, GripVertical, Link, RefreshCw, Globe, Loader2,
+  GitMerge, Copy, Search, MoreVertical, AlertTriangle, Upload,
 } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -66,9 +74,17 @@ interface User {
 interface ManualEntry {
   name: string
   phone: string
+  email: string
   role: string
   location: string
   company: string
+  notes: string
+}
+
+interface DuplicateGroup {
+  phone: string
+  count: number
+  candidateIds: string[]
 }
 
 const columnFields = [
@@ -88,7 +104,7 @@ const gsColumnFields = [
 ]
 
 const emptyManualEntry = (): ManualEntry => ({
-  name: '', phone: '', role: '', location: '', company: '',
+  name: '', phone: '', email: '', role: '', location: '', company: '', notes: '',
 })
 
 export function CallListManagement({ userId }: { userId: string }) {
@@ -145,6 +161,36 @@ export function CallListManagement({ userId }: { userId: string }) {
   const [gsAutoSync, setGsAutoSync] = useState(false)
   const [gsSyncInterval, setGsSyncInterval] = useState('30') // minutes
   const [gsSyncing, setGsSyncing] = useState<string | null>(null) // callListId being synced
+
+  // ─── New feature states ───
+  // Merge list state
+  const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeSourceListId, setMergeSourceListId] = useState('')
+  const [mergeMode, setMergeMode] = useState<'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES'>('SKIP_DUPLICATES')
+  const [keepOldNotes, setKeepOldNotes] = useState(true)
+  const [merging, setMerging] = useState(false)
+
+  // Bulk actions state
+  const [addNumbersOpen, setAddNumbersOpen] = useState(false)
+  const [addNumbersEntries, setAddNumbersEntries] = useState<ManualEntry[]>([emptyManualEntry()])
+  const [addNumbersSaving, setAddNumbersSaving] = useState(false)
+  const [updateStatusOpen, setUpdateStatusOpen] = useState(false)
+  const [updateStatusIds, setUpdateStatusIds] = useState<string[]>([])
+  const [newStatus, setNewStatus] = useState('PENDING')
+  const [updateStatusSaving, setUpdateStatusSaving] = useState(false)
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([])
+
+  // Deduplicate state
+  const [dedupOpen, setDedupOpen] = useState(false)
+  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([])
+  const [dedupLoading, setDedupLoading] = useState(false)
+
+  // Import more state
+  const [importMoreOpen, setImportMoreOpen] = useState(false)
+  const [importMoreParsedData, setImportMoreParsedData] = useState<Record<string, string>[]>([])
+  const [importMoreCsvColumns, setImportMoreCsvColumns] = useState<string[]>([])
+  const [importMoreColumnMapping, setImportMoreColumnMapping] = useState<Record<string, string>>({})
+  const importMoreFileRef = useRef<HTMLInputElement>(null)
 
   const fetchCallLists = useCallback(async () => {
     setLoading(true)
@@ -564,6 +610,245 @@ export function CallListManagement({ userId }: { userId: string }) {
     } finally {
       setGsSyncing(null)
     }
+  }
+
+  // ─── Merge List ───
+  const openMergeDialog = () => {
+    setMergeSourceListId('')
+    setMergeMode('SKIP_DUPLICATES')
+    setKeepOldNotes(true)
+    setMergeOpen(true)
+  }
+
+  const handleMerge = async () => {
+    if (!selectedList || !mergeSourceListId) { toast.error('Please select a source list'); return }
+    setMerging(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceListId: mergeSourceListId, mergeMode, keepOldNotes }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed to merge'); return }
+      const result = await res.json()
+      toast.success(`Merge complete: ${result.added} added, ${result.skipped} skipped, ${result.replaced} replaced (${result.total} total)`)
+      setMergeOpen(false)
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setMerging(false) }
+  }
+
+  // ─── Add Numbers (bulk add to existing list) ───
+  const updateAddNumberEntry = (index: number, field: keyof ManualEntry, value: string) => {
+    setAddNumbersEntries(prev => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }
+
+  const addAddNumberRow = () => {
+    setAddNumbersEntries(prev => [...prev, emptyManualEntry()])
+  }
+
+  const removeAddNumberRow = (index: number) => {
+    if (addNumbersEntries.length <= 1) return
+    setAddNumbersEntries(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleAddNumbers = async () => {
+    if (!selectedList) return
+    const valid = addNumbersEntries.filter(e => e.name.trim() && e.phone.trim())
+    if (valid.length === 0) { toast.error('Add at least one candidate with name and phone'); return }
+
+    setAddNumbersSaving(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ADD',
+          data: {
+            candidates: valid.map(e => ({
+              name: e.name.trim(),
+              phone: e.phone.trim(),
+              email: e.email.trim() || undefined,
+              role: e.role.trim() || undefined,
+              location: e.location.trim() || undefined,
+              company: e.company.trim() || undefined,
+              notes: e.notes.trim() || undefined,
+            })),
+          },
+        }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.count} candidates added`)
+      setAddNumbersOpen(false)
+      setAddNumbersEntries([emptyManualEntry()])
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setAddNumbersSaving(false) }
+  }
+
+  // ─── Bulk Delete Selected ───
+  const handleBulkDelete = async () => {
+    if (!selectedList || selectedCandidateIds.length === 0) { toast.error('No candidates selected'); return }
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE', candidateIds: selectedCandidateIds }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.count} candidates removed`)
+      setSelectedCandidateIds([])
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+  }
+
+  // ─── Bulk Update Status ───
+  const openUpdateStatusDialog = () => {
+    if (selectedCandidateIds.length === 0) { toast.error('Select candidates first'); return }
+    setUpdateStatusIds([...selectedCandidateIds])
+    setNewStatus('PENDING')
+    setUpdateStatusOpen(true)
+  }
+
+  const handleUpdateStatus = async () => {
+    if (!selectedList) return
+    setUpdateStatusSaving(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UPDATE_STATUS', candidateIds: updateStatusIds, data: { status: newStatus } }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.count} candidates updated to ${newStatus}`)
+      setUpdateStatusOpen(false)
+      setSelectedCandidateIds([])
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setUpdateStatusSaving(false) }
+  }
+
+  // ─── Deduplicate ───
+  const openDedupDialog = async () => {
+    if (!selectedList) return
+    setDuplicates([])
+    setDedupLoading(true)
+    setDedupOpen(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/deduplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'LIST' }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); setDedupOpen(false); return }
+      const json = await res.json()
+      setDuplicates(json.duplicates || [])
+    } catch { toast.error('Something went wrong') }
+    finally { setDedupLoading(false) }
+  }
+
+  const handleRemoveDuplicates = async () => {
+    if (!selectedList) return
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/deduplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'REMOVE' }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.removed} duplicate candidates removed`)
+      setDedupOpen(false)
+      setDuplicates([])
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+  }
+
+  // ─── Import More (add to existing list) ───
+  const openImportMoreDialog = () => {
+    setImportMoreParsedData([])
+    setImportMoreCsvColumns([])
+    setImportMoreColumnMapping({})
+    setImportMoreOpen(true)
+  }
+
+  const handleImportMoreUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      const reader = new FileReader()
+      reader.onload = (evt) => {
+        try {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer)
+          const workbook = XLSX.read(data, { type: 'array' })
+          const firstSheetName = workbook.SheetNames[0]
+          if (!firstSheetName) { toast.error('The workbook has no sheets'); return }
+          const worksheet = workbook.Sheets[firstSheetName]
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { defval: '' })
+          if (jsonData.length === 0) { toast.error('The sheet is empty'); return }
+          const cols = Object.keys(jsonData[0])
+          setImportMoreCsvColumns(cols)
+          setImportMoreParsedData(jsonData)
+          setImportMoreColumnMapping(autoDetectMapping(cols))
+          toast.success(`Parsed ${jsonData.length} rows from Excel`)
+        } catch { toast.error('Failed to parse Excel file') }
+      }
+      reader.readAsArrayBuffer(file)
+    } else {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const cols = results.meta.fields || []
+          setImportMoreCsvColumns(cols)
+          setImportMoreParsedData(results.data as Record<string, string>[])
+          setImportMoreColumnMapping(autoDetectMapping(cols))
+          toast.success(`Parsed ${results.data.length} rows from CSV`)
+        },
+        error: () => toast.error('Failed to parse CSV file'),
+      })
+    }
+  }
+
+  const handleImportMore = async () => {
+    if (!selectedList || importMoreParsedData.length === 0) { toast.error('No data to import'); return }
+
+    const candidates = importMoreParsedData.map(row => ({
+      name: importMoreColumnMapping.name ? String(row[importMoreColumnMapping.name] || '').trim() : '',
+      phone: importMoreColumnMapping.phone ? String(row[importMoreColumnMapping.phone] || '').trim() : '',
+      email: importMoreColumnMapping.email ? String(row[importMoreColumnMapping.email] || '').trim() || undefined : undefined,
+      role: importMoreColumnMapping.role ? String(row[importMoreColumnMapping.role] || '').trim() || undefined : undefined,
+      location: importMoreColumnMapping.location ? String(row[importMoreColumnMapping.location] || '').trim() || undefined : undefined,
+      company: importMoreColumnMapping.company ? String(row[importMoreColumnMapping.company] || '').trim() || undefined : undefined,
+    })).filter(c => c.name && c.phone)
+
+    if (candidates.length === 0) { toast.error('No valid candidates found. Check your column mapping.'); return }
+
+    setAddNumbersSaving(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ADD', data: { candidates } }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.count} candidates imported into "${selectedList.name}"`)
+      setImportMoreOpen(false)
+      setImportMoreParsedData([])
+      setImportMoreCsvColumns([])
+      setImportMoreColumnMapping({})
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setAddNumbersSaving(false) }
   }
 
   // ─── Assign ───
@@ -1168,13 +1453,70 @@ export function CallListManagement({ userId }: { userId: string }) {
       </Dialog>
 
       {/* ═══════════ Candidates Dialog ═══════════ */}
-      <Dialog open={candidatesOpen} onOpenChange={setCandidatesOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{selectedList?.name} - Candidates ({selectedList?.candidates.length || 0})</DialogTitle></DialogHeader>
+      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) setSelectedCandidateIds([]) }}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedList?.name} - Candidates ({selectedList?.candidates.length || 0})</DialogTitle>
+            <DialogDescription>View and manage candidates in this calling list</DialogDescription>
+          </DialogHeader>
+
+          {/* Action buttons row */}
+          <div className="flex flex-wrap gap-2 py-1">
+            <Button variant="outline" size="sm" onClick={() => { setSelectedCandidateIds([]); openMergeDialog() }}>
+              <GitMerge className="h-4 w-4 mr-1.5" /> Merge List
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <MoreVertical className="h-4 w-4 mr-1.5" /> Bulk Actions
+                  {selectedCandidateIds.length > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">{selectedCandidateIds.length}</Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onClick={handleBulkDelete} disabled={selectedCandidateIds.length === 0} className="text-red-600">
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete Selected ({selectedCandidateIds.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={openUpdateStatusDialog} disabled={selectedCandidateIds.length === 0}>
+                  <Copy className="h-4 w-4 mr-2" /> Update Status ({selectedCandidateIds.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersOpen(true) }}>
+                  <UserPlus className="h-4 w-4 mr-2" /> Add Numbers
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="sm" onClick={() => { setSelectedCandidateIds([]); openDedupDialog() }}>
+              <Search className="h-4 w-4 mr-1.5" /> Find Duplicates
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersOpen(true) }}>
+              <Plus className="h-4 w-4 mr-1.5" /> Add Numbers
+            </Button>
+            <Button variant="outline" size="sm" onClick={openImportMoreDialog}>
+              <Upload className="h-4 w-4 mr-1.5" /> Import More
+            </Button>
+            {selectedCandidateIds.length > 0 && (
+              <div className="flex items-center gap-2 ml-auto">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateIds([])}>
+                  Clear selection
+                </Button>
+              </div>
+            )}
+          </div>
+
           <div className="rounded-md border overflow-auto max-h-96">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={selectedList?.candidates.length ? selectedCandidateIds.length === selectedList.candidates.length : false}
+                      onCheckedChange={(checked) => {
+                        if (!selectedList) return
+                        setSelectedCandidateIds(checked ? selectedList.candidates.map(c => c.id) : [])
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead className="hidden sm:table-cell">Role</TableHead>
@@ -1184,7 +1526,19 @@ export function CallListManagement({ userId }: { userId: string }) {
               </TableHeader>
               <TableBody>
                 {selectedList?.candidates.map(c => (
-                  <TableRow key={c.id}>
+                  <TableRow key={c.id} className={selectedCandidateIds.includes(c.id) ? 'bg-muted/50' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedCandidateIds.includes(c.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedCandidateIds(prev =>
+                            checked
+                              ? [...prev, c.id]
+                              : prev.filter(id => id !== c.id)
+                          )
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell>{c.phone}</TableCell>
                     <TableCell className="hidden sm:table-cell">{c.role || '-'}</TableCell>
@@ -1220,6 +1574,333 @@ export function CallListManagement({ userId }: { userId: string }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
             <Button onClick={handleAssign} className="bg-emerald-600 hover:bg-emerald-700">Assign ({selectedRecruiters.length})</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Merge List Dialog ═══════════ */}
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitMerge className="h-5 w-5" />
+              Merge into &ldquo;{selectedList?.name}&rdquo;
+            </DialogTitle>
+            <DialogDescription>Import candidates from another calling list into this one.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Source List *</Label>
+              <Select value={mergeSourceListId} onValueChange={setMergeSourceListId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a calling list to merge from" />
+                </SelectTrigger>
+                <SelectContent>
+                  {callLists
+                    .filter(l => l.id !== selectedList?.id)
+                    .map(l => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} ({l.candidates.length} candidates)
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {callLists.filter(l => l.id !== selectedList?.id).length === 0 && (
+                <p className="text-xs text-muted-foreground">No other lists available to merge.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Merge Mode *</Label>
+              <Select value={mergeMode} onValueChange={(v) => setMergeMode(v as 'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="APPEND">Append All - Add every candidate, even duplicates</SelectItem>
+                  <SelectItem value="SKIP_DUPLICATES">Skip Duplicates - Only add new phone numbers</SelectItem>
+                  <SelectItem value="REPLACE_DUPLICATES">Replace Duplicates - Update existing with new data</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {mergeMode === 'REPLACE_DUPLICATES' && (
+              <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+                <Checkbox
+                  id="keepOldNotes"
+                  checked={keepOldNotes}
+                  onCheckedChange={(checked) => setKeepOldNotes(checked === true)}
+                />
+                <Label htmlFor="keepOldNotes" className="text-sm cursor-pointer">
+                  Keep existing notes when replacing duplicates
+                </Label>
+              </div>
+            )}
+
+            {mergeSourceListId && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  Merging will combine {callLists.find(l => l.id === mergeSourceListId)?.candidates.length || 0} candidates
+                  into &ldquo;{selectedList?.name}&rdquo; ({selectedList?.candidates.length || 0} candidates).
+                  {mergeMode === 'APPEND' && ' All candidates will be added, including any duplicates.'}
+                  {mergeMode === 'SKIP_DUPLICATES' && ' Candidates with the same phone number will be skipped.'}
+                  {mergeMode === 'REPLACE_DUPLICATES' && ' Candidates with the same phone number will be updated with new data.'}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMergeOpen(false)}>Cancel</Button>
+            <Button onClick={handleMerge} disabled={merging || !mergeSourceListId} className="bg-emerald-600 hover:bg-emerald-700">
+              {merging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Merging...</> : 'Merge Lists'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Add Numbers Dialog ═══════════ */}
+      <Dialog open={addNumbersOpen} onOpenChange={(open) => { setAddNumbersOpen(open); if (!open) setAddNumbersEntries([emptyManualEntry()]) }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Add Candidates to &ldquo;{selectedList?.name}&rdquo;
+            </DialogTitle>
+            <DialogDescription>Add new candidates manually. Name and phone are required.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary" className="text-xs">
+                {addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} valid entries
+              </Badge>
+              <Button variant="outline" size="sm" onClick={addAddNumberRow}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
+              </Button>
+            </div>
+
+            <div className="rounded-md border overflow-auto max-h-72">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">#</TableHead>
+                    <TableHead className="min-w-[120px]">Name *</TableHead>
+                    <TableHead className="min-w-[130px]">Phone *</TableHead>
+                    <TableHead className="min-w-[140px] hidden sm:table-cell">Email</TableHead>
+                    <TableHead className="min-w-[120px] hidden lg:table-cell">Role</TableHead>
+                    <TableHead className="min-w-[100px] hidden lg:table-cell">Location</TableHead>
+                    <TableHead className="min-w-[100px] hidden lg:table-cell">Company</TableHead>
+                    <TableHead className="min-w-[100px] hidden lg:table-cell">Notes</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {addNumbersEntries.map((entry, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell><Input value={entry.name} onChange={e => updateAddNumberEntry(index, 'name', e.target.value)} placeholder="Name" className="h-8 text-sm" /></TableCell>
+                      <TableCell><Input value={entry.phone} onChange={e => updateAddNumberEntry(index, 'phone', e.target.value)} placeholder="Phone" className="h-8 text-sm" /></TableCell>
+                      <TableCell className="hidden sm:table-cell"><Input value={entry.email} onChange={e => updateAddNumberEntry(index, 'email', e.target.value)} placeholder="Email" className="h-8 text-sm" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Input value={entry.role} onChange={e => updateAddNumberEntry(index, 'role', e.target.value)} placeholder="Role" className="h-8 text-sm" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Input value={entry.location} onChange={e => updateAddNumberEntry(index, 'location', e.target.value)} placeholder="Location" className="h-8 text-sm" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Input value={entry.company} onChange={e => updateAddNumberEntry(index, 'company', e.target.value)} placeholder="Company" className="h-8 text-sm" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Input value={entry.notes} onChange={e => updateAddNumberEntry(index, 'notes', e.target.value)} placeholder="Notes" className="h-8 text-sm" /></TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
+                          onClick={() => removeAddNumberRow(index)}
+                          disabled={addNumbersEntries.length <= 1}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddNumbersOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddNumbers}
+              disabled={addNumbersSaving || !addNumbersEntries.some(e => e.name.trim() && e.phone.trim())}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {addNumbersSaving ? 'Adding...' : `Add ${addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidates`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Update Status Dialog ═══════════ */}
+      <Dialog open={updateStatusOpen} onOpenChange={setUpdateStatusOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Update Status</DialogTitle>
+            <DialogDescription>Change status for {updateStatusIds.length} selected candidate{updateStatusIds.length !== 1 ? 's' : ''}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>New Status</Label>
+            <Select value={newStatus} onValueChange={setNewStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="DONE">Done</SelectItem>
+                <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+                <SelectItem value="SKIPPED">Skipped</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateStatusOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateStatus} disabled={updateStatusSaving} className="bg-emerald-600 hover:bg-emerald-700">
+              {updateStatusSaving ? 'Updating...' : 'Update Status'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Deduplicate Dialog ═══════════ */}
+      <Dialog open={dedupOpen} onOpenChange={(open) => { setDedupOpen(open); if (!open) setDuplicates([]) }}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Find Duplicates
+            </DialogTitle>
+            <DialogDescription>Find candidates with duplicate phone numbers in &ldquo;{selectedList?.name}&rdquo;.</DialogDescription>
+          </DialogHeader>
+
+          {dedupLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : duplicates.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-sm">No duplicate phone numbers found in this list.</p>
+            </div>
+          ) : (
+            <div className="space-y-3 py-2">
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  Found {duplicates.length} phone number{duplicates.length !== 1 ? 's' : ''} with duplicates
+                  ({duplicates.reduce((sum, d) => sum + d.count - 1, 0)} extra entries).
+                  Removing will keep only the oldest entry for each duplicate.
+                </AlertDescription>
+              </Alert>
+
+              <div className="rounded-md border overflow-auto max-h-64">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Phone</TableHead>
+                      <TableHead className="text-center">Count</TableHead>
+                      <TableHead className="text-center">Duplicates</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {duplicates.map(d => (
+                      <TableRow key={d.phone}>
+                        <TableCell className="font-medium">{d.phone}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className="border-amber-500 text-amber-700">{d.count}</Badge>
+                        </TableCell>
+                        <TableCell className="text-center text-muted-foreground">{d.count - 1}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDedupOpen(false)}>Close</Button>
+            {duplicates.length > 0 && (
+              <Button variant="destructive" onClick={handleRemoveDuplicates}>
+                <Trash2 className="h-4 w-4 mr-1.5" /> Remove {duplicates.reduce((sum, d) => sum + d.count - 1, 0)} Duplicates
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Import More Dialog ═══════════ */}
+      <Dialog open={importMoreOpen} onOpenChange={(open) => { setImportMoreOpen(open); if (!open) { setImportMoreParsedData([]); setImportMoreCsvColumns([]); setImportMoreColumnMapping({}) } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import More into &ldquo;{selectedList?.name}&rdquo;
+            </DialogTitle>
+            <DialogDescription>Import additional candidates from CSV or Excel into this existing list.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Upload File (CSV or Excel)</Label>
+              <Input ref={importMoreFileRef} type="file" accept=".csv,.xls,.xlsx" onChange={handleImportMoreUpload} />
+              <p className="text-xs text-muted-foreground">Supports .csv, .xls, and .xlsx files. Headers must be in the first row.</p>
+            </div>
+
+            {importMoreCsvColumns.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Column Mapping ({importMoreParsedData.length} rows)</Label>
+                  <div className="grid gap-2">
+                    {columnFields.map(field => (
+                      <div key={field.value} className="flex items-center gap-2">
+                        <Label className="w-24 text-sm shrink-0">{field.label}</Label>
+                        <select
+                          value={importMoreColumnMapping[field.value] || ''}
+                          onChange={(e) => setImportMoreColumnMapping(prev => ({ ...prev, [field.value]: e.target.value }))}
+                          className="flex-1 h-9 px-3 rounded-md border border-input bg-transparent text-sm"
+                        >
+                          <option value="">Select column</option>
+                          <option value="SKIP" className="text-muted-foreground">— Skip —</option>
+                          {importMoreCsvColumns.map(col => (
+                            <option key={col} value={col}>{col}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Preview (first 5 rows)</Label>
+                  <div className="rounded-md border overflow-auto max-h-40">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {importMoreCsvColumns.map(col => <TableHead key={col} className="text-xs whitespace-nowrap">{col}</TableHead>)}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {importMoreParsedData.slice(0, 5).map((row, i) => (
+                          <TableRow key={i}>
+                            {importMoreCsvColumns.map(col => <TableCell key={col} className="text-xs py-1.5 whitespace-nowrap">{String(row[col] || '')}</TableCell>)}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportMoreOpen(false)}>Cancel</Button>
+            <Button onClick={handleImportMore} disabled={addNumbersSaving || importMoreParsedData.length === 0} className="bg-emerald-600 hover:bg-emerald-700">
+              {addNumbersSaving ? 'Importing...' : `Import ${importMoreParsedData.length} Candidates`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
