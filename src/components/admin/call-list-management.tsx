@@ -153,7 +153,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       if (!res.ok) throw new Error()
       const json = await res.json()
       setCallLists(json.callLists || [])
-    } catch { toast.error('Failed to load call lists') }
+    } catch { toast.error('Failed to load calling lists') }
     finally { setLoading(false) }
   }, [])
 
@@ -230,7 +230,7 @@ export function CallListManagement({ userId }: { userId: string }) {
         body: JSON.stringify({ name, description, source: 'MANUAL', createdBy: userId, candidates }),
       })
       if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
-      toast.success(`Call list created with ${candidates.length} candidates`)
+      toast.success(`Calling list created with ${candidates.length} candidates`)
       setCreateOpen(false)
       resetCreateForm()
       fetchCallLists()
@@ -301,7 +301,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       })
       if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
       const dupes = valid.length - unique.length
-      toast.success(`Call list created with ${candidates.length} candidates${dupes > 0 ? ` (${dupes} duplicates removed)` : ''}`)
+      toast.success(`Calling list created with ${candidates.length} candidates${dupes > 0 ? ` (${dupes} duplicates removed)` : ''}`)
       setCreateOpen(false)
       resetCreateForm()
       fetchCallLists()
@@ -410,7 +410,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
   const handleImportCSV = async () => {
     if (parsedData.length === 0) { toast.error('No data to import'); return }
-    if (!name) { toast.error('Enter a name for the call list'); return }
+    if (!name) { toast.error('Enter a name for the calling list'); return }
 
     const seen = new Set<string>()
     const uniqueData = parsedData.filter(row => {
@@ -505,7 +505,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
   const handleGsImport = async () => {
     if (gsRows.length === 0) { toast.error('No data to import'); return }
-    if (!name) { toast.error('Enter a name for the call list'); return }
+    if (!name) { toast.error('Enter a name for the calling list'); return }
 
     const seen = new Set<string>()
     const uniqueData = gsRows.filter(row => {
@@ -611,8 +611,8 @@ export function CallListManagement({ userId }: { userId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName, description: editDescription }),
       })
-      if (!res.ok) { toast.error('Failed to update call list'); return }
-      toast.success('Call list updated')
+      if (!res.ok) { toast.error('Failed to update calling list'); return }
+      toast.success('Calling list updated')
       setEditOpen(false)
       fetchCallLists()
     } catch { toast.error('Something went wrong') }
@@ -643,7 +643,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
   return (
     <div>
-      <PageHeader title="Call List Management" description="Manage candidate lists for calling" icon={PhoneCall}>
+      <PageHeader title="Calling List Management" description="Manage candidate lists for calling" icon={PhoneCall}>
         <Button variant="outline" onClick={() => { setName(''); setDescription(''); setUploadSource('CSV'); setUploadOpen(true) }}>
           <FileText className="h-4 w-4 mr-2" /> Import CSV
         </Button>
@@ -661,7 +661,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : callLists.length === 0 ? (
-        <EmptyState icon={PhoneCall} title="No call lists" description="Create or import a call list to get started" actionLabel="Create List" onAction={() => handleCreateOpen('manual')} />
+        <EmptyState icon={PhoneCall} title="No calling lists" description="Create or import a calling list to get started" actionLabel="Create List" onAction={() => handleCreateOpen('manual')} />
       ) : (
         <div className="space-y-3">
           {callLists.map(list => {
@@ -740,7 +740,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       {/* ═══════════ Create List Dialog (Manual Entry + Copy-Paste) ═══════════ */}
       <Dialog open={createOpen} onOpenChange={(open) => { if (!open) resetCreateForm(); setCreateOpen(open) }}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Create Call List</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Create Calling List</DialogTitle></DialogHeader>
 
           <div className="space-y-4 py-2">
             {/* Shared: list name & description */}
@@ -920,7 +920,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2"><Label>List Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Name for this call list" /></div>
+            <div className="space-y-2"><Label>List Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Name for this calling list" /></div>
             <div className="space-y-2"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" rows={2} /></div>
             <div className="space-y-2">
               <Label>Upload {uploadSource === 'XLSX' ? 'Excel' : 'CSV'} File</Label>
@@ -1227,9 +1227,9 @@ export function CallListManagement({ userId }: { userId: string }) {
       {/* ═══════════ Edit Dialog ═══════════ */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Edit Call List</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Edit Calling List</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-2"><Label>Name *</Label><Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Call list name" /></div>
+            <div className="space-y-2"><Label>Name *</Label><Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Calling list name" /></div>
             <div className="space-y-2"><Label>Description</Label><Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="Optional description" rows={2} /></div>
           </div>
           <DialogFooter>
@@ -1242,7 +1242,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       <ConfirmDialog
         open={!!confirmDelete}
         onOpenChange={() => setConfirmDelete(null)}
-        title="Delete Call List"
+        title="Delete Calling List"
         description={`Are you sure you want to delete "${confirmDelete?.name}" and all its ${confirmDelete?.candidates.length} candidates? This action cannot be undone.`}
         confirmLabel="Delete"
         variant="destructive"

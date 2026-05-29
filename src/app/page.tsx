@@ -20,6 +20,8 @@ import { AdminSettings } from '@/components/admin/admin-settings'
 import { AnnouncementsManagement } from '@/components/admin/announcements-management'
 import { TeamManagementEnhanced } from '@/components/admin/team-management-enhanced'
 import { OrganizationSettings } from '@/components/admin/organization-settings'
+import { DynamicFieldBuilder } from '@/components/admin/dynamic-field-builder'
+import { DispositionBuilder } from '@/components/admin/disposition-builder'
 import { SuperAdminLayout } from '@/components/super-admin/super-admin-layout'
 import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
 import { OrganizationManagement } from '@/components/super-admin/organization-management'
@@ -32,13 +34,14 @@ import { ScheduledCalls } from '@/components/recruiter/scheduled-calls'
 import { Settings } from '@/components/recruiter/settings'
 import { CandidatePipeline } from '@/components/recruiter/candidate-pipeline'
 import { CreateCallingList } from '@/components/recruiter/create-calling-list'
+import { CallingListView } from '@/components/recruiter/calling-list-view'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
 type AuthView = 'login' | 'signup' | 'register' | 'forgot-password'
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type SuperAdminPage = 'dashboard' | 'organizations' | 'plans' | 'settings'
-type RecruiterPage = 'home' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
+type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
   const isOnline = useNetworkStatus()
@@ -231,6 +234,8 @@ function AppContent() {
         case 'announcements': return <AnnouncementsManagement />
         case 'team-enhanced': return <TeamManagementEnhanced />
         case 'organization-settings': return <OrganizationSettings />
+        case 'field-builder': return <DynamicFieldBuilder />
+        case 'disposition-builder': return <DispositionBuilder />
         default: return <AdminDashboard />
       }
     }
@@ -246,6 +251,7 @@ function AppContent() {
   const renderRecruiterPage = () => {
     switch (recruiterPage) {
       case 'home': return <RecruiterDashboard userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
+      case 'calling-list': return <CallingListView userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
       case 'create-list': return <CreateCallingList userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
       case 'pending': return <AutoDialer userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
       case 'history': return <CallHistory userId={user.id} />

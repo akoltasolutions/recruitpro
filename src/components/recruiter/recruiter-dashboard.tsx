@@ -114,7 +114,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
         setSelectedListId(assigned[0].id)
       }
     } catch {
-      toast.error('Failed to load call lists')
+      toast.error('Failed to load calling lists')
     }
   }, [userId])
 
@@ -343,15 +343,15 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
       {callLists.length === 0 ? (
         <EmptyState
           icon={List}
-          title="No Call Lists Assigned"
-          description="You haven't been assigned any call lists yet. Please contact your admin."
+          title="No Calling Lists Assigned"
+          description="You haven't been assigned any calling lists yet. Please contact your admin."
         />
       ) : (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <CardTitle className="text-base">Current Call List</CardTitle>
+                <CardTitle className="text-base">Current Calling List</CardTitle>
                 {listStats && (
                   <Badge variant="secondary" className="text-xs">
                     {listStats.progress}% done

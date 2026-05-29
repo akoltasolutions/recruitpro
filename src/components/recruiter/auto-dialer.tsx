@@ -197,7 +197,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const assigned = all.filter((l) => l.assignments.some((a) => a.recruiterId === userId))
       setCallLists(assigned)
     } catch {
-      toast.error('Failed to load call lists')
+      toast.error('Failed to load calling lists')
     }
     setLoading(false)
   }, [userId])
@@ -1178,7 +1178,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
           </Button>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold">Auto Dialer</h1>
-            <p className="text-sm text-muted-foreground">Select a call list to begin calling</p>
+            <p className="text-sm text-muted-foreground">Select a calling list to begin calling</p>
           </div>
         </div>
 
@@ -1192,7 +1192,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
           <Card>
             <CardContent className="p-8 text-center">
               <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="font-medium">No Call Lists Assigned</p>
+              <p className="font-medium">No Calling Lists Assigned</p>
               <p className="text-sm text-muted-foreground mt-1">Contact your admin to get assigned a list.</p>
             </CardContent>
           </Card>

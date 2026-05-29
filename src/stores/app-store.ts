@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'approvals';
-export type RecruiterPage = 'home' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings';
+export type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings';
 export type AuthPage = 'login' | 'signup';
 
 interface AppState {

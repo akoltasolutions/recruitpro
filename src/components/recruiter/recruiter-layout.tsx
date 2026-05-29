@@ -10,6 +10,7 @@ import {
   LogOut,
   Headphones,
   ListPlus,
+  PhoneCall,
   GitBranch,
 } from 'lucide-react'
 import {
@@ -42,7 +43,8 @@ interface RecruiterLayoutProps {
 
 const menuItems: { id: RecruiterPage; label: string; icon: React.ElementType; permissionKey?: keyof NonNullable<ReturnType<typeof useAuthStore.getState>['user']> }[] = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'create-list', label: 'Calling List', icon: ListPlus, permissionKey: 'createListPermission' },
+  { id: 'calling-list', label: 'Calling List', icon: PhoneCall },
+  { id: 'create-list', label: 'Create List', icon: ListPlus, permissionKey: 'createListPermission' },
   { id: 'pending', label: 'Pending', icon: Clock },
   { id: 'pipeline', label: 'Pipeline', icon: GitBranch },
   { id: 'history', label: 'History', icon: History },
