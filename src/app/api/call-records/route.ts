@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {};
     // Non-admin users can only see their own call records
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       where.recruiterId = auth.userId;
     } else if (recruiterId) {
       where.recruiterId = recruiterId;
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Force recruiterId to authenticated user (prevent impersonation)
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       body.recruiterId = auth.userId;
     }
 

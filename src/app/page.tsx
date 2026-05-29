@@ -218,7 +218,7 @@ function AppContent() {
   }
 
   // Org Admin Panel
-  if (user.role === 'ORG_ADMIN') {
+  if (user.role === 'ORG_ADMIN' || user.role === 'ADMIN') {
     const renderAdminPage = () => {
       switch (adminPage) {
         case 'dashboard': return <AdminDashboard />

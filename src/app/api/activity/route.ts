@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 // Whitelist of valid actions for activity logging
 const VALID_ACTIONS = [
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     // Admin can log activity for other users (e.g., break toggling)
     let targetUserId = auth.userId;
-    if (metadata?.targetUserId && auth.role === 'ADMIN') {
+    if (metadata?.targetUserId && requireOrgAdmin(auth)) {
       targetUserId = metadata.targetUserId;
     }
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     if (isNaN(limit) || limit < 1 || limit > 1000) limit = 200;
 
     const where: Record<string, unknown> = {};
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       where.userId = auth.userId;
     } else if (userId) {
       where.userId = userId;
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
     // Get latest status per user for live status view (admin only)
     let liveStatuses: { userId: string; name: string; status: string; lastActivity: string; totalHoursToday: number }[] = [];
-    if (auth.role === 'ADMIN') {
+    if (requireOrgAdmin(auth)) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 

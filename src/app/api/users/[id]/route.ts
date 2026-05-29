@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // Non-admin users can only view their own profile
-    if (auth.role !== 'ADMIN' && auth.userId !== id) {
+    if (!requireOrgAdmin(auth) && auth.userId !== id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     const user = await db.user.findUnique({
@@ -38,7 +38,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // Non-admin users can only update their own profile
-    if (auth.role !== 'ADMIN' && auth.userId !== id) {
+    if (!requireOrgAdmin(auth) && auth.userId !== id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     const data = await request.json();
@@ -46,7 +46,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // Whitelist safe fields for non-admin users
     const allowedFields = ['name', 'email', 'phone', 'password'];
     for (const key of Object.keys(data)) {
-      if (!allowedFields.includes(key) && auth.role !== 'ADMIN') {
+      if (!allowedFields.includes(key) && !requireOrgAdmin(auth)) {
         delete data[key];
       }
     }
@@ -105,7 +105,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     await db.user.delete({ where: { id } });

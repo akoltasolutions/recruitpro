@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
 
     // Ownership check: non-admin users can only view candidates in their assigned call lists
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       const assignment = await db.callListAssignment.findFirst({
         where: {
           callListId: id,
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
 
     // Ownership check: non-admin users can only add candidates to their assigned call lists
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       const assignment = await db.callListAssignment.findFirst({
         where: {
           callListId: id,

@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { password: _, organization, ...safeUser } = user;
+    if (safeUser.role === 'ADMIN') safeUser.role = 'ORG_ADMIN';
     return NextResponse.json({ user: safeUser, token, organization: organization || null });
   } catch (error) {
     console.error('Login error:', error);

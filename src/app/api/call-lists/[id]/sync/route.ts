@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 /**
  * Extract the Google Spreadsheet ID from various URL formats.
@@ -157,7 +157,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     }
 
     // Only admins can trigger sync
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied. Only admins can trigger sync.' }, { status: 403 });
     }
 

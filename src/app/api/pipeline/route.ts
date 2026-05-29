@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 // GET /api/pipeline — Get candidates grouped by pipeline stage
 export async function GET(request: NextRequest) {
@@ -113,7 +113,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Ownership check: non-admin users can only modify candidates in their assigned call lists
-    if (auth.role !== 'ADMIN') {
+    if (!requireOrgAdmin(auth)) {
       const candidate = await db.candidate.findUnique({
         where: { id: candidateId },
         select: { callListId: true },

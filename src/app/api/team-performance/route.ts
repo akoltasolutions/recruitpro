@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { authenticateRequest } from '@/lib/auth-middleware'
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware'
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request)
   if (!auth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (auth.role !== 'ADMIN') {
+  if (!requireOrgAdmin(auth)) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 })
   }
 

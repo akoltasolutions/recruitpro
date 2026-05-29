@@ -66,6 +66,7 @@ async function main() {
     { sql: `UPDATE "WhatsAppMessage" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'WhatsAppMessage' },
     { sql: `UPDATE "Announcement" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'Announcement' },
     { sql: `UPDATE "ActivityLog" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'ActivityLog' },
+    { sql: `UPDATE "User" SET "role" = 'ORG_ADMIN' WHERE "role" = 'ADMIN' AND "role" IS NOT NULL`, table: 'User (role)' },
   ];
 
   for (const { sql, table } of updateStatements) {

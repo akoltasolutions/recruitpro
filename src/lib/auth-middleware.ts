@@ -102,10 +102,14 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       return null;
     }
 
+    // Normalize legacy ADMIN role to ORG_ADMIN for backward compatibility
+    let normalizedRole = user.role;
+    if (normalizedRole === 'ADMIN') normalizedRole = 'ORG_ADMIN';
+
     // SUPER_ADMIN users may not have an organizationId — that's allowed
     return {
       userId: user.id,
-      role: user.role,
+      role: normalizedRole,
       organizationId: user.organizationId,
       organization: user.organization
         ? {
