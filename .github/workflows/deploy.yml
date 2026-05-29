@@ -1,0 +1,28 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📡 Connecting to server & deploying
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "========================================="
+            echo "GitHub Actions Deploy - $(date)"
+            echo "========================================="
+            cd /home/ubuntu/recruitpro
+            bash deploy.sh
+            echo "========================================="
+            echo "Deploy triggered by GitHub Actions DONE"
+            echo "========================================="
