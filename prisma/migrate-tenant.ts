@@ -5,7 +5,10 @@
  * This script:
  * 1. Finds or creates the default "Akolta" organization
  * 2. Updates all rows with NULL organizationId to belong to that org
- * 3. Also ensures the admin user is linked to the org
+ * 3. Promotes the FIRST admin user (earliest createdAt) to SUPER_ADMIN
+ * 4. Converts remaining ADMIN users to ORG_ADMIN
+ * 
+ * IMPORTANT: This script is idempotent — safe to run multiple times.
  */
 import { PrismaClient } from '@prisma/client';
 
@@ -66,7 +69,6 @@ async function main() {
     { sql: `UPDATE "WhatsAppMessage" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'WhatsAppMessage' },
     { sql: `UPDATE "Announcement" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'Announcement' },
     { sql: `UPDATE "ActivityLog" SET "organizationId" = '${orgId}' WHERE "organizationId" IS NULL`, table: 'ActivityLog' },
-    { sql: `UPDATE "User" SET "role" = 'ORG_ADMIN' WHERE "role" = 'ADMIN' AND "role" IS NOT NULL`, table: 'User (role)' },
   ];
 
   for (const { sql, table } of updateStatements) {
@@ -80,7 +82,55 @@ async function main() {
     }
   }
 
-  // 3. Summary
+  // 3. Role migration — promote first admin to SUPER_ADMIN, rest to ORG_ADMIN
+  console.log('\n=== Role Migration ===');
+
+  // Check if SUPER_ADMIN already exists
+  const existingSuperAdmin = await prisma.user.findFirst({
+    where: { role: 'SUPER_ADMIN' },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (existingSuperAdmin) {
+    console.log(`  ✓ SUPER_ADMIN already exists: ${existingSuperAdmin.email} (${existingSuperAdmin.name})`);
+    // Only convert remaining ADMIN users to ORG_ADMIN
+    const adminResult = await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "role" = 'ORG_ADMIN' WHERE "role" = 'ADMIN' AND "role" IS NOT NULL`
+    );
+    console.log(`  ✓ Converted ${adminResult} remaining ADMIN users to ORG_ADMIN`);
+  } else {
+    // No SUPER_ADMIN yet — find the first ADMIN user (earliest createdAt)
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, email: true, name: true, createdAt: true },
+    });
+
+    if (admins.length > 0) {
+      // Promote the first (earliest) admin to SUPER_ADMIN
+      const primaryAdmin = admins[0];
+      await prisma.user.update({
+        where: { id: primaryAdmin.id },
+        data: { role: 'SUPER_ADMIN' },
+      });
+      console.log(`  ✓ Promoted ${primaryAdmin.email} (${primaryAdmin.name}) to SUPER_ADMIN`);
+
+      // Convert remaining admins to ORG_ADMIN
+      if (admins.length > 1) {
+        const remainingIds = admins.slice(1).map(a => a.id);
+        await prisma.user.updateMany({
+          where: { id: { in: remainingIds } },
+          data: { role: 'ORG_ADMIN' },
+        });
+        console.log(`  ✓ Converted ${admins.length - 1} remaining ADMIN users to ORG_ADMIN`);
+      }
+    } else {
+      // No ADMIN users at all — check for ORG_ADMIN that should be SUPER_ADMIN
+      console.log('  ℹ No ADMIN users found. Checking existing roles...');
+    }
+  }
+
+  // 4. Summary
   const totalUpdated = tables.reduce((sum, t) => sum + t.count, 0);
   console.log(`\n=== Migration complete: ${totalUpdated} total rows updated ===`);
   
@@ -94,6 +144,16 @@ async function main() {
       (SELECT COUNT(*) FROM "Client" WHERE "organizationId" = '${orgId}') as clients
   `);
   console.log('Organization stats after migration:', orgStats);
+
+  // Show all user roles for verification
+  const allUsers = await prisma.user.findMany({
+    select: { email: true, role: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  console.log('\nUser roles after migration:');
+  allUsers.forEach(u => {
+    console.log(`  - ${u.email} → ${u.role} (${u.name})`);
+  });
 }
 
 main()
