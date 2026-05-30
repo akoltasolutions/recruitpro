@@ -6,6 +6,11 @@
 
 set -e
 
+# Ensure bun, pm2, node are in PATH (non-interactive SSH sessions may not load .bashrc)
+export PATH="$HOME/.bun/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
 PROJECT_DIR="/home/ubuntu/recruitpro"
 LOG_FILE="$PROJECT_DIR/logs/deploy.log"
 
@@ -16,6 +21,13 @@ log() {
 log "=========================================="
 log "DEPLOYMENT STARTED"
 log "=========================================="
+
+# Verify tools
+log "Checking tools..."
+which bun >/dev/null 2>&1 && log "  bun: $(bun --version)" || log "  WARNING: bun not found in PATH"
+which node >/dev/null 2>&1 && log "  node: $(node --version)" || log "  WARNING: node not found in PATH"
+which pm2 >/dev/null 2>&1 && log "  pm2: $(pm2 --version)" || log "  WARNING: pm2 not found in PATH"
+which npx >/dev/null 2>&1 && log "  npx: found" || log "  WARNING: npx not found in PATH"
 
 cd "$PROJECT_DIR"
 
