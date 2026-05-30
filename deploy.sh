@@ -1,7 +1,11 @@
 #!/bin/bash
 # ============================================
 # RecruitPro Auto-Deploy Script
-# Triggered by GitHub webhook on push to main
+# Triggered by GitHub Actions / webhook on push to main
+# 
+# Strategy: Quick SSH steps (git pull, deps, DB sync)
+# then kicks off the build in background via nohup
+# so SSH connection doesn't need to stay open.
 # ============================================
 
 set -e
@@ -13,6 +17,7 @@ export NVM_DIR="$HOME/.nvm"
 
 PROJECT_DIR="/home/ubuntu/recruitpro"
 LOG_FILE="$PROJECT_DIR/logs/deploy.log"
+BUILD_LOG="/tmp/recruitpro-build.log"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -24,10 +29,9 @@ log "=========================================="
 
 # Verify tools
 log "Checking tools..."
-which bun >/dev/null 2>&1 && log "  bun: $(bun --version)" || log "  WARNING: bun not found in PATH"
-which node >/dev/null 2>&1 && log "  node: $(node --version)" || log "  WARNING: node not found in PATH"
-which pm2 >/dev/null 2>&1 && log "  pm2: $(pm2 --version)" || log "  WARNING: pm2 not found in PATH"
-which npx >/dev/null 2>&1 && log "  npx: found" || log "  WARNING: npx not found in PATH"
+which bun >/dev/null 2>&1 && log "  bun: $(bun --version)" || { log "ERROR: bun not found"; exit 1; }
+which node >/dev/null 2>&1 && log "  node: $(node --version)" || { log "ERROR: node not found"; exit 1; }
+which pm2 >/dev/null 2>&1 && log "  pm2 found" || { log "ERROR: pm2 not found"; exit 1; }
 
 cd "$PROJECT_DIR"
 
@@ -35,7 +39,7 @@ cd "$PROJECT_DIR"
 log "Step 0: Backing up .env..."
 if [ -f .env ]; then
     cp .env /tmp/recruitpro-env-backup
-    log ".env backed up to /tmp/recruitpro-env-backup"
+    log ".env backed up."
 fi
 
 # Step 1: Pull latest code
@@ -44,15 +48,15 @@ git fetch origin
 git reset --hard origin/main
 log "Code updated to latest version."
 
-# Step 1b: Restore .env after git reset
+# Step 1b: Restore .env
 log "Step 1b: Restoring .env..."
 if [ -f /tmp/recruitpro-env-backup ]; then
     cp /tmp/recruitpro-env-backup .env
     rm /tmp/recruitpro-env-backup
-    log ".env restored successfully."
+    log ".env restored."
 else
     if [ ! -f .env ]; then
-        log "WARNING: No .env file found! Creating default..."
+        log "WARNING: No .env found! Creating default..."
         cat > .env << 'ENVEOF'
 DATABASE_URL="file:/home/ubuntu/recruitpro/db/custom.db"
 TOKEN_SECRET="recruitpro-prod-secret-key-2024"
@@ -73,7 +77,7 @@ log "Step 3: Syncing database schema..."
 bunx prisma db push
 log "Database synced."
 
-# Step 3b: Run tenant migration (backfill organizationId on existing rows)
+# Step 3b: Run tenant migration
 log "Step 3b: Running tenant migration..."
 if [ -f prisma/migrate-tenant.ts ]; then
     bun run prisma/migrate-tenant.ts
@@ -82,30 +86,63 @@ else
     log "No migration script found, skipping."
 fi
 
-# Step 4a: Stop PM2 before build to free memory (~911MB server)
-log "Step 4a: Stopping PM2 to free memory for build..."
+log "=========================================="
+log "QUICK STEPS COMPLETE — starting background build"
+log "SSH connection can now close safely."
+log "=========================================="
+
+# Step 4+: Build and restart in BACKGROUND (nohup) so SSH can close
+# This avoids GitHub Actions / SSH timeout issues on low-memory servers
+nohup bash -c '
+set -e
+
+export PATH="$HOME/.bun/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+PROJECT_DIR="/home/ubuntu/recruitpro"
+LOG_FILE="$PROJECT_DIR/logs/deploy.log"
+BUILD_LOG="/tmp/recruitpro-build.log"
+
+log() {
+    echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1" | tee -a "$LOG_FILE"
+}
+
+log "[BG BUILD] Step 4a: Stopping PM2 to free memory..."
 pm2 stop recruitpro 2>/dev/null || true
 sleep 2
-log "PM2 stopped."
+log "[BG BUILD] PM2 stopped."
 
-# Step 4b: Build
-log "Step 4b: Building application..."
+log "[BG BUILD] Step 4b: Building application (this takes 10-20 min on low-memory server)..."
 rm -rf .next
-NODE_OPTIONS="--max-old-space-size=512" bun run build
-log "Build completed."
+cd "$PROJECT_DIR"
+NODE_OPTIONS="--max-old-space-size=512" bun run build >> "$BUILD_LOG" 2>&1
+log "[BG BUILD] Build completed successfully."
 
-# Step 5: Delete and recreate PM2 process (restart caches old env vars!)
-log "Step 5: Restarting application via PM2..."
+log "[BG BUILD] Step 5: Restarting application via PM2..."
 pm2 delete recruitpro 2>/dev/null || true
 pm2 start ecosystem.config.cjs
 pm2 save
-log "Application restarted."
+log "[BG BUILD] Application restarted."
 
-# Step 6: Clean stray lockfiles that confuse Next.js workspace root detection
-log "Step 6: Cleaning stray lockfiles..."
+log "[BG BUILD] Step 6: Cleaning stray lockfiles..."
 rm -f /home/ubuntu/bun.lock /home/ubuntu/package-lock.json /home/ubuntu/.env
-log "Stray lockfiles cleaned."
+log "[BG BUILD] Stray lockfiles cleaned."
 
-log "=========================================="
-log "DEPLOYMENT COMPLETED SUCCESSFULLY"
-log "=========================================="
+# Verify app is responding
+sleep 5
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
+log "[BG BUILD] Health check: HTTP $HTTP_CODE"
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "307" ]; then
+    log "=========================================="
+    log "DEPLOYMENT COMPLETED SUCCESSFULLY"
+    log "=========================================="
+else
+    log "WARNING: App health check returned HTTP $HTTP_CODE — may need manual investigation"
+fi
+' > /dev/null 2>&1 &
+
+BG_PID=$!
+log "Background build process started (PID: $BG_PID)"
+log "Monitor progress: tail -f $BUILD_LOG or $LOG_FILE"
