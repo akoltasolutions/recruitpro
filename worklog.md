@@ -110,3 +110,29 @@ Stage Summary:
 - Login tested: SUPER_ADMIN and ORG_ADMIN roles work with organization data
 - Registration tested: new org + ORG_ADMIN user created successfully
 - Ready for deployment to production server
+
+---
+Task ID: 8
+Agent: main
+Task: Fix Super Admin Plan Builder visibility + deploy to production
+
+Work Log:
+- Diagnosed root cause: migration script converted ALL ADMIN users to ORG_ADMIN,
+  preventing the primary admin from accessing the Super Admin Panel (where Plan Builder lives)
+- Fixed prisma/migrate-tenant.ts: now promotes the earliest ADMIN user to SUPER_ADMIN,
+  converts remaining ADMIN users to ORG_ADMIN. Script is idempotent.
+- Created .github/workflows/deploy.yml for auto-deploy via SSH on push to main
+- Fixed deploy.sh: added PATH setup for non-interactive SSH sessions (bun, node, pm2)
+- Restructured deploy.sh: quick steps (git pull, deps, DB) via SSH, then nohup
+  background build to avoid SSH timeouts on 911MB server
+- Pushed 5 commits to GitHub triggering auto-deploy pipeline
+
+Stage Summary:
+- Code is pushed to GitHub (commit 348fc3d)
+- Migration fix ensures admin user gets SUPER_ADMIN role (can access Plan Builder)
+- GitHub Actions auto-deploy triggers on every push to main
+- NOTE: Server (911MB RAM) build takes 10-20+ minutes, causing timeout issues
+- If server is stuck, user needs to SSH in and manually:
+  1. Kill stuck build processes: pkill -f "next build"
+  2. Build: cd /home/ubuntu/recruitpro && bun run build
+  3. Restart: pm2 start ecosystem.config.cjs && pm2 save
