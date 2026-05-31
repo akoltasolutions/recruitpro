@@ -26,6 +26,7 @@ model SubscriptionPlan {
   features        String   @default("[]") // JSON array of feature strings
   trialDays         Int      @default(0)           // number of trial days
   monthlyCallLimit  Int      @default(0)           // max calls per month, -1 = unlimited
+  dailyCallLimit    Int      @default(0)           // max calls per day, -1 = unlimited
   storageLimit      Int      @default(0)           // MB, -1 = unlimited
   isUnlimited       Boolean  @default(false)       // master unlimited toggle
   featureAccess     String   @default("{}")        // JSON: granular feature toggles

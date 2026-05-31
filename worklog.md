@@ -136,3 +136,27 @@ Stage Summary:
   1. Kill stuck build processes: pkill -f "next build"
   2. Build: cd /home/ubuntu/recruitpro && bun run build
   3. Restart: pm2 start ecosystem.config.cjs && pm2 save
+
+---
+Task ID: 1-3
+Agent: Main Agent
+Task: Fix Plan Type dropdown, add daily calling limit, free plan defaults to 1 user
+
+Work Log:
+- Analyzed screenshot of Create Plan dialog showing Plan Type dropdown stuck on "Starter"
+- Identified root cause: Radix Select inside Dialog/ScrollArea with portal causing click interception
+- Fixed dropdown by adding `modal={false}` to `<Select>` component in plan-management.tsx
+- Added `dailyCallLimit Int @default(0)` field to SubscriptionPlan in prisma schema
+- Ran `bun run db:push` to sync schema changes
+- Updated Plan and PlanFormData interfaces to include dailyCallLimit
+- Updated emptyForm, openEdit, handleUnlimitedToggle, handleSubmit to include dailyCallLimit
+- Added `handlePlanTypeChange()` function that auto-sets maxUsers=1 and dailyCallLimit=50 when type=FREE
+- Added Daily Call Limit input field to the plan form UI
+- Added Daily Calls display to plan cards
+- Updated POST, PUT, and duplicate API routes to handle dailyCallLimit
+
+Stage Summary:
+- Plan Type dropdown fixed: `modal={false}` allows proper selection inside Dialog
+- Free plan auto-limits to 1 user and 50 daily calls when type is set to FREE
+- Daily Call Limit field added to plan form, card display, and all API routes
+- All changes pass lint check and compile successfully

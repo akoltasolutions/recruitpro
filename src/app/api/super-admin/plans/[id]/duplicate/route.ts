@@ -43,6 +43,7 @@ export async function POST(
         features: sourcePlan.features,
         trialDays: sourcePlan.trialDays,
         monthlyCallLimit: sourcePlan.monthlyCallLimit,
+        dailyCallLimit: sourcePlan.dailyCallLimit,
         storageLimit: sourcePlan.storageLimit,
         isUnlimited: sourcePlan.isUnlimited,
         featureAccess: sourcePlan.featureAccess,

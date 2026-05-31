@@ -71,6 +71,7 @@ interface Plan {
   features: string
   trialDays: number
   monthlyCallLimit: number
+  dailyCallLimit: number
   storageLimit: number
   isUnlimited: boolean
   featureAccess: string
@@ -92,6 +93,7 @@ interface PlanFormData {
   maxNumbers: number
   dailyUploadLimit: number
   monthlyCallLimit: number
+  dailyCallLimit: number
   storageLimit: number
   isUnlimited: boolean
   featureAccess: FeatureAccess
@@ -135,6 +137,7 @@ const emptyForm: PlanFormData = {
   maxNumbers: 5000,
   dailyUploadLimit: 500,
   monthlyCallLimit: 0,
+  dailyCallLimit: 0,
   storageLimit: 0,
   isUnlimited: false,
   featureAccess: { ...defaultFeatures },
@@ -254,6 +257,7 @@ export function PlanManagement() {
       maxNumbers: plan.maxNumbers,
       dailyUploadLimit: plan.dailyUploadLimit,
       monthlyCallLimit: plan.monthlyCallLimit,
+      dailyCallLimit: plan.dailyCallLimit,
       storageLimit: plan.storageLimit,
       isUnlimited: plan.isUnlimited,
       featureAccess: parseFeatureAccess(plan.featureAccess),
@@ -270,19 +274,42 @@ export function PlanManagement() {
         maxNumbers: -1,
         dailyUploadLimit: -1,
         monthlyCallLimit: -1,
+        dailyCallLimit: -1,
         storageLimit: -1,
       }))
     } else {
       setFormData((f) => ({
         ...f,
         isUnlimited: false,
-        maxUsers: 10,
+        maxUsers: f.type === 'FREE' ? 1 : 10,
         maxNumbers: 5000,
         dailyUploadLimit: 500,
         monthlyCallLimit: 0,
+        dailyCallLimit: 0,
         storageLimit: 0,
       }))
     }
+  }
+
+  function handlePlanTypeChange(newType: PlanType) {
+    setFormData((f) => {
+      if (newType === 'FREE') {
+        return {
+          ...f,
+          type: newType,
+          monthlyPrice: 0,
+          yearlyPrice: 0,
+          maxUsers: f.isUnlimited ? -1 : 1,
+          dailyCallLimit: f.isUnlimited ? -1 : 50,
+        }
+      }
+      return {
+        ...f,
+        type: newType,
+        maxUsers: f.isUnlimited ? -1 : 10,
+        dailyCallLimit: f.isUnlimited ? -1 : 0,
+      }
+    })
   }
 
   function handleFeatureToggle(key: keyof FeatureAccess) {
@@ -315,6 +342,7 @@ export function PlanManagement() {
         maxNumbers: formData.maxNumbers,
         dailyUploadLimit: formData.dailyUploadLimit,
         monthlyCallLimit: formData.monthlyCallLimit,
+        dailyCallLimit: formData.dailyCallLimit,
         storageLimit: formData.storageLimit,
         isUnlimited: formData.isUnlimited,
         featureAccess: JSON.stringify(formData.featureAccess),
@@ -504,6 +532,17 @@ export function PlanManagement() {
                         {plan.dailyUploadLimit === -1 ? 'Unlimited' : plan.dailyUploadLimit.toLocaleString('en-IN')}
                       </span>
                     </div>
+                    {(plan.dailyCallLimit !== 0 || plan.monthlyCallLimit !== 0) && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Phone className="size-3.5" />
+                          Daily Calls
+                        </span>
+                        <span className="font-medium">
+                          {plan.dailyCallLimit === -1 ? 'Unlimited' : plan.dailyCallLimit === 0 ? 'No Limit' : plan.dailyCallLimit.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    )}
                     {plan.monthlyCallLimit !== 0 && (
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -634,7 +673,7 @@ export function PlanManagement() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="plan-type">Plan Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData((f) => ({ ...f, type: v as PlanType }))}>
+                  <Select value={formData.type} onValueChange={(v) => handlePlanTypeChange(v as PlanType)} modal={false}>
                     <SelectTrigger id="plan-type">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -647,6 +686,11 @@ export function PlanManagement() {
                       <SelectItem value="CUSTOM">Custom</SelectItem>
                     </SelectContent>
                   </Select>
+                  {formData.type === 'FREE' && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Free plan is limited to 1 user and 50 daily calls.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -769,6 +813,18 @@ export function PlanManagement() {
                       disabled={formData.isUnlimited}
                     />
                     <p className="text-xs text-muted-foreground">-1 = unlimited</p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="plan-daily-calls">Daily Call Limit</Label>
+                    <Input
+                      id="plan-daily-calls"
+                      type="number"
+                      placeholder="0"
+                      value={formData.dailyCallLimit}
+                      onChange={(e) => setFormData((f) => ({ ...f, dailyCallLimit: parseInt(e.target.value) || 0 }))}
+                      disabled={formData.isUnlimited}
+                    />
+                    <p className="text-xs text-muted-foreground">0 = no limit, -1 = unlimited</p>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="plan-monthly-calls">Monthly Call Limit</Label>
