@@ -18,17 +18,49 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   LayoutDashboard, Building2, CreditCard, Settings,
   Menu, Shield, LogOut, MoreHorizontal,
+  BarChart3, Activity, Tag, PhoneCall, MessageSquare,
+  Users, UserCheck, Megaphone, Settings2, Palette,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
-const menuItems = [
-  { key: 'dashboard', label: 'Platform Dashboard', icon: LayoutDashboard },
-  { key: 'organizations', label: 'Organizations', icon: Building2 },
-  { key: 'plans', label: 'Subscription Plans', icon: CreditCard },
-  { key: 'settings', label: 'Platform Settings', icon: Settings },
+interface MenuItem {
+  key: string
+  label: string
+  icon: LucideIcon
+  section: 'platform' | 'company'
+}
+
+const platformMenuItems: MenuItem[] = [
+  { key: 'platform-dashboard', label: 'Platform Dashboard', icon: LayoutDashboard, section: 'platform' },
+  { key: 'organizations', label: 'Organizations', icon: Building2, section: 'platform' },
+  { key: 'plans', label: 'Subscription Plans', icon: CreditCard, section: 'platform' },
+  { key: 'platform-settings', label: 'Platform Settings', icon: Settings, section: 'platform' },
 ]
 
-// All items shown in bottom nav (only 4 items)
-const bottomNavItems = menuItems
+const companyMenuItems: MenuItem[] = [
+  { key: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'company' },
+  { key: 'team-performance', label: 'Team Performance', icon: BarChart3, section: 'company' },
+  { key: 'team-monitoring', label: 'Team Monitoring', icon: Activity, section: 'company' },
+  { key: 'dispositions', label: 'Disposition', icon: Tag, section: 'company' },
+  { key: 'call-lists', label: 'Calling List', icon: PhoneCall, section: 'company' },
+  { key: 'templates', label: 'Message Templates', icon: MessageSquare, section: 'company' },
+  { key: 'clients', label: 'Client Name', icon: Building2, section: 'company' },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone, section: 'company' },
+  { key: 'users', label: 'User Management', icon: Users, section: 'company' },
+  { key: 'team-enhanced', label: 'Team Management', icon: Users, section: 'company' },
+  { key: 'approvals', label: 'Approval Requests', icon: UserCheck, section: 'company' },
+  { key: 'field-builder', label: 'Field Builder', icon: Settings2, section: 'company' },
+  { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette, section: 'company' },
+  { key: 'admin-settings', label: 'Settings', icon: Settings, section: 'company' },
+  { key: 'organization-settings', label: 'Organization Settings', icon: Building2, section: 'company' },
+]
+
+const allMenuItems = [...platformMenuItems, ...companyMenuItems]
+
+// First 5 items shown directly in bottom nav
+const bottomNavItems = allMenuItems.slice(0, 5)
+// Remaining items shown in "More" popover
+const moreNavItems = allMenuItems.slice(5)
 
 interface SuperAdminLayoutProps {
   activePage: string
@@ -40,6 +72,7 @@ interface SuperAdminLayoutProps {
 export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }: SuperAdminLayoutProps) {
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const sidebarContent = (
     <>
@@ -55,12 +88,13 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
         </div>
       </SidebarHeader>
       <Separator />
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto">
+        {/* Platform Management Section */}
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>Platform Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {platformMenuItems.map((item) => (
                 <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton
                     isActive={activePage === item.key}
@@ -71,6 +105,32 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
                     )}
                   >
                     <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-violet-600')} />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator className="mx-4 w-auto" />
+
+        {/* Company Management Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Company Management</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {companyMenuItems.map((item) => (
+                <SidebarMenuItem key={item.key}>
+                  <SidebarMenuButton
+                    isActive={activePage === item.key}
+                    onClick={() => onNavigate(item.key)}
+                    className={cn(
+                      'cursor-pointer',
+                      activePage === item.key && 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/15'
+                    )}
+                  >
+                    <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-emerald-600')} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -146,13 +206,55 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
                 onClick={() => onNavigate(item.key)}
                 className={cn(
                   'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
-                  activePage === item.key ? 'text-violet-600' : 'text-muted-foreground hover:text-foreground'
+                  activePage === item.key
+                    ? item.section === 'platform' ? 'text-violet-600' : 'text-emerald-600'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <item.icon className="h-5 w-5" />
-                <span className="truncate max-w-[64px]">{item.label.split(' ')[0]}</span>
+                <span className="truncate max-w-[56px]">{item.label.split(' ')[0]}</span>
               </button>
             ))}
+            {/* More menu for remaining items */}
+            <Popover open={moreOpen} onOpenChange={setMoreOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
+                    moreNavItems.some(item => item.key === activePage)
+                      ? 'text-emerald-600'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                  <span>More</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="center" className="w-64 p-2 mb-2 max-h-80 overflow-y-auto">
+                <div className="space-y-1">
+                  {moreNavItems.map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        onNavigate(item.key)
+                        setMoreOpen(false)
+                      }}
+                      className={cn(
+                        'flex items-center gap-3 w-full rounded-md px-3 py-2.5 text-sm transition-colors',
+                        activePage === item.key
+                          ? item.section === 'platform'
+                            ? 'bg-violet-600/10 text-violet-700 dark:text-violet-400'
+                            : 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400'
+                          : 'text-foreground hover:bg-muted'
+                      )}
+                    >
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </nav>
       </div>

@@ -26,6 +26,7 @@ import { SuperAdminLayout } from '@/components/super-admin/super-admin-layout'
 import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
 import { OrganizationManagement } from '@/components/super-admin/organization-management'
 import { PlanManagement } from '@/components/super-admin/plan-management'
+import { PlatformSettingsPage } from '@/components/super-admin/platform-settings'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { AutoDialer } from '@/components/recruiter/auto-dialer'
@@ -40,7 +41,7 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
 
 type AuthView = 'login' | 'signup' | 'register' | 'forgot-password'
 type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'dashboard' | 'organizations' | 'plans' | 'settings'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
@@ -74,7 +75,7 @@ function AppContent() {
   const [authView, setAuthView] = useState<AuthView>('login')
   const [adminPage, setAdminPage] = useState<AdminPage>('dashboard')
   const [recruiterPage, setRecruiterPage] = useState<RecruiterPage>('home')
-  const [superAdminPage, setSuperAdminPage] = useState<SuperAdminPage>('dashboard')
+  const [superAdminPage, setSuperAdminPage] = useState<SuperAdminPage>('platform-dashboard')
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -86,7 +87,7 @@ function AppContent() {
     setAuthView('login')
     setAdminPage('dashboard')
     setRecruiterPage('home')
-    setSuperAdminPage('dashboard')
+    setSuperAdminPage('platform-dashboard')
   }
 
   const handleGoToLogin = () => setAuthView('login')
@@ -202,10 +203,27 @@ function AppContent() {
   if (user.role === 'SUPER_ADMIN') {
     const renderSuperAdminPage = () => {
       switch (superAdminPage) {
-        case 'dashboard': return <PlatformDashboard />
+        // Platform Management pages
+        case 'platform-dashboard': return <PlatformDashboard />
         case 'organizations': return <OrganizationManagement />
         case 'plans': return <PlanManagement />
-        case 'settings': return <div className="p-6"><h1 className="text-2xl font-bold">Platform Settings</h1><p className="text-muted-foreground mt-2">Platform settings coming soon.</p></div>
+        case 'platform-settings': return <PlatformSettingsPage />
+        // Company Management pages (same as admin panel)
+        case 'admin-dashboard': return <AdminDashboard />
+        case 'team-performance': return <TeamPerformance />
+        case 'team-monitoring': return <TeamMonitoring />
+        case 'dispositions': return <DispositionManagement />
+        case 'call-lists': return <CallListManagement userId={user.id} />
+        case 'templates': return <MessageTemplates />
+        case 'clients': return <ClientManagement />
+        case 'announcements': return <AnnouncementsManagement />
+        case 'users': return <UserManagement />
+        case 'team-enhanced': return <TeamManagementEnhanced />
+        case 'approvals': return <ApprovalRequests />
+        case 'field-builder': return <DynamicFieldBuilder />
+        case 'disposition-builder': return <DispositionBuilder />
+        case 'admin-settings': return <AdminSettings userId={user.id} />
+        case 'organization-settings': return <OrganizationSettings />
         default: return <PlatformDashboard />
       }
     }
