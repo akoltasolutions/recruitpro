@@ -132,7 +132,7 @@ function CodeBackupSection() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Select value={format} onValueChange={(v) => setFormat(v as 'tar' | 'zip')}>
+            <Select value={format} onValueChange={(v) => setFormat(v as 'tar' | 'zip')} modal={false}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -442,7 +442,7 @@ function ExportSection() {
             <strong>Columns:</strong> Name, Email, Phone, Role, Organization, Department, Designation, Status, Created Date
           </p>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Select value={format} onValueChange={(v) => setFormat(v as 'csv' | 'excel')}>
+            <Select value={format} onValueChange={(v) => setFormat(v as 'csv' | 'excel')} modal={false}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -484,7 +484,7 @@ function ExportSection() {
             <strong>Columns:</strong> Name, Phone, Email, Job Role, Location, Company, Status, Call List, Pipeline Stage, Created Date, Notes
           </p>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Select value={format} onValueChange={(v) => setFormat(v as 'csv' | 'excel')}>
+            <Select value={format} onValueChange={(v) => setFormat(v as 'csv' | 'excel')} modal={false}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -741,6 +741,7 @@ function ImportSection() {
                       onValueChange={(v) =>
                         setMapping((prev) => ({ ...prev, [target.key]: v }))
                       }
+                      modal={false}
                     >
                       <SelectTrigger className="h-9">
                         <SelectValue />

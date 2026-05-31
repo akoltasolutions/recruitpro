@@ -1591,7 +1591,7 @@ export function CallListManagement({ userId }: { userId: string }) {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Source List *</Label>
-              <Select value={mergeSourceListId} onValueChange={setMergeSourceListId}>
+              <Select value={mergeSourceListId} onValueChange={setMergeSourceListId} modal={false}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a calling list to merge from" />
                 </SelectTrigger>
@@ -1612,7 +1612,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
             <div className="space-y-2">
               <Label>Merge Mode *</Label>
-              <Select value={mergeMode} onValueChange={(v) => setMergeMode(v as 'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES')}>
+              <Select value={mergeMode} onValueChange={(v) => setMergeMode(v as 'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES')} modal={false}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1744,7 +1744,7 @@ export function CallListManagement({ userId }: { userId: string }) {
           </DialogHeader>
           <div className="space-y-2 py-2">
             <Label>New Status</Label>
-            <Select value={newStatus} onValueChange={setNewStatus}>
+            <Select value={newStatus} onValueChange={setNewStatus} modal={false}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

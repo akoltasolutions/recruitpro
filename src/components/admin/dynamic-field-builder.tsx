@@ -501,7 +501,7 @@ export function DynamicFieldBuilder() {
             {/* Field Type */}
             <div className="space-y-2">
               <Label htmlFor="field-type">Field Type</Label>
-              <Select value={formType} onValueChange={v => setFormType(v as FieldType)}>
+              <Select value={formType} onValueChange={v => setFormType(v as FieldType)} modal={false}>
                 <SelectTrigger id="field-type">
                   <SelectValue />
                 </SelectTrigger>

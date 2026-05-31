@@ -634,7 +634,7 @@ export function OrganizationManagement() {
               {/* Subscription Status */}
               <div className="grid gap-2">
                 <Label htmlFor="org-status">Subscription Status</Label>
-                <Select value={formData.subscriptionStatus} onValueChange={(v) => setFormData((f) => ({ ...f, subscriptionStatus: v }))}>
+                <Select value={formData.subscriptionStatus} onValueChange={(v) => setFormData((f) => ({ ...f, subscriptionStatus: v }))} modal={false}>
                   <SelectTrigger id="org-status">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
@@ -658,7 +658,7 @@ export function OrganizationManagement() {
                     {/* Plan Selection */}
                     <div className="grid gap-2 mb-4">
                       <Label htmlFor="org-plan">Subscription Plan</Label>
-                      <Select value={formData.selectedPlanId} onValueChange={handlePlanSelect}>
+                      <Select value={formData.selectedPlanId} onValueChange={handlePlanSelect} modal={false}>
                         <SelectTrigger id="org-plan">
                           <SelectValue placeholder="Select a plan" />
                         </SelectTrigger>

@@ -841,6 +841,7 @@ export function TeamManagementEnhanced() {
               <Select
                 value={inviteForm.role}
                 onValueChange={(value) => setInviteForm((f) => ({ ...f, role: value }))}
+                modal={false}
               >
                 <SelectTrigger id="invite-role" className="w-full">
                   <SelectValue placeholder="Select role" />
@@ -857,6 +858,7 @@ export function TeamManagementEnhanced() {
               <Select
                 value={inviteForm.designation}
                 onValueChange={(value) => setInviteForm((f) => ({ ...f, designation: value }))}
+                modal={false}
               >
                 <SelectTrigger id="invite-designation" className="w-full">
                   <SelectValue placeholder="Select designation" />
@@ -876,6 +878,7 @@ export function TeamManagementEnhanced() {
               <Select
                 value={inviteForm.department}
                 onValueChange={(value) => setInviteForm((f) => ({ ...f, department: value }))}
+                modal={false}
               >
                 <SelectTrigger id="invite-department" className="w-full">
                   <SelectValue placeholder="Select department" />
@@ -994,6 +997,7 @@ export function TeamManagementEnhanced() {
               <Select
                 value={deptForm.headName}
                 onValueChange={(value) => setDeptForm((f) => ({ ...f, headName: value }))}
+                modal={false}
               >
                 <SelectTrigger id="dept-head" className="w-full">
                   <SelectValue placeholder="Select department head" />
