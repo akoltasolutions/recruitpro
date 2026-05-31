@@ -300,7 +300,7 @@ export function PlanManagement() {
           monthlyPrice: 0,
           yearlyPrice: 0,
           maxUsers: f.isUnlimited ? -1 : 1,
-          dailyCallLimit: f.isUnlimited ? -1 : 50,
+          dailyCallLimit: f.isUnlimited ? -1 : 25,
         }
       }
       return {
@@ -688,7 +688,7 @@ export function PlanManagement() {
                   </Select>
                   {formData.type === 'FREE' && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Free plan is limited to 1 user and 50 daily calls.
+                      Free plan is limited to 1 user. Daily call limit is set to 25 by default — you can adjust it below.
                     </p>
                   )}
                 </div>
@@ -819,12 +819,16 @@ export function PlanManagement() {
                     <Input
                       id="plan-daily-calls"
                       type="number"
-                      placeholder="0"
+                      placeholder={formData.type === 'FREE' ? '25' : '0'}
                       value={formData.dailyCallLimit}
                       onChange={(e) => setFormData((f) => ({ ...f, dailyCallLimit: parseInt(e.target.value) || 0 }))}
                       disabled={formData.isUnlimited}
                     />
-                    <p className="text-xs text-muted-foreground">0 = no limit, -1 = unlimited</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.type === 'FREE'
+                        ? 'Default 25 calls/day for free plan. Set your own limit.'
+                        : '0 = no limit, -1 = unlimited'}
+                    </p>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="plan-monthly-calls">Monthly Call Limit</Label>
