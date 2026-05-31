@@ -1,0 +1,15 @@
+.env.template
+ecosystem.config.cjs
+Caddyfile.template
+prisma/
+src/
+public/
+deploy.sh
+.eslintrc.json
+next.config.ts
+tailwind.config.ts
+tsconfig.json
+postcss.config.mjs
+package.json
+bun.lock
+README.md
