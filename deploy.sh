@@ -2,15 +2,17 @@
 # ============================================
 # RecruitPro Auto-Deploy Script
 # Triggered by GitHub Actions / webhook on push to main
-# 
-# Strategy: Quick SSH steps (git pull, deps, DB sync)
-# then kicks off the build in background via nohup
-# so SSH connection doesn't need to stay open.
+#
+# Self-healing strategy:
+# 1. Kill any stuck build processes from previous failed deploys
+# 2. If PM2 is stopped, restart it IMMEDIATELY with existing .next
+# 3. Quick SSH steps: git pull, deps, DB sync, migration
+# 4. Build + restart in BACKGROUND (nohup)
 # ============================================
 
 set -e
 
-# Ensure bun, pm2, node are in PATH (non-interactive SSH sessions may not load .bashrc)
+# Ensure bun, pm2, node are in PATH
 export PATH="$HOME/.bun/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -18,6 +20,7 @@ export NVM_DIR="$HOME/.nvm"
 PROJECT_DIR="/home/ubuntu/recruitpro"
 LOG_FILE="$PROJECT_DIR/logs/deploy.log"
 BUILD_LOG="/tmp/recruitpro-build.log"
+LOCK_FILE="/tmp/recruitpro-deploy.lock"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -35,7 +38,28 @@ which pm2 >/dev/null 2>&1 && log "  pm2 found" || { log "ERROR: pm2 not found"; 
 
 cd "$PROJECT_DIR"
 
-# Step 0: Backup .env before git reset (it is NOT in git)
+# ── Self-Healing: Kill stuck builds from previous failed deploys ──
+log "Killing any stuck build processes..."
+pkill -f "next build" 2>/dev/null || true
+pkill -f "bun.*build" 2>/dev/null || true
+sleep 2
+
+# ── Self-Healing: If PM2 is not running and .next exists, restart immediately ──
+PM2_STATUS=$(pm2 pid recruitpro 2>/dev/null || echo "stopped")
+if [ "$PM2_STATUS" = "stopped" ] || [ -z "$PM2_STATUS" ]; then
+    if [ -d .next ]; then
+        log "WARNING: PM2 not running but .next exists — restarting immediately with current build"
+        pm2 delete recruitpro 2>/dev/null || true
+        pm2 start ecosystem.config.cjs
+        pm2 save
+        sleep 5
+        log "App restarted with existing build. Will update to latest in background."
+    else
+        log "WARNING: PM2 not running and no .next exists — building from scratch"
+    fi
+fi
+
+# Step 0: Backup .env
 log "Step 0: Backing up .env..."
 if [ -f .env ]; then
     cp .env /tmp/recruitpro-env-backup
@@ -87,12 +111,11 @@ else
 fi
 
 log "=========================================="
-log "QUICK STEPS COMPLETE — starting background build"
-log "SSH connection can now close safely."
+log "QUICK STEPS DONE — starting background build"
+log "SSH connection can close safely."
 log "=========================================="
 
-# Step 4+: Build and restart in BACKGROUND (nohup) so SSH can close
-# This avoids GitHub Actions / SSH timeout issues on low-memory servers
+# Step 4+: Build and restart in BACKGROUND
 nohup bash -c '
 set -e
 
@@ -108,14 +131,24 @@ log() {
     echo "[$(date "+%Y-%m-%d %H:%M:%S")] $1" | tee -a "$LOG_FILE"
 }
 
+# Prevent concurrent builds
+if [ -f /tmp/recruitpro-deploy.lock ]; then
+    OLD_PID=$(cat /tmp/recruitpro-deploy.lock)
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+        log "[BG BUILD] Another build already running (PID $OLD_PID), aborting."
+        exit 0
+    fi
+fi
+echo $$ > /tmp/recruitpro-deploy.lock
+
 log "[BG BUILD] Step 4a: Stopping PM2 to free memory..."
 pm2 stop recruitpro 2>/dev/null || true
-sleep 2
+sleep 3
 log "[BG BUILD] PM2 stopped."
 
-log "[BG BUILD] Step 4b: Building application (this takes 10-20 min on low-memory server)..."
-rm -rf .next
+log "[BG BUILD] Step 4b: Building application (10-20 min on low-memory server)..."
 cd "$PROJECT_DIR"
+rm -rf .next
 NODE_OPTIONS="--max-old-space-size=512" bun run build >> "$BUILD_LOG" 2>&1
 log "[BG BUILD] Build completed successfully."
 
@@ -127,10 +160,11 @@ log "[BG BUILD] Application restarted."
 
 log "[BG BUILD] Step 6: Cleaning stray lockfiles..."
 rm -f /home/ubuntu/bun.lock /home/ubuntu/package-lock.json /home/ubuntu/.env
-log "[BG BUILD] Stray lockfiles cleaned."
+rm -f /tmp/recruitpro-deploy.lock
+log "[BG BUILD] Cleaned up."
 
-# Verify app is responding
-sleep 5
+# Verify
+sleep 8
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
 log "[BG BUILD] Health check: HTTP $HTTP_CODE"
 
@@ -139,10 +173,10 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "307
     log "DEPLOYMENT COMPLETED SUCCESSFULLY"
     log "=========================================="
 else
-    log "WARNING: App health check returned HTTP $HTTP_CODE — may need manual investigation"
+    log "WARNING: Health check HTTP $HTTP_CODE — may need manual fix"
 fi
 ' > /dev/null 2>&1 &
 
 BG_PID=$!
-log "Background build process started (PID: $BG_PID)"
-log "Monitor progress: tail -f $BUILD_LOG or $LOG_FILE"
+log "Background build started (PID: $BG_PID)"
+log "Monitor: tail -f $BUILD_LOG or $LOG_FILE"
