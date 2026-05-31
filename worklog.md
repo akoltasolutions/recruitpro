@@ -190,3 +190,25 @@ Stage Summary:
 - Backup & Restore module fully functional with 5 tabs: Code, Database, Restore, Export, Import
 - Access control: Only Super Admin can access backup features
 - All data protection measures in place (pre-restore backup, auto-recovery, safe imports)
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Recover production site from frozen build + prevent future OOM deploys
+
+Work Log:
+- User manually recovered: killed frozen processes, ran `NODE_OPTIONS="--max-old-space-size=384" npx next build`
+- Build completed successfully (8.6min compile, 44/44 static pages, 3.2s)
+- PM2 started, curl http://localhost:3000 returns valid HTML
+- Added GitHub Actions concurrency group (cancel-in-progress: true) to prevent overlapping builds
+- Reduced PM2 max_memory_restart from 1G to 350M (server has only 911MB RAM)
+- Added NODE_OPTIONS --max-old-space-size=256 for Next.js runtime
+- Changed PM2 script from `npx next start` to direct `node_modules/.bin/next start`
+- Added min_uptime=10s, max_restarts=10 to prevent restart loops
+- Committed and pushed to GitHub (441ec06)
+
+Stage Summary:
+- Site is back online at app.akolta.com
+- Future deploys will: (1) cancel overlapping GitHub Actions, (2) use memory-constrained build (384MB heap), (3) use 350MB restart threshold
+- deploy.sh already had NODE_OPTIONS for builds from previous session
+- Key fix: capping heap forces Node to garbage collect and use swap instead of freezing
