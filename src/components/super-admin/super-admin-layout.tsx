@@ -166,7 +166,7 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
   if (isMobile) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-50 flex items-center gap-2 border-b bg-background px-4 py-3">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="shrink-0">
@@ -199,7 +199,7 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
             </motion.div>
           </AnimatePresence>
         </main>
-        <nav className="fixed bottom-0 left-0 right-0 z-[10000] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <nav className="fixed bottom-0 left-0 right-0 z-[9999] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-around px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {bottomNavItems.map((item) => (
               <button
@@ -268,7 +268,7 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
         {sidebarContent}
       </Sidebar>
       <SidebarInset>
-        <header className="flex items-center gap-2 border-b px-6 py-3">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6 py-3">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 !h-4" />
           <div className="flex items-center gap-2">

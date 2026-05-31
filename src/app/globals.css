@@ -136,9 +136,10 @@
 /* ============================================================
  * Z-INDEX HIERARCHY (Android WebView safe)
  * ============================================================
- * z-[9999]  Mobile footer nav (recruiter-layout.tsx, admin-layout.tsx)
- * z-[10000] Sheet overlay / Dialog overlay (must be above nav)
- * z-[10001] Sheet content / Dialog content (must be above overlay)
+ * z-30      Desktop/Mobile header (sticky, backdrop-blur)
+ * z-[9999]  Mobile bottom nav (below all overlays)
+ * z-[10000] Dialog/Sheet/AlertDialog overlay (above nav)
+ * z-[10001] Dialog/Sheet/AlertDialog content (above overlay)
  * z-[10002] Select/DropdownMenu/Popover/Tooltip portal content
  * z-[10003] Gap timer overlay (mobile, custom CSS)
  * z-[10004] Client/Template bottom-sheet overlay (mobile)
