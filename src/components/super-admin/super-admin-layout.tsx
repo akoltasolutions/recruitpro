@@ -19,7 +19,7 @@ import {
   LayoutDashboard, Building2, CreditCard, Settings,
   Menu, Shield, LogOut, MoreHorizontal,
   BarChart3, Activity, Tag, PhoneCall, MessageSquare,
-  Users, UserCheck, Megaphone, Settings2, Palette,
+  Users, UserCheck, Megaphone, Settings2, Palette, DatabaseBackup,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -35,6 +35,7 @@ const platformMenuItems: MenuItem[] = [
   { key: 'organizations', label: 'Organizations', icon: Building2, section: 'platform' },
   { key: 'plans', label: 'Subscription Plans', icon: CreditCard, section: 'platform' },
   { key: 'platform-settings', label: 'Platform Settings', icon: Settings, section: 'platform' },
+  { key: 'backup-restore', label: 'Backup & Restore', icon: DatabaseBackup, section: 'platform' },
 ]
 
 const companyMenuItems: MenuItem[] = [

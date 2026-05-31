@@ -27,6 +27,7 @@ import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
 import { OrganizationManagement } from '@/components/super-admin/organization-management'
 import { PlanManagement } from '@/components/super-admin/plan-management'
 import { PlatformSettingsPage } from '@/components/super-admin/platform-settings'
+import { BackupRestorePage } from '@/components/admin/backup-restore'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { AutoDialer } from '@/components/recruiter/auto-dialer'
@@ -41,7 +42,7 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
 
 type AuthView = 'login' | 'signup' | 'register' | 'forgot-password'
 type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
@@ -208,6 +209,7 @@ function AppContent() {
         case 'organizations': return <OrganizationManagement />
         case 'plans': return <PlanManagement />
         case 'platform-settings': return <PlatformSettingsPage />
+        case 'backup-restore': return <BackupRestorePage />
         // Company Management pages (same as admin panel)
         case 'admin-dashboard': return <AdminDashboard />
         case 'team-performance': return <TeamPerformance />
