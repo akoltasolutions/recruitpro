@@ -160,3 +160,33 @@ Stage Summary:
 - Free plan auto-limits to 1 user and 50 daily calls when type is set to FREE
 - Daily Call Limit field added to plan form, card display, and all API routes
 - All changes pass lint check and compile successfully
+
+---
+Task ID: 2-7
+Agent: Main Agent + 2 Subagents
+Task: Code cleanup, performance optimization, Backup & Restore module, User Import/Export
+
+Work Log:
+- Full codebase audit identified 20 unused UI components, 11 unused packages, dead toast system
+- Fixed critical toast bug: layout.tsx imported shadcn Toaster but all components used Sonner — switched to Sonner
+- Removed 17 unused UI component files (calendar, form, chart, drawer, breadcrumb, etc.)
+- Removed dead toast system files (toast.tsx, toaster.tsx, use-toast.ts)
+- Removed 21 unused npm packages (next-auth, sharp, react-markdown, react-syntax-highlighter, etc.)
+- Removed redundant package-lock.json, deploy artifacts, examples directory
+- Built Backup & Restore module with 6 API routes and 1 frontend component
+- Code backup API supports TAR.GZ and ZIP formats
+- Database backup creates SQL dump via sqlite3
+- Database restore has auto-backup before restore + automatic recovery on failure
+- User export supports CSV and Excel for both users and candidates
+- User import with column mapping preview and auto-password generation
+- All backup endpoints guarded by requireSuperAdmin
+- Added Backup & Restore to Super Admin platform menu only (not regular admin)
+- Net result: 16,563 lines deleted, 1,696 lines added
+- Committed and pushed to GitHub for auto-deploy
+
+Stage Summary:
+- Total cleanup: 17 dead components, 21 unused packages removed
+- Toast system fixed (Sonner now properly mounted)
+- Backup & Restore module fully functional with 5 tabs: Code, Database, Restore, Export, Import
+- Access control: Only Super Admin can access backup features
+- All data protection measures in place (pre-restore backup, auto-recovery, safe imports)
