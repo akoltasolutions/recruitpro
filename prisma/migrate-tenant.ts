@@ -125,8 +125,25 @@ async function main() {
         console.log(`  ✓ Converted ${admins.length - 1} remaining ADMIN users to ORG_ADMIN`);
       }
     } else {
-      // No ADMIN users at all — check for ORG_ADMIN that should be SUPER_ADMIN
-      console.log('  ℹ No ADMIN users found. Checking existing roles...');
+      // No ADMIN users left — they may have already been migrated to ORG_ADMIN
+      // If no SUPER_ADMIN exists, promote the first ORG_ADMIN (earliest createdAt)
+      console.log('  ℹ No ADMIN users found. Checking for ORG_ADMIN to promote...');
+      const orgAdmins = await prisma.user.findMany({
+        where: { role: 'ORG_ADMIN' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, email: true, name: true },
+      });
+
+      if (orgAdmins.length > 0) {
+        const primaryOrgAdmin = orgAdmins[0];
+        await prisma.user.update({
+          where: { id: primaryOrgAdmin.id },
+          data: { role: 'SUPER_ADMIN' },
+        });
+        console.log(`  ✓ Promoted ORG_ADMIN ${primaryOrgAdmin.email} (${primaryOrgAdmin.name}) to SUPER_ADMIN`);
+      } else {
+        console.log('  ⚠ WARNING: No admin users found at all. Cannot create SUPER_ADMIN.');
+      }
     }
   }
 
