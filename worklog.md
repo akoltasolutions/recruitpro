@@ -342,3 +342,49 @@ Stage Summary:
 - Lint passes clean
 - Dev server running, no errors
 - Deploy triggered via GitHub Actions
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add copy-paste for Add Numbers + filters + delete by filter in Call List Management
+
+Work Log:
+- Analyzed screenshot via VLM — identified Candidates dialog with table, Bulk Actions dropdown, Add Numbers button
+- Read full call-list-management.tsx (~1900 lines) and bulk API endpoint
+- Identified existing copy-paste logic (parsePasteInput) only works for creating NEW lists, not adding to existing
+- Identified no filter or delete-by-filter functionality existed
+
+Feature 1 — Copy-Paste for Add Numbers:
+- Added state: addNumbersTab, addNumbersPasteText, addNumbersPasteParsed
+- Added parseAddNumbersPaste() and handleAddNumbersPaste() handlers
+- Replaced flat Add Numbers dialog with Tabs layout (Manual Entry + Copy-Paste)
+- Copy-Paste tab has Textarea + live preview table (up to 20 rows)
+- Duplicate phone detection and skip
+- Uses existing bulk ADD API endpoint
+
+Feature 2 — Filters (Role, Location, Status):
+- Added state: filterRole, filterLocation, filterStatus
+- Added helpers: getFilteredCandidates(), getUniqueValues(), clearFilters(), hasActiveFilters
+- New filter bar with 3 Select dropdowns above candidates table
+- Dynamic options from current list data
+- "Showing X of Y" badge + "Clear filters" button
+- Table renders filtered candidates only
+
+Feature 3 — Delete by Filter:
+- Added state: deleteFilteredConfirm, deleteFilteredSaving
+- Added handleDeleteFiltered() handler
+- New "Delete Filtered (N)" in Bulk Actions dropdown (with separator)
+- Only enabled when filters active
+- Confirmation dialog shows filter summary + count + destructive alert
+- Uses existing DELETE bulk API with filtered candidate IDs
+
+No API changes required. No other functionality disturbed.
+Lint passes clean. Dev server compiling fine.
+
+Commit: 7359d95
+Push: main → main (triggered GitHub Actions deploy)
+
+Stage Summary:
+- 1 file changed: call-list-management.tsx (+385, -94 lines)
+- 3 new features implemented
+- DropdownMenuSeparator added to imports
