@@ -488,3 +488,35 @@ Stage Summary:
 - Vertical card layout: icon → value → label
 - Responsive grid: 2 cols mobile, 3 cols tablet/desktop
 - No existing functionality disturbed
+
+---
+Task ID: 6
+Agent: Main Agent + 3 Subagents
+Task: Shift Management, WFH Tracking, Auto-Idle 15min
+
+Work Log:
+- Added ShiftAssignment model to Prisma schema (userId, shiftStartTime, shiftEndTime, breakAllowedTime, workingHoursTotal, weeklyOff, allowOutsideShift)
+- Pushed schema to SQLite database
+- Created 4 API routes: /api/shifts (GET/POST), /api/shifts/bulk (POST), /api/shifts/my-shift (GET), /api/shifts/[id] (PUT/DELETE)
+- Created ShiftManagement admin UI component with table, create/edit/bulk-assign dialogs
+- Added 'Shift Management' to admin-layout.tsx and super-admin-layout.tsx navigation
+- Added routing in page.tsx for shift-management page
+- Added shift hour restriction in POST /api/user-status: blocks ACTIVE outside shift (403)
+- Added shiftInfo to GET /api/user-status response
+- Added 'Your Shift Timing' card on Recruiter Dashboard
+- Changed AUTO_IDLE_MINUTES from 20 to 15 (no calls → auto idle)
+- Changed AUTO_LOGOUT_MINUTES from 30 to 15 (no activity → auto idle instead of logout)
+- Updated warning toast messages for 15-min thresholds
+
+Lint passes clean. Dev server compiles without errors.
+
+Commit: 66e23ba
+Push: main → main (triggered GitHub Actions deploy)
+
+Stage Summary:
+- 14 files changed: 7 new (API routes + UI component), 7 modified (layouts, page routing, dashboard, API, hooks)
+- Shift timing configurable from Admin Panel (individual + bulk)
+- Candidate sees shift timing on dashboard
+- Active status blocked outside shift hours (unless admin enables override)
+- Auto-idle after 15 min no calls, 15 min no activity
+- No existing dialer functionality disturbed
