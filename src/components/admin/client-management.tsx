@@ -104,8 +104,8 @@ export function ClientManagement() {
           body: JSON.stringify({ name: trimmed }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: 'Update failed' }))
-          throw new Error(err.message || 'Update failed')
+          const err = await res.json().catch(() => ({ error: 'Update failed' }))
+          throw new Error(err.error || 'Update failed')
         }
         toast.success(`Client "${trimmed}" updated successfully`)
       } else {
@@ -115,8 +115,8 @@ export function ClientManagement() {
           body: JSON.stringify({ name: trimmed }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ message: 'Creation failed' }))
-          throw new Error(err.message || 'Creation failed')
+          const err = await res.json().catch(() => ({ error: 'Creation failed' }))
+          throw new Error(err.error || 'Creation failed')
         }
         toast.success(`Client "${trimmed}" created successfully`)
       }
@@ -135,8 +135,8 @@ export function ClientManagement() {
     try {
       const res = await authFetch(`/api/clients/${client.id}`, { method: 'DELETE' })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Delete failed' }))
-        throw new Error(err.message || 'Delete failed')
+        const err = await res.json().catch(() => ({ error: 'Delete failed' }))
+        throw new Error(err.error || 'Delete failed')
       }
       toast.success(`Client "${client.name}" deleted successfully`)
       fetchClients()
@@ -153,8 +153,8 @@ export function ClientManagement() {
         body: JSON.stringify({ isActive: !client.isActive }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Toggle failed' }))
-        throw new Error(err.message || 'Toggle failed')
+        const err = await res.json().catch(() => ({ error: 'Toggle failed' }))
+        throw new Error(err.error || 'Toggle failed')
       }
       toast.success(`Client "${client.name}" ${client.isActive ? 'deactivated' : 'activated'}`)
       fetchClients()
