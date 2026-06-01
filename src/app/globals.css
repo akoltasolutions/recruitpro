@@ -134,8 +134,31 @@
 }
 
 /* ============================================================
- * Z-INDEX HIERARCHY (Android WebView safe)
+ * GLOBAL PORTAL OVERLAY FIX (Permanent)
  * ============================================================
+ *
+ * Problem: When Radix Dialog/Sheet/AlertDialog opens (modal={true}),
+ * the internal useHideOthers mechanism adds the `inert` HTML attribute
+ * to ALL sibling portals on document.body — including Select,
+ * DropdownMenu, Popover, and Tooltip portals. This makes them
+ * completely non-interactive regardless of CSS pointer-events.
+ *
+ * Solution (3 layers):
+ *
+ * Layer 1 - React MutationObserver (usePortalOverlayFix hook):
+ *   Runs in Dialog/Sheet/AlertDialog components. Detects and removes
+ *   `inert` from non-dialog portals in real-time.
+ *
+ * Layer 2 - CSS inert override:
+ *   Belt-and-suspenders CSS rule. Note: CSS `inert` property support
+ *   varies; the JS MutationObserver is the primary fix.
+ *
+ * Layer 3 - Z-Index & Pointer Events:
+ *   Proper z-index stacking and pointer-events management ensures
+ *   dropdowns render above modal content.
+ *
+ * Z-INDEX HIERARCHY:
+ * ──────────────────
  * z-30       Desktop/Mobile header (sticky, backdrop-blur)
  * z-[9999]   Mobile bottom nav (below all overlays)
  * z-[10000]  Sheet/Dialog/AlertDialog overlay (above nav)
@@ -147,37 +170,48 @@
  * z-[10005]  Client/Template bottom-sheet content (mobile)
  * z-[10006]  Toast/Sonner notifications (above everything)
  *
- * CRITICAL: Do NOT set z-index on [data-radix-portal] or
- * [data-radix-popper-content-wrapper] — that creates a stacking
- * context which TRAPS child z-index values. Let children's own
- * z-index resolve in the root stacking context.
- *
- * All auto-dialer overlays use [data-dialer-overlay] and
- * [data-dialer-sheet] data attributes so they participate
- * in this single-source-of-truth hierarchy.
+ * CRITICAL RULES:
+ * - NEVER set z-index on [data-radix-portal] — it creates a
+ *   stacking context which TRAPS child z-index values
+ * - NEVER set position or isolation on [data-radix-portal]
+ * - Let children's own z-index resolve in the root stacking context
  * ============================================================ */
 
-/* Do NOT set z-index on portal containers — must not create stacking context.
-   But DO ensure pointer-events are restored so portaled Select/Dropdown content
-   inside a modal Dialog can receive clicks. */
+/* ─── Layer 2: CSS inert override for portals ─── */
+/* Remove inert from all non-dialog portals via CSS.
+   Note: :has() support is good in modern browsers but this CSS rule
+   alone may not fully override the inert HTML attribute. The JS
+   MutationObserver in usePortalOverlayFix is the primary fix. */
+[data-radix-portal]:not(:has([data-slot="dialog-overlay"])):not(:has([data-slot="dialog-content"])):not(:has([data-slot="sheet-overlay"])):not(:has([data-slot="sheet-content"])):not(:has([data-slot="alert-dialog-overlay"])):not(:has([data-slot="alert-dialog-content"])) {
+  inert: auto !important;
+}
+
+/* ─── Layer 3: Portal container rules ─── */
+/* Do NOT create stacking context on portal containers.
+   Let children resolve z-index in root stacking context. */
 [data-radix-portal] {
   z-index: auto !important;
   isolation: auto !important;
-  pointer-events: none !important;   /* Dialog sets this on body; mirror on portals */
+  /* DO NOT set pointer-events here — let children handle it.
+     The Dialog's body-level pointer-events:none is handled by
+     children with pointer-events:auto */
 }
 
-/* Popper wrappers: no stacking context, allow pointer events for children */
+/* Popper wrappers: no stacking context, allow pointer events */
 [data-radix-popper-content-wrapper] {
   z-index: auto !important;
   isolation: auto !important;
-  pointer-events: auto !important;   /* Re-enable for Select/Dropdown portals */
+  pointer-events: auto !important;
+  overflow: visible !important;
 }
 
+/* ─── Dialog/Sheet/AlertDialog z-index ─── */
 /* Dialog/Sheet/AlertDialog overlay: above mobile nav, below content */
 [data-slot="dialog-overlay"],
 [data-slot="sheet-overlay"],
 [data-slot="alert-dialog-overlay"] {
   z-index: 10000 !important;
+  pointer-events: auto !important;
 }
 
 /* Dialog/Sheet/AlertDialog content: above overlay */
@@ -188,13 +222,21 @@
   pointer-events: auto !important;
 }
 
-/* Select/DropdownMenu/Popover: above Dialog content */
-/* pointer-events: auto is CRITICAL — modal Dialog sets pointer-events:none on body,
-   which blocks clicks on these portaled elements unless we re-enable them. */
+/* ─── Select/Dropdown/Popover: ABOVE Dialog content ─── */
+/* CRITICAL: pointer-events:auto overrides Dialog's body pointer-events:none.
+   These MUST be in the root stacking context (portal has isolation:auto). */
 [data-slot="select-content"],
 [data-slot="dropdown-menu-content"],
 [data-slot="dropdown-menu-sub-content"],
 [data-slot="popover-content"] {
+  z-index: 10002 !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  overflow: visible !important;
+}
+
+/* ─── Tooltip: above Dialog content ─── */
+[data-slot="tooltip-content"] {
   z-index: 10002 !important;
   pointer-events: auto !important;
 }
@@ -230,6 +272,7 @@
   overflow-x: hidden !important;
 }
 
+/* ─── Interactive element rules ─── */
 /* Ensure close buttons inside dialogs are always clickable */
 [data-slot="dialog-close"] {
   pointer-events: auto !important;
@@ -245,6 +288,15 @@
 [data-dialer-sheet] a {
   touch-action: manipulation;
   pointer-events: auto;
+}
+
+/* Ensure Select items and Dropdown items are always interactive */
+[data-slot="select-item"],
+[data-slot="dropdown-menu-item"],
+[data-slot="dropdown-menu-checkbox-item"],
+[data-slot="dropdown-menu-radio-item"] {
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
 }
 
 /* IMPORTANT: Do NOT set position:fixed or overflow:hidden on <body> via CSS.

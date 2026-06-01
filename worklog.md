@@ -149,3 +149,29 @@ Stage Summary:
 - No hardcoded z-index values remain in any component
 - Select/Dropdown menus always appear above Dialog content (z-10002 > z-10001)
 - Overflow-x-hidden on DialogContent prevents horizontal bleed globally
+---
+Task ID: 1
+Agent: Main Agent
+Task: Global Popup Dropdown Overlay Fix (Permanent) for RecruitPro
+
+Work Log:
+- Analyzed root cause: Radix Dialog modal={true} adds `inert` HTML attribute to ALL sibling portals on document.body, including Select/Dropdown/Popover portals, making them completely non-interactive
+- Previous fix (commit 249989e) only addressed CSS overflow/width — missed the fundamental `inert` issue
+- Read all UI primitives: select.tsx, dialog.tsx, dropdown-menu.tsx, popover.tsx, sheet.tsx, alert-dialog.tsx, command.tsx, tooltip.tsx
+- Created usePortalOverlayFix.ts hook with MutationObserver to remove `inert` from non-dialog portals
+- Created usePortalBootstrap hook for persistent observer
+- Created PortalOverlayProvider client component for root layout
+- Updated Dialog/Sheet/AlertDialog components to activate portal fix on mount
+- Updated Select component: modal={false} default, position: fixed, max-height override
+- Updated globals.css with comprehensive z-index hierarchy, inert CSS override, pointer-events rules
+- Removed incorrect pointer-events:none from [data-radix-portal] CSS rule
+- All lint checks pass, dev server compiles successfully (200)
+
+Stage Summary:
+- Permanent 3-layer fix implemented:
+  - Layer 1 (JS): MutationObserver removes `inert` from non-dialog portals in real-time
+  - Layer 2 (CSS): `inert: auto` override + proper z-index hierarchy + pointer-events
+  - Layer 3 (Component): Select defaults modal={false}, position: fixed positioning
+- Files modified: select.tsx, dialog.tsx, sheet.tsx, alert-dialog.tsx, globals.css, layout.tsx
+- Files created: hooks/usePortalOverlayFix.ts, providers/portal-overlay-provider.tsx
+

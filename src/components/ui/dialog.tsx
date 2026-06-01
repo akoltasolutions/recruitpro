@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { usePortalOverlayFix } from "@/hooks/usePortalOverlayFix"
 
 function Dialog({
   ...props
@@ -50,6 +51,11 @@ const DialogContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }
 >(({ className, children, showCloseButton = true, ...props }, ref) => {
+  // Activates the global portal overlay fix while this dialog content is mounted.
+  // This removes `inert` from non-dialog portals (Select, Dropdown, Popover, etc.)
+  // that Radix Dialog's modal behavior marks as inert.
+  usePortalOverlayFix(true)
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />

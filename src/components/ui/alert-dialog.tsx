@@ -2,9 +2,9 @@
 
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
-
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { usePortalOverlayFix } from "@/hooks/usePortalOverlayFix"
 
 function AlertDialog({
   ...props
@@ -48,6 +48,9 @@ function AlertDialogContent({
   className,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+  // Activates the global portal overlay fix while this alert dialog is mounted
+  usePortalOverlayFix(true)
+
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
