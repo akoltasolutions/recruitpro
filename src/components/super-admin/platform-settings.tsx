@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore, authFetch } from '@/stores/auth-store'
 import { PageHeader } from '@/components/shared/page-header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -28,7 +28,6 @@ const defaultSettings: PlatformSettings = {
 }
 
 export function PlatformSettingsPage() {
-  const { authFetch } = useAuthStore()
   const [settings, setSettings] = useState<PlatformSettings>(defaultSettings)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
