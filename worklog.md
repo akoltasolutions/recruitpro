@@ -412,3 +412,28 @@ Stage Summary:
 - Filters now clickable with native <select>
 - Search box added for name/phone/location search
 - All bulk actions (Delete Selected, Update Status, Delete Filtered) verified working
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Move Platform Management below Company Management + add collapsible toggle
+
+Work Log:
+- Analyzed uploaded screenshot via VLM — confirmed Platform Management at TOP of sidebar
+- Read super-admin-layout.tsx — identified sidebar order and `allMenuItems` array
+- Reordered sidebar sections: Company Management first, then Platform Management
+- Reversed `allMenuItems` array order: `[...companyMenuItems, ...platformMenuItems]` so mobile bottom nav shows company items first
+- Added `platformSectionOpen` state (default: false = collapsed)
+- Replaced static `SidebarGroupLabel` for Platform Management with clickable div containing ChevronRight icon
+- ChevronRight rotates 90° when expanded (rotate-90 transition)
+- Platform submenu items wrapped in animated container (max-h transition with opacity fade)
+- Added ChevronRight to lucide-react imports
+- Lint passes clean, dev server compiles without errors
+
+Stage Summary:
+- 1 file changed: super-admin-layout.tsx
+- Platform Management now appears below Company Management in sidebar
+- Platform Management is collapsed by default with chevron toggle (▶ collapsed / ▼ expanded)
+- Smooth expand/collapse animation with max-height + opacity transition
+- Mobile bottom nav now shows Company items first (platform items in "More" menu)
+- No other sidebar navigation affected, all routing/permissions preserved

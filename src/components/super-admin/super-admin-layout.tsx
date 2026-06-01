@@ -20,6 +20,7 @@ import {
   Menu, Shield, LogOut, MoreHorizontal,
   BarChart3, Activity, Tag, PhoneCall, MessageSquare,
   Users, UserCheck, Megaphone, Settings2, Palette, DatabaseBackup,
+  ChevronRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -56,7 +57,7 @@ const companyMenuItems: MenuItem[] = [
   { key: 'organization-settings', label: 'Organization Settings', icon: Building2, section: 'company' },
 ]
 
-const allMenuItems = [...platformMenuItems, ...companyMenuItems]
+const allMenuItems = [...companyMenuItems, ...platformMenuItems]
 
 // First 5 items shown directly in bottom nav
 const bottomNavItems = allMenuItems.slice(0, 5)
@@ -74,6 +75,7 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [platformSectionOpen, setPlatformSectionOpen] = useState(false)
 
   const sidebarContent = (
     <>
@@ -90,32 +92,6 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
       </SidebarHeader>
       <Separator />
       <SidebarContent className="overflow-y-auto">
-        {/* Platform Management Section */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Platform Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {platformMenuItems.map((item) => (
-                <SidebarMenuItem key={item.key}>
-                  <SidebarMenuButton
-                    isActive={activePage === item.key}
-                    onClick={() => onNavigate(item.key)}
-                    className={cn(
-                      'cursor-pointer',
-                      activePage === item.key && 'bg-violet-600/10 text-violet-700 dark:text-violet-400 hover:bg-violet-600/15'
-                    )}
-                  >
-                    <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-violet-600')} />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <Separator className="mx-4 w-auto" />
-
         {/* Company Management Section */}
         <SidebarGroup>
           <SidebarGroupLabel>Company Management</SidebarGroupLabel>
@@ -138,6 +114,50 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator className="mx-4 w-auto" />
+
+        {/* Platform Management Section - Collapsible */}
+        <SidebarGroup>
+          <div
+            className="flex items-center h-8 rounded-md px-2 cursor-pointer select-none hover:bg-sidebar-accent transition-colors"
+            onClick={() => setPlatformSectionOpen(!platformSectionOpen)}
+          >
+            <ChevronRight
+              className={cn(
+                'h-4 w-4 mr-1 shrink-0 transition-transform duration-200 text-sidebar-foreground/70',
+                platformSectionOpen && 'rotate-90'
+              )}
+            />
+            <span className="text-xs font-medium text-sidebar-foreground/70">Platform Management</span>
+          </div>
+          <div
+            className={cn(
+              'overflow-hidden transition-all duration-200 ease-in-out',
+              platformSectionOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+            )}
+          >
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {platformMenuItems.map((item) => (
+                  <SidebarMenuItem key={item.key}>
+                    <SidebarMenuButton
+                      isActive={activePage === item.key}
+                      onClick={() => onNavigate(item.key)}
+                      className={cn(
+                        'cursor-pointer',
+                        activePage === item.key && 'bg-violet-600/10 text-violet-700 dark:text-violet-400 hover:bg-violet-600/15'
+                      )}
+                    >
+                      <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-violet-600')} />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </div>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
