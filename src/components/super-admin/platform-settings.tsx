@@ -9,13 +9,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Settings, Shield, Loader2, Save } from 'lucide-react'
+import { Settings, Shield, Loader2, Save, Timer } from 'lucide-react'
 
 interface PlatformSettings {
   subscriptionEnforcement: boolean
   defaultMaxUsers: number
   defaultMaxNumbers: number
   defaultDailyUploadLimit: number
+  includeDispositionTime: boolean
 }
 
 const defaultSettings: PlatformSettings = {
@@ -23,6 +24,7 @@ const defaultSettings: PlatformSettings = {
   defaultMaxUsers: 10,
   defaultMaxNumbers: 5000,
   defaultDailyUploadLimit: 500,
+  includeDispositionTime: true,
 }
 
 export function PlatformSettingsPage() {
@@ -123,6 +125,42 @@ export function PlatformSettingsPage() {
                 checked={settings.subscriptionEnforcement}
                 onCheckedChange={(checked) =>
                   setSettings((prev) => ({ ...prev, subscriptionEnforcement: checked }))
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Call Timer Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Timer className="h-5 w-5 text-emerald-600" />
+              <div>
+                <CardTitle className="text-base">Call Timer Settings</CardTitle>
+                <CardDescription>
+                  Configure how call duration is measured across the platform
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="include-disposition-time" className="text-sm font-medium">
+                  Include Disposition Time in Call Timer
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {settings.includeDispositionTime
+                    ? 'Call timer runs from Call button click until disposition is submitted (includes talk time + disposition fill time)'
+                    : 'Call timer stops when recruiter returns from call (only actual call duration counted)'}
+                </p>
+              </div>
+              <Switch
+                id="include-disposition-time"
+                checked={settings.includeDispositionTime}
+                onCheckedChange={(checked) =>
+                  setSettings((prev) => ({ ...prev, includeDispositionTime: checked }))
                 }
               />
             </div>

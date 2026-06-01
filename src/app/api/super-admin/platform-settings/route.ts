@@ -10,6 +10,7 @@ interface PlatformSettings {
   defaultMaxUsers: number
   defaultMaxNumbers: number
   defaultDailyUploadLimit: number
+  includeDispositionTime: boolean
 }
 
 const defaultSettings: PlatformSettings = {
@@ -17,6 +18,7 @@ const defaultSettings: PlatformSettings = {
   defaultMaxUsers: 10,
   defaultMaxNumbers: 5000,
   defaultDailyUploadLimit: 500,
+  includeDispositionTime: true,
 }
 
 async function ensureSettingsFile(): Promise<PlatformSettings> {
@@ -62,6 +64,7 @@ export async function PUT(request: NextRequest) {
       defaultMaxUsers: body.defaultMaxUsers ?? existing.defaultMaxUsers,
       defaultMaxNumbers: body.defaultMaxNumbers ?? existing.defaultMaxNumbers,
       defaultDailyUploadLimit: body.defaultDailyUploadLimit ?? existing.defaultDailyUploadLimit,
+      includeDispositionTime: body.includeDispositionTime ?? existing.includeDispositionTime,
     }
 
     const dir = path.dirname(SETTINGS_PATH)

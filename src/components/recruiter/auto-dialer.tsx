@@ -124,6 +124,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(false)
   const [callTimer, setCallTimer] = useState(0)
+  const [includeDispositionTime, setIncludeDispositionTime] = useState(true)
   const [callInitiated, setCallInitiated] = useState(false)
   const [callGap, setCallGap] = useState(() => {
     if (typeof window === 'undefined') return 3
@@ -161,6 +162,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const preCallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const callInitiatedRef = useRef(false)
+  const includeDispositionTimeRef = useRef(true)
 
   // Dynamically measure the actual viewport height for the bottom-sheet.
   // CSS dvh/vh units are UNRELIABLE in Android WebView — they don't account for
@@ -241,6 +243,22 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   }, [])
 
   const user = useAuthStore((s) => s.user)
+
+  // Fetch call timer config (includeDispositionTime) from platform settings
+  useEffect(() => {
+    authFetch('/api/settings/call-timer-config')
+      .then((res) => {
+        if (res.ok) return res.json()
+        return { includeDispositionTime: true }
+      })
+      .then((data) => {
+        const val = data.includeDispositionTime ?? true
+        setIncludeDispositionTime(val)
+        includeDispositionTimeRef.current = val
+        console.log('[AutoDialer] includeDispositionTime:', val)
+      })
+      .catch(() => { /* non-blocking — default true */ })
+  }, [])
 
   useEffect(() => {
     fetchCallLists()
@@ -351,7 +369,11 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
     callInitiatedRef.current = false
     setCallInitiated(false)
-    stopCallTimer()
+    // Only stop the timer if disposition time is NOT included
+    // When includeDispositionTime is ON, timer continues until disposition submit
+    if (!includeDispositionTimeRef.current) {
+      stopCallTimer()
+    }
     // Small delay to ensure UI is ready before showing the popup
     setTimeout(() => {
       setIsDispositionModalOpen(true)
@@ -437,7 +459,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       }
       callInitiatedRef.current = false
       setCallInitiated(false)
-      stopCallTimer()
+      // Only stop the timer if disposition time is NOT included
+      if (!includeDispositionTimeRef.current) {
+        stopCallTimer()
+      }
       // Read and restore candidate from sessionStorage BEFORE clearing
       const stored = checkPendingCall()
       clearCallState()
@@ -460,7 +485,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // ==================== CALL TIMER HELPERS ====================
   const startCallTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current)
-    setCallTimer(0)
+    setCallTimer(1) // Start from 1 second immediately (no delay)
     timerRef.current = setInterval(() => {
       setCallTimer((prev) => prev + 1)
     }, 1000)
@@ -523,7 +548,12 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Mark call as initiated
     callInitiatedRef.current = true
     setCallInitiated(true)
-    startCallTimer()
+    // Note: startCallTimer() is already called in startPreCallTimer() or prepareCall()
+    // to ensure timer starts immediately when Call button is clicked (no delay)
+    // Only start here if timer isn't already running
+    if (!timerRef.current) {
+      startCallTimer()
+    }
     recordCallActivity() // Reset auto-idle timer on call initiation
 
     // Persist to sessionStorage — survives if WebView reloads the page
@@ -598,6 +628,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
 
     setPreCallCountdown(callGap)
+    // START TIMER IMMEDIATELY when Call button is clicked (before countdown)
+    // This eliminates the ~3s delay — timer starts from 00:00:01 right away
+    startCallTimer()
     if (preCallTimerRef.current) clearInterval(preCallTimerRef.current)
     preCallTimerRef.current = setInterval(() => {
       setPreCallCountdown((prev) => {
@@ -996,7 +1029,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
   // Manually open disposition (user clicks "End Call & Log" button)
   const handleManualEndCall = () => {
-    stopCallTimer()
+    // Only stop the timer if disposition time is NOT included
+    if (!includeDispositionTimeRef.current) {
+      stopCallTimer()
+    }
     callInitiatedRef.current = false
     setCallInitiated(false)
     clearCallState()
@@ -1092,6 +1128,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
       recordCallActivity() // Reset auto-idle timer on call record save
 
+      // STOP TIMER NOW — disposition submitted, capture final duration
+      stopCallTimer()
+
       toast.success('Call record saved! Moving to next contact...')
       setIsDispositionModalOpen(false)
       clearCallState()
@@ -1151,6 +1190,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const result = await res.json()
       console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
       recordCallActivity() // Reset auto-idle timer on call record save
+
+      // STOP TIMER NOW — disposition submitted, capture final duration
+      stopCallTimer()
 
       toast.success('Call record saved')
       setIsDispositionModalOpen(false)
@@ -1739,8 +1781,16 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                         <p className="font-medium text-sm truncate">{currentCandidate.name}</p>
                         <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
                       </div>
-                      <Badge variant="outline" className="text-[10px] shrink-0">{formatDuration(callTimer)}</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0 tabular-nums">
+                        {includeDispositionTime && timerRef.current && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
+                        )}
+                        {formatDuration(callTimer)}
+                      </Badge>
                     </div>
+                    {includeDispositionTime && timerRef.current && (
+                      <p className="text-[10px] text-amber-600 font-medium pl-10">⏱ Timer running — stops on disposition submit</p>
+                    )}
                     <div className="flex gap-4 text-xs pl-10 text-muted-foreground">
                       {currentCandidate.role && (
                         <span className="flex items-center gap-1 truncate">
@@ -2108,8 +2158,16 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       <p className="font-medium text-sm truncate">{currentCandidate.name}</p>
                       <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
                     </div>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{formatDuration(callTimer)}</Badge>
+                    <Badge variant="outline" className="text-[10px] shrink-0 tabular-nums">
+                      {includeDispositionTime && timerRef.current && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
+                      )}
+                      {formatDuration(callTimer)}
+                    </Badge>
                   </div>
+                  {includeDispositionTime && timerRef.current && (
+                    <p className="text-[10px] text-amber-600 font-medium mt-1 ml-12">⏱ Timer running — stops on disposition submit</p>
+                  )}
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pl-12">
                     <span className="flex items-center gap-1.5 text-muted-foreground truncate">
                       <Briefcase className="h-3 w-3 shrink-0 text-emerald-500" />
