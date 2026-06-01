@@ -24,12 +24,19 @@ const defaultSettings: PlatformSettings = {
 async function ensureSettingsFile(): Promise<PlatformSettings> {
   try {
     const data = await fs.readFile(SETTINGS_PATH, 'utf-8')
-    return JSON.parse(data) as PlatformSettings
+    const parsed = JSON.parse(data) as Partial<PlatformSettings>
+    // Merge with defaults to handle new fields added in later versions
+    return { ...defaultSettings, ...parsed }
   } catch {
-    // File doesn't exist or is invalid, create with defaults
-    const dir = path.dirname(SETTINGS_PATH)
-    await fs.mkdir(dir, { recursive: true })
-    await fs.writeFile(SETTINGS_PATH, JSON.stringify(defaultSettings, null, 2), 'utf-8')
+    // File doesn't exist or is invalid — create with defaults
+    try {
+      const dir = path.dirname(SETTINGS_PATH)
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(SETTINGS_PATH, JSON.stringify(defaultSettings, null, 2), 'utf-8')
+    } catch (writeErr) {
+      // If write fails (e.g. permissions), still return defaults
+      console.error('Could not create settings file:', writeErr)
+    }
     return defaultSettings
   }
 }
@@ -45,7 +52,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(settings)
   } catch (error) {
     console.error('Failed to read platform settings:', error)
-    return NextResponse.json({ error: 'Failed to read settings' }, { status: 500 })
+    // Return defaults as fallback so the page still loads
+    return NextResponse.json(defaultSettings)
   }
 }
 
@@ -77,3 +85,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 })
   }
 }
+
+// Ensure settings file exists on module load (called once at startup)
+ensureSettingsFile().catch(() => {})

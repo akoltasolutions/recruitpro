@@ -113,6 +113,24 @@ log "Step 3: Syncing database schema..."
 bunx prisma db push
 log "Database synced."
 
+# Step 3c: Ensure platform-settings.json exists
+log "Step 3c: Ensuring platform-settings.json exists..."
+if [ ! -f db/platform-settings.json ]; then
+    mkdir -p db
+    cat > db/platform-settings.json << 'SETTINGSEOF'
+{
+  "subscriptionEnforcement": false,
+  "defaultMaxUsers": 10,
+  "defaultMaxNumbers": 5000,
+  "defaultDailyUploadLimit": 500,
+  "includeDispositionTime": true
+}
+SETTINGSEOF
+    log "Created default platform-settings.json."
+else
+    log "platform-settings.json already exists."
+fi
+
 # Step 3b: Run tenant migration
 log "Step 3b: Running tenant migration..."
 if [ -f prisma/migrate-tenant.ts ]; then

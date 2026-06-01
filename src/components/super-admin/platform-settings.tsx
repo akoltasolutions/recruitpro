@@ -42,11 +42,14 @@ export function PlatformSettingsPage() {
       if (res.ok) {
         const data = await res.json()
         setSettings(data)
+      } else if (res.status === 401) {
+        toast.error('Session expired. Please log in again.')
       } else {
-        toast.error('Failed to load platform settings')
+        toast.error('Failed to load platform settings. Using defaults.')
       }
     } catch {
-      toast.error('Failed to load platform settings')
+      // Network error — use defaults so the page still loads
+      toast.error('Network error. Using default settings.')
     } finally {
       setLoading(false)
     }
