@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from 'react'
 /**
  * Hash-based URL router that syncs page state with the browser URL.
  *
+ * SSR-safe: the useState initializer returns `defaultPage` on the server
+ * (where `window` is undefined) and reads the real hash on the first
+ * client-side render via a synchronisation effect.
+ *
  * Usage:
  *   const [page, navigate] = useHashRouter<MyPage>('dashboard')
  *
@@ -16,13 +20,25 @@ import { useCallback, useEffect, useState } from 'react'
 export function useHashRouter<PageType extends string>(
   defaultPage: PageType,
 ): [PageType, (page: PageType) => void] {
-  // Read the initial hash only when running in the browser.
-  // AppContent is rendered client-only (guarded by the `mounted` flag from
-  // useSyncExternalStore), so window is always available here.
-  const [page, setPage] = useState<PageType>(() => {
+  // SSR-safe initializer: `window` is undefined during static generation
+  // so we always start with `defaultPage` on the server.  On the very
+  // first client render the effect below will synchronise with the URL.
+  const [page, setPage] = useState<PageType>(defaultPage)
+  const [mounted, setMounted] = useState(false)
+
+  // On first client render, read the actual hash and sync state.
+  useEffect(() => {
     const hash = window.location.hash.replace(/^#\/?/, '')
-    return (hash || defaultPage) as PageType
-  })
+    const initial = (hash || defaultPage) as PageType
+    setPage(initial)
+
+    // If no hash, set default silently (replaceState avoids extra history entry)
+    if (!window.location.hash) {
+      window.history.replaceState(null, '', `#/${defaultPage}`)
+    }
+
+    setMounted(true)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const navigate = useCallback((newPage: PageType) => {
     // pushState changes the URL without scrolling and adds a history entry.
@@ -32,12 +48,8 @@ export function useHashRouter<PageType extends string>(
   }, [])
 
   useEffect(() => {
-    // On first mount, if the URL has no hash, silently set the default
-    // so the address bar reflects the current page without creating a
-    // new history entry.
-    if (!window.location.hash) {
-      window.history.replaceState(null, '', `#/${defaultPage}`)
-    }
+    // Only attach listeners after the initial sync to avoid double-setState.
+    if (!mounted) return
 
     const syncFromHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '')
@@ -53,7 +65,7 @@ export function useHashRouter<PageType extends string>(
       window.removeEventListener('hashchange', syncFromHash)
       window.removeEventListener('popstate', syncFromHash)
     }
-  }, [defaultPage])
+  }, [defaultPage, mounted])
 
   return [page, navigate]
 }
