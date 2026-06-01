@@ -55,6 +55,9 @@ server.log
 # PRODUCTION — NEVER overwrite these files
 # ══════════════════════════════════════════════
 
+# Prisma local config (blocks env loading on server)
+prisma.config.ts
+
 # Database — your production user data (NEVER commit!)
 db/*.db
 db/*.db-journal
