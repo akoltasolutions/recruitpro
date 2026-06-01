@@ -16,7 +16,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageProps) {
-  const [email, setEmail] = useState('')
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -30,15 +30,9 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
     setErrorCode('')
 
     // Client-side validation first
-    if (!email.trim() || !password.trim()) {
+    if (!loginId.trim() || !password.trim()) {
       setErrorCode('EMPTY_FIELDS')
       setServerError('Please fill in all required fields.')
-      return
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setErrorCode('INVALID_EMAIL')
-      setServerError('Please enter a valid email address.')
       return
     }
 
@@ -47,7 +41,7 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ identifier: loginId.trim(), password }),
       })
       const data = await res.json()
 
@@ -124,10 +118,10 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm sm:text-base">Email</Label>
+              <Label htmlFor="loginId" className="text-sm sm:text-base">Email or Phone Number</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="email" type="email" placeholder="you@company.com" value={email} onChange={e => { setEmail(e.target.value); setServerError(''); }} className="pl-10 h-11 sm:h-12 text-sm sm:text-base" autoComplete="email" />
+                <Input id="loginId" type="text" placeholder="Enter your registered Email or Phone Number" value={loginId} onChange={e => { setLoginId(e.target.value); setServerError(''); }} className="pl-10 h-11 sm:h-12 text-sm sm:text-base" autoComplete="email" />
               </div>
             </div>
             <div className="space-y-2">

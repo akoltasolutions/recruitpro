@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
+import { useHashRouter } from '@/hooks/use-hash-router'
 import { useAuthStore } from '@/stores/auth-store'
 import { LoginPage } from '@/components/auth/login-page'
 import { SignupPage } from '@/components/auth/signup-page'
@@ -74,9 +75,9 @@ export default function Home() {
 function AppContent() {
   const { user, isAuthenticated, logout } = useAuthStore()
   const [authView, setAuthView] = useState<AuthView>('login')
-  const [adminPage, setAdminPage] = useState<AdminPage>('dashboard')
-  const [recruiterPage, setRecruiterPage] = useState<RecruiterPage>('home')
-  const [superAdminPage, setSuperAdminPage] = useState<SuperAdminPage>('platform-dashboard')
+  const [adminPage, navigateAdmin] = useHashRouter<AdminPage>('dashboard')
+  const [recruiterPage, navigateRecruiter] = useHashRouter<RecruiterPage>('home')
+  const [superAdminPage, navigateSuperAdmin] = useHashRouter<SuperAdminPage>('platform-dashboard')
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -86,9 +87,7 @@ function AppContent() {
   const handleLogout = () => {
     logout()
     setAuthView('login')
-    setAdminPage('dashboard')
-    setRecruiterPage('home')
-    setSuperAdminPage('platform-dashboard')
+    window.location.hash = ''
   }
 
   const handleGoToLogin = () => setAuthView('login')
@@ -161,7 +160,7 @@ function AppContent() {
           const data = JSON.parse(raw)
           if (Date.now() - data.timestamp < 30 * 60 * 1000) {
             console.log('[Page] Detected return from dialer, navigating to pending page')
-            setRecruiterPage('pending')
+            navigateRecruiter('pending')
           }
         } catch { /* ignore */ }
       }
@@ -231,7 +230,7 @@ function AppContent() {
     }
 
     return (
-      <SuperAdminLayout activePage={superAdminPage} onNavigate={(page) => setSuperAdminPage(page as SuperAdminPage)} onLogout={handleLogout}>
+      <SuperAdminLayout activePage={superAdminPage} onNavigate={(page) => navigateSuperAdmin(page as SuperAdminPage)} onLogout={handleLogout}>
         {renderSuperAdminPage()}
       </SuperAdminLayout>
     )
@@ -261,7 +260,7 @@ function AppContent() {
     }
 
     return (
-      <AdminLayout activePage={adminPage} onNavigate={(page) => setAdminPage(page as AdminPage)} onLogout={handleLogout}>
+      <AdminLayout activePage={adminPage} onNavigate={(page) => navigateAdmin(page as AdminPage)} onLogout={handleLogout}>
         {renderAdminPage()}
       </AdminLayout>
     )
@@ -270,20 +269,20 @@ function AppContent() {
   // Recruiter Panel
   const renderRecruiterPage = () => {
     switch (recruiterPage) {
-      case 'home': return <RecruiterDashboard userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
-      case 'calling-list': return <CallingListView userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
-      case 'create-list': return <CreateCallingList userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
-      case 'pending': return <AutoDialer userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
+      case 'home': return <RecruiterDashboard userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
+      case 'calling-list': return <CallingListView userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
+      case 'create-list': return <CreateCallingList userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
+      case 'pending': return <AutoDialer userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
       case 'history': return <CallHistory userId={user.id} />
-      case 'scheduled': return <ScheduledCalls userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
+      case 'scheduled': return <ScheduledCalls userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
       case 'pipeline': return <CandidatePipeline />
       case 'settings': return <Settings userId={user.id} onLogout={handleLogout} />
-      default: return <RecruiterDashboard userId={user.id} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} />
+      default: return <RecruiterDashboard userId={user.id} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} />
     }
   }
 
   return (
-    <RecruiterLayout activePage={recruiterPage} onNavigate={(page) => setRecruiterPage(page as RecruiterPage)} onLogout={handleLogout}>
+    <RecruiterLayout activePage={recruiterPage} onNavigate={(page) => navigateRecruiter(page as RecruiterPage)} onLogout={handleLogout}>
       {renderRecruiterPage()}
     </RecruiterLayout>
   )
