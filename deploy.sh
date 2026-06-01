@@ -46,24 +46,25 @@ log "Checking swap space..."
 SWAP_SIZE=$(free -m | awk '/Swap:/ {print $2}')
 if [ "$SWAP_SIZE" -lt 1024 ] 2>/dev/null; then
     log "Swap is ${SWAP_SIZE}MB — setting up 2GB swap file..."
-    # Remove any existing small swap
-    if [ -f "$SWAP_FILE" ]; then
-        swapoff "$SWAP_FILE" 2>/dev/null || true
-        rm -f "$SWAP_FILE"
+    # Remove any existing swap
+    sudo swapoff "$SWAP_FILE" 2>/dev/null || true
+    sudo rm -f "$SWAP_FILE"
+    # Create 2GB swap file (with sudo for root permissions)
+    if sudo dd if=/dev/zero of="$SWAP_FILE" bs=1M count=2048 status=progress 2>&1 | tail -1; then
+        sudo chmod 600 "$SWAP_FILE"
+        sudo mkswap "$SWAP_FILE" >/dev/null
+        sudo swapon "$SWAP_FILE" >/dev/null
+        # Make it permanent in /etc/fstab
+        if ! sudo grep -q "$SWAP_FILE" /etc/fstab; then
+            echo "$SWAP_FILE none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
+        fi
+        # Set swappiness low (only use swap when memory is tight)
+        sudo sysctl vm.swappiness=10 >/dev/null 2>&1 || true
+        NEW_SWAP=$(free -m | awk '/Swap:/ {print $2}')
+        log "Swap configured: ${NEW_SWAP}MB"
+    else
+        log "WARNING: Could not create swap (permission denied?) — proceeding without swap"
     fi
-    # Create 2GB swap file
-    dd if=/dev/zero of="$SWAP_FILE" bs=1M count=2048 status=progress 2>&1 | tail -1
-    chmod 600 "$SWAP_FILE"
-    mkswap "$SWAP_FILE" >/dev/null
-    swapon "$SWAP_FILE" >/dev/null
-    # Make it permanent
-    if ! grep -q "$SWAP_FILE" /etc/fstab; then
-        echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
-    fi
-    # Set swappiness low (only use swap when memory is tight)
-    sysctl vm.swappiness=10 >/dev/null 2>&1 || true
-    NEW_SWAP=$(free -m | awk '/Swap:/ {print $2}')
-    log "Swap configured: ${NEW_SWAP}MB"
 else
     log "Swap space: ${SWAP_SIZE}MB (sufficient)"
 fi
