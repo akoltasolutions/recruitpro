@@ -309,3 +309,36 @@ Stage Summary:
 - Create Plan dialog: now fully scrollable (min-h-0 fix on ScrollArea)
 - useHashRouter: rewritten with useSyncExternalStore, lint clean
 - All fixes apply globally to any Select/Dropdown inside any Dialog/Sheet
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Create Plan dialog not scrollable + Plan Type dropdown not working
+
+Work Log:
+- Analyzed screenshot via VLM — confirmed dialog content cut off at "Storage Limit (MB)", Feature Access section hidden
+- Read plan-management.tsx — found DialogContent uses ScrollArea which doesn't size reliably in flex context
+- Read dialog.tsx — found base class has overflow-y-auto, DialogContent wasn't forwarding refs
+- Read select.tsx — found SelectContent portals to body level, Dialog intercepts clicks on body-level elements
+
+Fix 1 (Scrollability):
+- Replaced Radix ScrollArea with native div: `flex-1 min-h-0 overflow-y-auto`
+- DialogContent uses flex-col layout: Header (fixed) → Scrollable content (flex-1) → Footer (fixed)
+- All form fields including Feature Access section now accessible via scroll
+
+Fix 2 (Dropdown):
+- Added optional `container` prop to SelectContent — passes to Radix Portal
+- Modified DialogContent to use React.forwardRef — exposes DOM ref
+- PlanManagement uses dialogRef → passes dialogRef.current as container to SelectContent
+- Select dropdown now renders inside Dialog DOM tree instead of body
+- Dialog no longer intercepts clicks on dropdown items
+- Both changes backward-compatible (container defaults to undefined = body portal as before)
+
+Commit: 85ee8dc
+Push: main → main (triggered GitHub Actions deploy)
+
+Stage Summary:
+- 3 files changed: plan-management.tsx, dialog.tsx, select.tsx
+- Lint passes clean
+- Dev server running, no errors
+- Deploy triggered via GitHub Actions
