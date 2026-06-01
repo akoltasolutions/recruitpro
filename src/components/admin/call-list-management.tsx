@@ -187,6 +187,7 @@ export function CallListManagement({ userId }: { userId: string }) {
   const [filterRole, setFilterRole] = useState('')
   const [filterLocation, setFilterLocation] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [deleteFilteredConfirm, setDeleteFilteredConfirm] = useState(false)
   const [deleteFilteredSaving, setDeleteFilteredSaving] = useState(false)
 
@@ -751,10 +752,15 @@ export function CallListManagement({ userId }: { userId: string }) {
   // ─── Delete by Filter helpers ───
   const getFilteredCandidates = () => {
     if (!selectedList) return []
+    const query = searchQuery.trim().toLowerCase()
     return selectedList.candidates.filter(c => {
       if (filterRole && (c.role || '').toLowerCase() !== filterRole.toLowerCase()) return false
       if (filterLocation && (c.location || '').toLowerCase() !== filterLocation.toLowerCase()) return false
       if (filterStatus && c.status !== filterStatus) return false
+      if (query) {
+        const haystack = `${c.name} ${c.phone} ${c.role || ''} ${c.location || ''} ${c.email || ''}`.toLowerCase()
+        if (!haystack.includes(query)) return false
+      }
       return true
     })
   }
@@ -769,9 +775,10 @@ export function CallListManagement({ userId }: { userId: string }) {
     setFilterRole('')
     setFilterLocation('')
     setFilterStatus('')
+    setSearchQuery('')
   }
 
-  const hasActiveFilters = !!(filterRole || filterLocation || filterStatus)
+  const hasActiveFilters = !!(filterRole || filterLocation || filterStatus || searchQuery.trim())
 
   const handleDeleteFiltered = async () => {
     if (!selectedList) return
@@ -1620,42 +1627,51 @@ export function CallListManagement({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* Filter row */}
-          <div className="flex flex-wrap items-center gap-2 py-1 border rounded-lg px-3 bg-muted/30">
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Filters:</span>
-            <Select value={filterRole} onValueChange={(v) => setFilterRole(v === '__all__' ? '' : v)} modal={false}>
-              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
-                <SelectValue placeholder="All Roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Roles</SelectItem>
-                {getUniqueValues('role').map(r => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterLocation} onValueChange={(v) => setFilterLocation(v === '__all__' ? '' : v)} modal={false}>
-              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
-                <SelectValue placeholder="All Locations" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Locations</SelectItem>
-                {getUniqueValues('location').map(l => (
-                  <SelectItem key={l} value={l}>{l}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v === '__all__' ? '' : v)} modal={false}>
-              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Statuses</SelectItem>
-                {getUniqueValues('status').map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Filter + Search row */}
+          <div className="flex flex-wrap items-center gap-2 py-2 border rounded-lg px-3 bg-muted/30">
+            <div className="relative flex-1 min-w-[180px] max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search name, phone, location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 text-xs pl-8 pr-3"
+              />
+            </div>
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">|</span>
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Role:</span>
+            <select
+              value={filterRole || '__all__'}
+              onChange={(e) => setFilterRole(e.target.value === '__all__' ? '' : e.target.value)}
+              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[110px]"
+            >
+              <option value="__all__">All Roles</option>
+              {getUniqueValues('role').map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Location:</span>
+            <select
+              value={filterLocation || '__all__'}
+              onChange={(e) => setFilterLocation(e.target.value === '__all__' ? '' : e.target.value)}
+              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[120px]"
+            >
+              <option value="__all__">All Locations</option>
+              {getUniqueValues('location').map(l => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Status:</span>
+            <select
+              value={filterStatus || '__all__'}
+              onChange={(e) => setFilterStatus(e.target.value === '__all__' ? '' : e.target.value)}
+              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[120px]"
+            >
+              <option value="__all__">All Statuses</option>
+              {getUniqueValues('status').map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
             {hasActiveFilters && (
               <Badge variant="secondary" className="text-xs">
                 Showing {getFilteredCandidates().length} of {selectedList?.candidates.length || 0}
@@ -1992,6 +2008,12 @@ export function CallListManagement({ userId }: { userId: string }) {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="rounded-lg border p-3 space-y-1 bg-muted/30">
+              {searchQuery.trim() && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Search:</span>
+                  <span className="font-medium">&ldquo;{searchQuery.trim()}&rdquo;</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Role:</span>
                 <span className="font-medium">{filterRole || 'All'}</span>
