@@ -307,25 +307,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── 12. Log credentials to console ────────────────────────────────────
-    console.log('');
-    console.log('═══════════════════════════════════════════════════');
-    console.log('  ✅ Seed Complete — RecruitPro Database Initialized');
-    console.log('═══════════════════════════════════════════════════');
-    console.log(`  Organization : ${akoltaOrg.name} (${akoltaOrg.slug})`);
-    console.log(`  Plan         : Enterprise (ACTIVE)`);
-    console.log('');
-    console.log('  Admin Credentials:');
-    console.log(`    Email    : admin@recruitment.com`);
-    console.log(`    Password : admin123`);
-    console.log(`    Role     : SUPER_ADMIN`);
-    console.log('');
-    console.log('  Recruiter Credentials:');
-    console.log(`    Email    : john@recruitment.com`);
-    console.log(`    Password : recruiter123`);
-    console.log(`    Role     : USER`);
-    console.log('═══════════════════════════════════════════════════');
-    console.log('');
+    // ── 12. Log credentials to console (development only) ──────────────────
+    if (process.env.NODE_ENV === 'development') {
+      console.log('');
+      console.log('═══════════════════════════════════════════════════');
+      console.log('  ✅ Seed Complete — RecruitPro Database Initialized');
+      console.log('═══════════════════════════════════════════════════');
+      console.log(`  Organization : ${akoltaOrg.name} (${akoltaOrg.slug})`);
+      console.log(`  Plan         : Enterprise (ACTIVE)`);
+      console.log('');
+      console.log('  Admin Credentials:');
+      console.log(`    Email    : admin@recruitment.com`);
+      console.log(`    Password : admin123`);
+      console.log(`    Role     : SUPER_ADMIN`);
+      console.log('');
+      console.log('  Recruiter Credentials:');
+      console.log(`    Email    : john@recruitment.com`);
+      console.log(`    Password : recruiter123`);
+      console.log(`    Role     : USER`);
+      console.log('═══════════════════════════════════════════════════');
+      console.log('');
+    }
 
     return NextResponse.json({
       success: true,

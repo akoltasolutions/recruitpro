@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -25,7 +24,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
-  Palette, Plus, Pencil, Trash2, GripVertical, Check, X,
+  Palette, Plus, Pencil, Trash2, GripVertical,
   ThumbsUp, ThumbsDown, Minus, SmilePlus,
 } from 'lucide-react'
 import { toast } from 'sonner'

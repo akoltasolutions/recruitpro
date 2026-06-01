@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/admin/backup/export-users]', error);
     return NextResponse.json(
-      { error: 'Failed to export users. ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

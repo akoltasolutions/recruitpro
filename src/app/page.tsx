@@ -97,7 +97,6 @@ function AppContent() {
   // ==================== GLOBAL ANDROID WEBVIEW BRIDGE ====================
   useEffect(() => {
     const handleShowDisposition = (e: Event) => {
-      console.log('[GlobalBridge] __show_disposition event received:', (e as CustomEvent).detail)
       const detail = (e as CustomEvent).detail || {}
       sessionStorage.setItem('__trigger_disposition', JSON.stringify(detail))
       window.dispatchEvent(new CustomEvent('show-disposition-from-dialer', { detail }))
@@ -106,7 +105,6 @@ function AppContent() {
     window.addEventListener('__show_disposition', handleShowDisposition)
 
     const showPostCallDisposition = (phoneNumber: string) => {
-      console.log('[GlobalBridge] showPostCallDisposition called:', phoneNumber)
       const data = { phone: phoneNumber, timestamp: Date.now() }
       sessionStorage.setItem('__trigger_disposition', JSON.stringify(data))
       window.dispatchEvent(new CustomEvent('show-disposition-from-dialer', { detail: data }))
@@ -115,7 +113,6 @@ function AppContent() {
     ;(window as unknown as Record<string, unknown>).showPostCallDisposition = showPostCallDisposition
 
     const handlePopState = () => {
-      console.log('[GlobalBridge] Back button pressed — dispatching close-all-modals')
       window.dispatchEvent(new CustomEvent('close-all-modals'))
     }
     window.addEventListener('popstate', handlePopState)
@@ -123,7 +120,6 @@ function AppContent() {
     ;(window as unknown as Record<string, unknown>).__pushModalHistory = () => {
       try {
         window.history.pushState({ modal: true }, '')
-        console.log('[GlobalBridge] Pushed modal history entry')
       } catch { /* ignore */ }
     }
 
@@ -160,7 +156,6 @@ function AppContent() {
         try {
           const data = JSON.parse(raw)
           if (Date.now() - data.timestamp < 30 * 60 * 1000) {
-            console.log('[Page] Detected return from dialer, navigating to pending page')
             navigateRecruiter('pending')
           }
         } catch { /* ignore */ }

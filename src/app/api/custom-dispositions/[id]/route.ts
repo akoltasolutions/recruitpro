@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { name, color, isPositive, isActive } = body;
 
-    const existing = await db.customDisposition.findUnique({
+    const existing = await db.customDisposition.findFirst({
       where: { id, organizationId: auth.organizationId },
     });
     if (!existing) return NextResponse.json({ error: 'Disposition not found' }, { status: 404 });
@@ -51,7 +51,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     const { id } = await params;
 
-    const existing = await db.customDisposition.findUnique({
+    const existing = await db.customDisposition.findFirst({
       where: { id, organizationId: auth.organizationId },
     });
     if (!existing) return NextResponse.json({ error: 'Disposition not found' }, { status: 404 });

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Log login activity for recruiter tracking — default to IDLE so time
     // does not start counting until the recruiter explicitly picks a status.
-    if (user.role === 'RECRUITER') {
+    if (user.role === 'USER') {
       try {
         await db.activityLog.create({
           data: {

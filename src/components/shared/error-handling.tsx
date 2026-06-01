@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { WifiOff, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 

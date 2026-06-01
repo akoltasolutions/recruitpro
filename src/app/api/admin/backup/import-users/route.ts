@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/admin/backup/import-users]', error);
     return NextResponse.json(
-      { error: 'Failed to process import. ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

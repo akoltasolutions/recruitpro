@@ -156,6 +156,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ invitation }, { status: 201 });
   } catch (error) {
+    // Handle Prisma unique constraint violation (race condition)
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'An invitation for this email already exists in your organization.', code: 'INVITATION_EXISTS' },
+        { status: 409 }
+      );
+    }
     console.error('Create invitation error:', error);
     return NextResponse.json(
       { error: 'Something went wrong.', code: 'SERVER_ERROR' },

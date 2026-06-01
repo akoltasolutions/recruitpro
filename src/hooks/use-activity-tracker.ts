@@ -81,7 +81,9 @@ export function useActivityTracker({
       // When app comes back to foreground → count as activity
       if (document.visibilityState === 'visible') {
         recordActivity()
-        console.log('[ActivityTracker] App came to foreground — activity recorded')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ActivityTracker] App came to foreground — activity recorded')
+        }
       }
     }
 
@@ -114,7 +116,9 @@ export function useActivityTracker({
       // ── AUTO-IDLE CHECK (15 min no app activity) ─────────────────────
       if (inactiveMs >= AUTO_LOGOUT_MS) {
         if (logoutWarningTimerRef.current) clearTimeout(logoutWarningTimerRef.current)
-        console.log('[ActivityTracker] Auto-switching to Idle — 15 min inactivity')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ActivityTracker] Auto-switching to Idle — 15 min inactivity')
+        }
         toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.', {
           duration: 4000,
         })
@@ -139,7 +143,9 @@ export function useActivityTracker({
         logoutWarningTimerRef.current = setTimeout(() => {
           const recheck = Date.now() - lastActivityRef.current
           if (recheck >= AUTO_LOGOUT_MS) {
-            console.log('[ActivityTracker] Auto-idle (delayed check)')
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[ActivityTracker] Auto-idle (delayed check)')
+            }
             toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.')
             onAutoIdle()
           } else {
@@ -167,9 +173,11 @@ export function useActivityTracker({
         }
 
         if (callInactivityMs >= AUTO_IDLE_MS) {
-          console.log(
-            `[ActivityTracker] Auto-switching to IDLE (no calls for ${AUTO_IDLE_MINUTES} min)`
-          )
+          if (process.env.NODE_ENV === 'development') {
+            console.log(
+              `[ActivityTracker] Auto-switching to IDLE (no calls for ${AUTO_IDLE_MINUTES} min)`
+            )
+          }
           idleWarningShownRef.current = false
           try {
             const res = await authFetch('/api/user-status', {

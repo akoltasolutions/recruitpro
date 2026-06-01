@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth || !requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth || !requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -78,8 +78,12 @@ export async function POST(request: NextRequest) {
     const { password: _, ...safeUser } = user;
     return NextResponse.json({ user: safeUser }, { status: 201 });
   } catch (error) {
+    // Handle Prisma unique constraint violation (race condition)
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2002') {
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 409 });
+    }
     console.error('Create user error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const body = await request.json();
     const { label, fieldType, options, isRequired, isActive } = body;
 
-    const existing = await db.dynamicField.findUnique({
+    const existing = await db.dynamicField.findFirst({
       where: { id, organizationId: auth.organizationId },
     });
     if (!existing) return NextResponse.json({ error: 'Field not found' }, { status: 404 });
@@ -56,7 +56,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     const { id } = await params;
 
-    const existing = await db.dynamicField.findUnique({
+    const existing = await db.dynamicField.findFirst({
       where: { id, organizationId: auth.organizationId },
     });
     if (!existing) return NextResponse.json({ error: 'Field not found' }, { status: 404 });

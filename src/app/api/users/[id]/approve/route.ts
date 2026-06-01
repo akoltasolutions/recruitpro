@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth || !requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

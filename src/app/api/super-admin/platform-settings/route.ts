@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
+import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware'
 
 const SETTINGS_PATH = path.join(process.cwd(), 'db', 'platform-settings.json')
 
@@ -31,8 +32,13 @@ async function ensureSettingsFile(): Promise<PlatformSettings> {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request)
+    if (!auth || !requireSuperAdmin(auth)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const settings = await ensureSettingsFile()
     return NextResponse.json(settings)
   } catch (error) {
@@ -41,8 +47,13 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    const auth = await authenticateRequest(request)
+    if (!auth || !requireSuperAdmin(auth)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json() as Partial<PlatformSettings>
 
     const existing = await ensureSettingsFile()

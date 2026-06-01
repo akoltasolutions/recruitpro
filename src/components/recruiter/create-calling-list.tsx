@@ -19,7 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   PhoneCall, Plus, Trash2, Users, Eye, Pencil, UserPlus, ClipboardPaste,
-  GripVertical, Loader2, ListPlus, ArrowLeft, Phone, Clock, CalendarDays,
+  GripVertical, Loader2, ListPlus, ArrowLeft, Clock, CalendarDays,
   ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'

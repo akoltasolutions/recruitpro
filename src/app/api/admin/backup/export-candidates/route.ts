@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[GET /api/admin/backup/export-candidates]', error);
     return NextResponse.json(
-      { error: 'Failed to export candidates. ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

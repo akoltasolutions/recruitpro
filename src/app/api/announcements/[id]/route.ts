@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 // PUT /api/announcements/[id] — Update announcement (admin only)
 export async function PUT(
@@ -13,7 +13,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!requireAdmin(auth.role)) {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 
@@ -90,7 +90,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!requireAdmin(auth.role)) {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 

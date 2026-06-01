@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { authFetch } from '@/stores/auth-store'
 import {
   Users, UserPlus, Search, Pencil, Trash2, Mail, Phone, MailCheck,
   Loader2, UserCheck, UserX, Briefcase, Building, MoreHorizontal,
@@ -37,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -151,7 +150,7 @@ export function TeamManagementEnhanced() {
   const [members] = useState<TeamMember[]>(mockMembers)
   const [invitations, setInvitations] = useState<PendingInvitation[]>(mockInvitations)
   const [designations, setDesignations] = useState<Designation[]>(mockDesignations)
-  const [departments] = useState<Department[]>(mockDepartments)
+  const [departments, setDepartments] = useState<Department[]>(mockDepartments)
 
   // ─── Filtered Members ────────────────────────────────────────────────────
 

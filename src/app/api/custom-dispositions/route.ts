@@ -90,11 +90,19 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Verify all items belong to the organization before updating
+    const ownedItems = await db.customDisposition.findMany({
+      where: { id: { in: items.map((item: { id: string }) => item.id) }, organizationId: auth.organizationId },
+    });
+    if (ownedItems.length !== items.length) {
+      return NextResponse.json({ error: 'One or more dispositions not found in this organization' }, { status: 404 });
+    }
+
     // Update sortOrder for each disposition in a transaction
     await db.$transaction(
       items.map((item: { id: string; sortOrder: number }) =>
         db.customDisposition.update({
-          where: { id: item.id, organizationId: auth.organizationId },
+          where: { id: item.id },
           data: { sortOrder: item.sortOrder },
         })
       )

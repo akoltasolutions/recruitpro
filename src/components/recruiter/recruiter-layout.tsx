@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
-import type { RecruiterPage } from '@/stores/app-store'
+type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 interface RecruiterLayoutProps {
   activePage: string

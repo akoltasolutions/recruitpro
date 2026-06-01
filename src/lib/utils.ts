@@ -43,25 +43,6 @@ export function isValidPhone(phone: string): boolean {
   return digits.length >= 10 && digits.length <= 12
 }
 
-/** Check if value is non-empty after trimming */
-export function isRequired(value: string): boolean {
-  return value.trim().length > 0
-}
-
-/** Password strength: min 8 chars, at least one letter and one number */
-export function isStrongPassword(password: string): { valid: boolean; message: string } {
-  if (password.length < 8) {
-    return { valid: false, message: 'Password must be at least 8 characters long.' }
-  }
-  if (!/[a-zA-Z]/.test(password)) {
-    return { valid: false, message: 'Password must contain at least one letter.' }
-  }
-  if (!/[0-9]/.test(password)) {
-    return { valid: false, message: 'Password must contain at least one number.' }
-  }
-  return { valid: true, message: '' }
-}
-
 /** Signup password: min 8 chars, at least one letter and one number (matches backend requirement) */
 export function isSignupPassword(password: string): { valid: boolean; message: string } {
   if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {

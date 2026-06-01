@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Settings as SettingsIcon,
   User,
@@ -25,7 +25,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/shared/page-header'
 import { toast } from 'sonner'
 import { useAuthStore, authFetch } from '@/stores/auth-store'
-import { cn } from '@/lib/utils'
 
 interface SettingsProps {
   userId: string

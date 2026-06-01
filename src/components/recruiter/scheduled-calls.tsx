@@ -1,14 +1,12 @@
 'use client'
 
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   CalendarClock,
   Phone,
-  Clock,
   MapPin,
   Briefcase,
   FileText,
-  AlertCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

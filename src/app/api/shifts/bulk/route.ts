@@ -132,7 +132,6 @@ export async function POST(request: NextRequest) {
     }, { status: 200 });
   } catch (error) {
     console.error('Bulk shift assignment error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to bulk assign shifts';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

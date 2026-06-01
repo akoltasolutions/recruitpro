@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import {
   UserCheck, Clock, Mail, Phone, CheckCircle2, XCircle,
-  Loader2, Users, Eye, Trash2, UserPlus,
+  Loader2, Eye, UserPlus,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/page-header'
 import { Button } from '@/components/ui/button'

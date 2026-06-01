@@ -76,10 +76,7 @@ export async function POST(request: NextRequest) {
         console.error('[restore] Recovery also failed:', recoveryErr);
       }
       return NextResponse.json(
-        {
-          error: 'Database restore failed. An attempt was made to recover from the pre-restore backup. ' +
-            (restoreErr instanceof Error ? restoreErr.message : 'Unknown error'),
-        },
+        { error: 'Internal server error' },
         { status: 500 }
       );
     }
@@ -98,7 +95,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/admin/backup/restore]', error);
     return NextResponse.json(
-      { error: 'Failed to restore database. ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

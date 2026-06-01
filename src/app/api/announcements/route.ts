@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 // GET /api/announcements — Get all active announcements
 export async function GET(request: NextRequest) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!requireAdmin(auth.role)) {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 

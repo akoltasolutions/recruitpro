@@ -149,7 +149,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ shift }, { status: 201 });
   } catch (error) {
     console.error('Create shift error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to create shift assignment';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/admin/backup/code]', error);
     return NextResponse.json(
-      { error: 'Failed to create code backup. ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

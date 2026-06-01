@@ -131,8 +131,7 @@ export async function PUT(
     return NextResponse.json({ shift });
   } catch (error) {
     console.error('Shift update error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to update shift assignment';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -173,7 +172,6 @@ export async function DELETE(
     return NextResponse.json({ message: 'Shift assignment deleted successfully' });
   } catch (error) {
     console.error('Shift delete error:', error);
-    const message = error instanceof Error ? error.message : 'Failed to delete shift assignment';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

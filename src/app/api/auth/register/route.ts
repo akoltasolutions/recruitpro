@@ -184,6 +184,14 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    // Handle Prisma unique constraint violation (race condition)
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'An account with this email or company slug already exists.', code: 'CONFLICT' },
+        { status: 409 }
+      );
+    }
     console.error('Registration error:', error);
     return NextResponse.json(
       { error: 'Something went wrong. Please try again later.', code: 'SERVER_ERROR' },
