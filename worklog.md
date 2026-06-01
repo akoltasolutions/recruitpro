@@ -223,3 +223,22 @@ Stage Summary:
 - Login: email OR phone number with same password, full backward compatible
 - Overlapping: z-index hierarchy verified across all components
 - GitHub Actions deploy triggered to Mumbai server
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Re-push changes to GitHub to trigger fresh deployment
+
+Work Log:
+- User reported changes not reflecting on live site
+- Verified git status: working tree clean, all changes committed
+- Found 1 unpushed commit (202f0aa - worklog update)
+- Key fix commit af1d759 (URL routing + email/phone login + overlapping fix) was already on origin/main
+- Pushed 202f0aa to origin/main → af1d759..202f0aa main -> main
+- GitHub Actions deploy re-triggered
+
+Stage Summary:
+- All 3 fixes (commit af1d759) are in GitHub and being deployed
+- Fresh deploy triggered via GitHub Actions to Mumbai server (13.235.221.20)
+- Deploy pipeline: zero-downtime build in background, PM2 restarts with new build
+- Expected: ~3-5 minutes for build completion + PM2 restart
