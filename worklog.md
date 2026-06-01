@@ -520,3 +520,31 @@ Stage Summary:
 - Active status blocked outside shift hours (unless admin enables override)
 - Auto-idle after 15 min no calls, 15 min no activity
 - No existing dialer functionality disturbed
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Add Idle Time, Break Total, Active Time columns to Team Monitoring recruiter table
+
+Work Log:
+- Read worklog and understood current project state (RecruitPro at app.akolta.com)
+- Analyzed uploaded screenshots via VLM — confirmed candidate dashboard shows Idle Time, Break Total, Active in Shift Status section; Team Monitoring only had Recruiter, Status, Login Time, Hours Today, Last Activity, Action
+- Read /api/user-status/team/route.ts — discovered totalIdleDurationMs was already computed in calculateMemberStatus() but not returned in response
+- Updated TeamMemberStatus interface to include totalIdleDurationToday
+- Added totalIdleDurationToday to the return object in calculateMemberStatus
+- Updated team-monitoring.tsx LiveStatus interface with totalIdleDurationToday field
+- Updated fetchStatuses mapping to include totalIdleDurationToday
+- Added formatDuration utility function (HH:MM:SS format)
+- Updated desktop table header: 9 columns (Recruiter, Status, Login, Hours, Idle, Break, Active, Last Activity, Action)
+- Updated desktop table rows with 3 new cells: Idle Time (slate), Break Total (amber), Active Time (emerald, bold)
+- Updated mobile cards stats grid: 5 items (Login, Hours, Idle, Break, Active)
+- All existing columns preserved per user requirement
+- Lint passes clean, dev server compiles without errors
+- Committed as c1d0f1a, pushed to main → GitHub Actions deploy triggered
+
+Stage Summary:
+- 2 files changed: user-status/team/route.ts (+2 lines), team-monitoring.tsx (+66, -33 lines)
+- 3 new columns visible in Team Monitoring recruiter table: Idle Time, Break Total, Active Time
+- Data sourced from same ActivityLog calculations as recruiter dashboard (synced)
+- Auto-refresh every 30s ensures real-time sync between recruiter panel and admin panel
+- No existing functionality disturbed
