@@ -17,13 +17,14 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Tag, PhoneCall, MessageSquare, Building2, Users, LogOut,
   Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone, MoreHorizontal,
-  Settings2, Palette,
+  Settings2, Palette, Clock,
 } from 'lucide-react'
 
 const menuItems = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'team-performance', label: 'Team Performance', icon: BarChart3 },
   { key: 'team-monitoring', label: 'Team Monitoring', icon: Activity },
+  { key: 'shift-management', label: 'Shift Management', icon: Clock },
   { key: 'dispositions', label: 'Disposition', icon: Tag },
   { key: 'call-lists', label: 'Calling List', icon: PhoneCall },
   { key: 'templates', label: 'Message Templates', icon: MessageSquare },

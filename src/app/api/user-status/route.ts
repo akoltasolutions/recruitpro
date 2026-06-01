@@ -153,9 +153,20 @@ export async function GET(request: NextRequest) {
 
     const statusInfo = await calculateStatusInfo(auth.userId);
 
+    // Fetch shift info to include in response
+    const shift = await db.shiftAssignment.findUnique({
+      where: { userId: auth.userId },
+      select: { shiftStartTime: true, shiftEndTime: true, allowOutsideShift: true },
+    });
+
+    const shiftInfo = shift
+      ? { shiftStartTime: shift.shiftStartTime, shiftEndTime: shift.shiftEndTime, allowOutsideShift: shift.allowOutsideShift }
+      : null;
+
     return NextResponse.json({
       ...statusInfo,
       userId: auth.userId,
+      shiftInfo,
     });
   } catch (error) {
     console.error('User status fetch error:', error);
@@ -184,6 +195,26 @@ export async function POST(request: NextRequest) {
 
     // Get current status info to check transitions
     const currentInfo = await calculateStatusInfo(auth.userId);
+
+    // ── Shift-hour enforcement for ACTIVE status ──────────────────────
+    if (status === 'ACTIVE') {
+      const shift = await db.shiftAssignment.findUnique({
+        where: { userId: auth.userId },
+        select: { shiftStartTime: true, shiftEndTime: true, allowOutsideShift: true },
+      });
+
+      if (shift && !shift.allowOutsideShift) {
+        const now = new Date();
+        const currentHHmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        if (currentHHmm < shift.shiftStartTime || currentHHmm > shift.shiftEndTime) {
+          return NextResponse.json(
+            { error: `Your shift timing is from ${shift.shiftStartTime} to ${shift.shiftEndTime}. You can go Active only during your assigned shift hours.` },
+            { status: 403 }
+          );
+        }
+      }
+      // If no shift exists, allow. If allowOutsideShift is true, allow.
+    }
 
     let action: string;
     let logStatus: string;

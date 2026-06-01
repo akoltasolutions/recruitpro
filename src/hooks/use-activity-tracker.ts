@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
-import { useAuthStore, authFetch } from '@/stores/auth-store'
+import { authFetch } from '@/stores/auth-store'
 import { toast } from 'sonner'
 import { msSinceLastCall, resetCallActivity } from '@/lib/call-activity-tracker'
 
@@ -10,7 +10,7 @@ import { msSinceLastCall, resetCallActivity } from '@/lib/call-activity-tracker'
 // ---------------------------------------------------------------------------
 
 /** Minutes of no call activity before auto-switching to IDLE (when ACTIVE) */
-const AUTO_IDLE_MINUTES = 20
+const AUTO_IDLE_MINUTES = 15
 const AUTO_IDLE_MS = AUTO_IDLE_MINUTES * 60 * 1000
 
 /** Show a warning when this many minutes remain before auto-idle */
@@ -18,7 +18,7 @@ const IDLE_WARNING_MINUTES = 5
 const IDLE_WARNING_MS = IDLE_WARNING_MINUTES * 60 * 1000
 
 /** Minutes of no app interaction before auto-logout */
-const AUTO_LOGOUT_MINUTES = 30
+const AUTO_LOGOUT_MINUTES = 15
 const AUTO_LOGOUT_MS = AUTO_LOGOUT_MINUTES * 60 * 1000
 
 /** Show a warning toast this many seconds before auto-logout */
@@ -46,7 +46,6 @@ export function useActivityTracker({
   const logoutWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasLogoutWarnedRef = useRef(false)
   const idleWarningShownRef = useRef(false)
-  const logoutFn = useAuthStore((s) => s.logout)
 
   // ---- Record activity helper (called by all event sources) ---------------
   const recordActivity = useCallback(() => {
@@ -112,18 +111,18 @@ export function useActivityTracker({
       const now = Date.now()
       const inactiveMs = now - lastActivityRef.current
 
-      // ── AUTO-LOGOUT CHECK (30 min no app activity) ─────────────────────
+      // ── AUTO-IDLE CHECK (15 min no app activity) ─────────────────────
       if (inactiveMs >= AUTO_LOGOUT_MS) {
         if (logoutWarningTimerRef.current) clearTimeout(logoutWarningTimerRef.current)
-        console.log('[ActivityTracker] Auto-logging out — 30 min inactivity')
-        toast.error('Session expired — logged out due to inactivity.', {
+        console.log('[ActivityTracker] Auto-switching to Idle — 15 min inactivity')
+        toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.', {
           duration: 4000,
         })
-        logoutFn()
+        onAutoIdle()
         return
       }
 
-      // Logout warning (60 seconds before logout)
+      // Idle warning (60 seconds before auto-idle)
       const timeUntilLogout = AUTO_LOGOUT_MS - inactiveMs
       if (
         timeUntilLogout <= LOGOUT_WARNING_SECONDS * 1000 &&
@@ -131,25 +130,25 @@ export function useActivityTracker({
       ) {
         hasLogoutWarnedRef.current = true
         toast.warning(
-          'No activity detected. Auto-logging out in 1 minute. Tap anywhere to stay logged in.',
+          'No activity detected. Auto-switching to Idle in 1 minute.',
           { duration: LOGOUT_WARNING_SECONDS * 1000 }
         )
 
-        // Schedule a re-check at exactly 30 min
+        // Schedule a re-check at exactly 15 min
         if (logoutWarningTimerRef.current) clearTimeout(logoutWarningTimerRef.current)
         logoutWarningTimerRef.current = setTimeout(() => {
           const recheck = Date.now() - lastActivityRef.current
           if (recheck >= AUTO_LOGOUT_MS) {
-            console.log('[ActivityTracker] Auto-logout (delayed check)')
-            toast.error('Session expired — logged out due to inactivity.')
-            logoutFn()
+            console.log('[ActivityTracker] Auto-idle (delayed check)')
+            toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.')
+            onAutoIdle()
           } else {
             hasLogoutWarnedRef.current = false
           }
         }, LOGOUT_WARNING_SECONDS * 1000)
       }
 
-      // ── AUTO-IDLE CHECK (20 min no calls while ACTIVE) ─────────────────
+      // ── AUTO-IDLE CHECK (15 min no calls while ACTIVE) ─────────────────
       if (currentStatus === 'ACTIVE') {
         const callInactivityMs = msSinceLastCall()
 
@@ -196,7 +195,7 @@ export function useActivityTracker({
     }, CHECK_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [currentStatus, onAutoIdle, logoutFn])
+  }, [currentStatus, onAutoIdle])
 
   // ---- 5. Reset call activity timer on status changes ───────────────────
   useEffect(() => {

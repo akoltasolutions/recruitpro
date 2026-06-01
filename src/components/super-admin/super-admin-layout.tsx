@@ -20,7 +20,7 @@ import {
   Menu, Shield, LogOut, MoreHorizontal,
   BarChart3, Activity, Tag, PhoneCall, MessageSquare,
   Users, UserCheck, Megaphone, Settings2, Palette, DatabaseBackup,
-  ChevronRight,
+  ChevronRight, Clock,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -43,6 +43,7 @@ const companyMenuItems: MenuItem[] = [
   { key: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'company' },
   { key: 'team-performance', label: 'Team Performance', icon: BarChart3, section: 'company' },
   { key: 'team-monitoring', label: 'Team Monitoring', icon: Activity, section: 'company' },
+  { key: 'shift-management', label: 'Shift Management', icon: Clock, section: 'company' },
   { key: 'dispositions', label: 'Disposition', icon: Tag, section: 'company' },
   { key: 'call-lists', label: 'Calling List', icon: PhoneCall, section: 'company' },
   { key: 'templates', label: 'Message Templates', icon: MessageSquare, section: 'company' },

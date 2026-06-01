@@ -23,6 +23,7 @@ import { TeamManagementEnhanced } from '@/components/admin/team-management-enhan
 import { OrganizationSettings } from '@/components/admin/organization-settings'
 import { DynamicFieldBuilder } from '@/components/admin/dynamic-field-builder'
 import { DispositionBuilder } from '@/components/admin/disposition-builder'
+import { ShiftManagement } from '@/components/admin/shift-management'
 import { SuperAdminLayout } from '@/components/super-admin/super-admin-layout'
 import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
 import { OrganizationManagement } from '@/components/super-admin/organization-management'
@@ -42,8 +43,8 @@ import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
 
 type AuthView = 'login' | 'signup' | 'register' | 'forgot-password'
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 export default function Home() {
@@ -213,6 +214,7 @@ function AppContent() {
         case 'admin-dashboard': return <AdminDashboard />
         case 'team-performance': return <TeamPerformance />
         case 'team-monitoring': return <TeamMonitoring />
+        case 'shift-management': return <ShiftManagement />
         case 'dispositions': return <DispositionManagement />
         case 'call-lists': return <CallListManagement userId={user.id} />
         case 'templates': return <MessageTemplates />
@@ -243,6 +245,7 @@ function AppContent() {
         case 'dashboard': return <AdminDashboard />
         case 'team-performance': return <TeamPerformance />
         case 'team-monitoring': return <TeamMonitoring />
+        case 'shift-management': return <ShiftManagement />
         case 'dispositions': return <DispositionManagement />
         case 'call-lists': return <CallListManagement userId={user.id} />
         case 'templates': return <MessageTemplates />

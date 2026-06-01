@@ -80,6 +80,14 @@ function formatDuration(seconds: number): string {
   return `${s}s`
 }
 
+function formatShiftTime(hhmm: string): string {
+  const [hours, minutes] = hhmm.split(':').map(Number)
+  const period = hours >= 12 ? 'PM' : 'AM'
+  const displayHours = hours % 12 || 12
+  const displayMinutes = minutes.toString().padStart(2, '0')
+  return `${displayHours}:${displayMinutes} ${period}`
+}
+
 function formatActiveHours(activeMinutes: number): string {
   if (activeMinutes <= 0) return '0h'
   const hrs = Math.floor(activeMinutes / 60)
@@ -96,6 +104,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [userStatus, setUserStatus] = useState<string>('IDLE')
+  const [userShift, setUserShift] = useState<{shiftStartTime: string, shiftEndTime: string} | null>(null)
 
   const initialSelected = useRef(false)
 
@@ -140,14 +149,27 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
     }
   }, [])
 
+  const fetchUserShift = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/shifts/my-shift')
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.shift) {
+        setUserShift({ shiftStartTime: data.shift.shiftStartTime, shiftEndTime: data.shift.shiftEndTime })
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [])
+
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      await Promise.all([fetchCallLists(), fetchCallRecords(), fetchDailyStats()])
+      await Promise.all([fetchCallLists(), fetchCallRecords(), fetchDailyStats(), fetchUserShift()])
       setLoading(false)
     }
     load()
-  }, [fetchCallLists, fetchCallRecords, fetchDailyStats])
+  }, [fetchCallLists, fetchCallRecords, fetchDailyStats, fetchUserShift])
 
   const selectedList = callLists.find((l) => l.id === selectedListId)
 
@@ -188,6 +210,30 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
       <StatusManagement
         onStatusChange={(status) => setUserStatus(status)}
       />
+
+      {/* Shift Timing Card */}
+      <Card className="bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Your Shift Timing</p>
+              {userShift ? (
+                <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  {formatShiftTime(userShift.shiftStartTime)} – {formatShiftTime(userShift.shiftEndTime)}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No shift timing assigned yet.</p>
+              )}
+            </div>
+          </div>
+          {userShift && (
+            <p className="text-xs text-muted-foreground mt-2 ml-[52px]">Your shift timing is assigned by Admin.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
