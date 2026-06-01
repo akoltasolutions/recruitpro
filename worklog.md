@@ -159,3 +159,26 @@ Stage Summary:
 - Select dropdowns inside Dialogs will now render ABOVE the overlay (z-10002 vs 10000)
 - Navigation menu no longer overlaps (correct z-index hierarchy)
 - Future deploys will properly read DATABASE_URL from .env
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Deploy z-index and Select dropdown fixes to Mumbai server via GitHub Actions
+
+Work Log:
+- Verified all fixes present in source code:
+  - dialog.tsx: overlay z-[10000], content z-[10001] ✅
+  - super-admin-layout.tsx: header sticky z-30, mobile nav z-[9999] ✅
+  - admin-layout.tsx: header sticky z-30, mobile nav z-[9999] ✅
+  - recruiter-layout.tsx: header sticky z-30, mobile nav z-[9999] ✅
+  - plan-management.tsx: modal={false} on Select inside Dialog ✅
+- Confirmed prisma.config.ts is NOT in repo (won't block deploy)
+- Verified deploy workflow (.github/workflows/deploy.yml) triggers on push to main
+- Pushed commit a64333b to origin/main → GitHub Actions deploy triggered
+- Deploy script does zero-downtime: pulls code, builds in background, PM2 restarts
+
+Stage Summary:
+- All fixes (commit f2df5f3 + b94f266) already in GitHub
+- GitHub Actions deploy triggered to Mumbai server (13.235.221.20)
+- Expected completion: ~3-5 minutes (build + PM2 restart)
+- Fixes will resolve: overlapping nav menu + plan type dropdown not working
