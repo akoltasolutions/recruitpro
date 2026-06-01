@@ -18,6 +18,7 @@ interface TeamMemberStatus {
   breakStartTime: string | null;
   totalBreakDurationToday: number;
   totalActiveDurationToday: number;
+  totalIdleDurationToday: number;
   lastActivity: string | null;
 }
 
@@ -133,6 +134,7 @@ function calculateMemberStatus(
     breakStartTime,
     totalBreakDurationToday: totalBreakDurationMs,
     totalActiveDurationToday: totalActiveDurationMs,
+    totalIdleDurationToday: totalIdleDurationMs,
     lastActivity,
   };
 }

@@ -47,6 +47,7 @@ interface LiveStatus {
   breakStartTime: string | null;
   totalBreakDurationToday: number;
   totalActiveDurationToday: number;
+  totalIdleDurationToday: number;
 }
 
 interface TeamStatusResponse {
@@ -128,6 +129,14 @@ function getStatusBadgeVariant(status: StatusKey) {
 // ---------------------------------------------------------------------------
 // Utility formatters
 // ---------------------------------------------------------------------------
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 function formatHours(decimal: number): string {
   const h = Math.floor(decimal);
@@ -226,6 +235,7 @@ export function TeamMonitoring() {
         breakStartTime: (m.breakStartTime as string | null) || null,
         totalBreakDurationToday: (m.totalBreakDurationToday as number) || 0,
         totalActiveDurationToday: (m.totalActiveDurationToday as number) || 0,
+        totalIdleDurationToday: (m.totalIdleDurationToday as number) || 0,
       }));
       setStatuses(mapped);
       setError(null);
@@ -582,21 +592,27 @@ export function TeamMonitoring() {
                   </div>
 
                   {/* Stats row */}
-                  <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      In: {formatLoginTime(recruiter.loginTime)}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Timer className="h-3 w-3" />
-                      {formatHours(recruiter.totalHoursToday)}
-                    </span>
-                    {recruiter.lastActivity && (
-                      <span className="inline-flex items-center gap-1">
-                        <Activity className="h-3 w-3" />
-                        {relativeTime(recruiter.lastActivity)}
-                      </span>
-                    )}
+                  <div className="mt-4 grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Clock className="h-3 w-3 shrink-0" />
+                      <span>In: {formatLoginTime(recruiter.loginTime)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Timer className="h-3 w-3 shrink-0" />
+                      <span>Hours: {formatHours(recruiter.totalHoursToday)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Moon className="h-3 w-3 shrink-0 text-slate-500" />
+                      <span className="text-slate-600 dark:text-slate-400 font-mono">Idle: {formatDuration(recruiter.totalIdleDurationToday)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Pause className="h-3 w-3 shrink-0 text-amber-500" />
+                      <span className="text-amber-600 dark:text-amber-400 font-mono">Break: {formatDuration(recruiter.totalBreakDurationToday)}</span>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-1.5">
+                      <Play className="h-3 w-3 shrink-0 text-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-semibold">Active: {formatDuration(recruiter.totalActiveDurationToday)}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -610,11 +626,14 @@ export function TeamMonitoring() {
         <Card className="hidden lg:block">
           <CardContent className="p-0">
             {/* Table header */}
-            <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-center gap-4 border-b px-6 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_0.9fr_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               <span>Recruiter</span>
               <span>Status</span>
-              <span>Login Time</span>
-              <span>Hours Today</span>
+              <span className="text-center">Login</span>
+              <span className="text-center">Hours</span>
+              <span className="flex items-center gap-1 justify-center"><Moon className="h-2.5 w-2.5" /> Idle</span>
+              <span className="flex items-center gap-1 justify-center"><Pause className="h-2.5 w-2.5" /> Break</span>
+              <span className="flex items-center gap-1 justify-center"><Play className="h-2.5 w-2.5" /> Active</span>
               <span>Last Activity</span>
               <span className="text-right">Action</span>
             </div>
@@ -630,15 +649,15 @@ export function TeamMonitoring() {
                 return (
                   <div
                     key={recruiter.userId}
-                    className={`grid grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] items-center gap-4 px-6 py-3 text-sm ${
+                    className={`grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_0.9fr_auto] items-center gap-3 px-5 py-3 text-sm ${
                       idx !== statuses.length - 1 ? 'border-b' : ''
                     } hover:bg-muted/50 transition-colors`}
                   >
                     {/* Recruiter name */}
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <div className="relative shrink-0">
                         <div
-                          className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ${cfg.bgClass} ${cfg.textClass}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${cfg.bgClass} ${cfg.textClass}`}
                         >
                           {recruiter.name
                             .split(' ')
@@ -651,14 +670,14 @@ export function TeamMonitoring() {
                           {cfg.emoji}
                         </span>
                       </div>
-                      <span className="font-medium truncate">{recruiter.name}</span>
+                      <span className="font-medium truncate text-sm">{recruiter.name}</span>
                     </div>
 
                     {/* Status badge */}
                     <div>
                       <Badge
                         variant={getStatusBadgeVariant(recruiter.status)}
-                        className={`${cfg.bgClass} ${cfg.textClass} border-0 gap-1`}
+                        className={`${cfg.bgClass} ${cfg.textClass} border-0 gap-1 text-xs`}
                       >
                         <StatusIcon className="h-3 w-3" />
                         {cfg.label}
@@ -666,20 +685,34 @@ export function TeamMonitoring() {
                     </div>
 
                     {/* Login time */}
-                    <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-muted-foreground text-xs text-center">
                       {formatLoginTime(recruiter.loginTime)}
                     </span>
 
                     {/* Hours today */}
-                    <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Timer className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-muted-foreground text-xs text-center inline-flex items-center justify-center gap-1">
+                      <Timer className="h-3 w-3 shrink-0" />
                       {formatHours(recruiter.totalHoursToday)}
                     </span>
 
+                    {/* Idle Time */}
+                    <span className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
+                      {formatDuration(recruiter.totalIdleDurationToday)}
+                    </span>
+
+                    {/* Break Total */}
+                    <span className="text-center font-mono text-xs text-amber-600 dark:text-amber-400">
+                      {formatDuration(recruiter.totalBreakDurationToday)}
+                    </span>
+
+                    {/* Active Time */}
+                    <span className="text-center font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {formatDuration(recruiter.totalActiveDurationToday)}
+                    </span>
+
                     {/* Last activity */}
-                    <span className="text-muted-foreground inline-flex items-center gap-1">
-                      <Activity className="h-3.5 w-3.5 shrink-0" />
+                    <span className="text-muted-foreground text-xs inline-flex items-center gap-1">
+                      <Activity className="h-3 w-3 shrink-0" />
                       {relativeTime(recruiter.lastActivity)}
                     </span>
 
@@ -687,14 +720,14 @@ export function TeamMonitoring() {
                     <div className="text-right">
                       {!offline ? (
                         toggling ? (
-                          <Button size="sm" variant="outline" disabled>
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <Button size="sm" variant="outline" disabled className="h-7 text-xs">
+                            <RefreshCw className="h-3 w-3 animate-spin" />
                           </Button>
                         ) : (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="sm" variant="outline" className="gap-1">
-                                <ChevronDown className="h-3.5 w-3.5" />
+                              <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                                <ChevronDown className="h-3 w-3" />
                                 Action
                               </Button>
                             </DropdownMenuTrigger>
