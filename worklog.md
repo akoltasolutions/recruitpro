@@ -242,3 +242,34 @@ Stage Summary:
 - Fresh deploy triggered via GitHub Actions to Mumbai server (13.235.221.20)
 - Deploy pipeline: zero-downtime build in background, PM2 restarts with new build
 - Expected: ~3-5 minutes for build completion + PM2 restart
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Diagnose and fix why ALL 3 previous fixes never deployed to production
+
+Work Log:
+- User reported all 3 issues (URL routing, overlapping UI, email/phone login) still exist on live
+- Ran `npx next build` locally to verify production compilation
+- DISCOVERED ROOT CAUSE: Build was CRASHING with `ReferenceError: window is not defined`
+  during static page generation (prerender phase)
+- The `useHashRouter` hook accessed `window.location.hash` in `useState` initializer
+  which runs during server-side rendering — `window` doesn't exist on server → crash
+- This is why GitHub Actions showed "success" but site never updated:
+  - Foreground SSH script completes → GitHub Actions reports success
+  - Background build (nohup) crashes silently → PM2 keeps serving old build
+  - Zero-downtime deploy correctly falls back to old build on failure
+  - User sees NO changes because the NEW build never compiled
+- Fixed useHashRouter: useState returns defaultPage on server, useEffect syncs hash on client
+- Verified: production build now completes successfully (43/43 pages generated, ○ / static)
+- All 3 fixes from af1d759 are now compilable and deployable
+- Committed as f426f2c, pushed to GitHub → deploy triggered
+
+Stage Summary:
+- ROOT CAUSE: `window is not defined` in useHashRouter → build crash → no deployment
+- FIX: SSR-safe useHashRouter with useEffect-based hash sync
+- VERIFIED: Production build passes (compiled in 13.6s, 43 static pages generated)
+- All 3 changes now deployable:
+  1. URL routing: hash-based navigation with pushState
+  2. Login: email OR phone number detection
+  3. Overlapping UI: z-index hierarchy (overlay=10000, content=10001, select=10002)
