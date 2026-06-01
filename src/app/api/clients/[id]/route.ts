@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { Prisma } from '@prisma/client';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -16,12 +15,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const existing = await db.client.findUnique({ where: { id } });
     if (!existing) return NextResponse.json({ error: 'Client not found' }, { status: 404 });
 
-    // If renaming, check for unique constraint
-    if (name !== undefined && name !== existing.name) {
-      const nameExists = await db.client.findUnique({ where: { name } });
-      if (nameExists) return NextResponse.json({ error: 'Client name already exists' }, { status: 409 });
-    }
-
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (isActive !== undefined) updateData.isActive = isActive;
@@ -30,7 +23,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ client });
   } catch (error) {
     // Handle Prisma unique constraint violation (P2002) when renaming
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2002') {
       return NextResponse.json({ error: 'Client name already exists' }, { status: 409 });
     }
     console.error('Update client error:', error);
@@ -50,8 +44,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ success: true });
   } catch (error) {
     // Handle foreign key constraint error — client has linked call records
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-      return NextResponse.json({ error: 'Cannot delete client with existing call records. Remove call records first.' }, { status: 409 });
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2003') {
+      return NextResponse.json({ error: 'Cannot delete client with existing call records.' }, { status: 409 });
     }
     console.error('Delete client error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { Prisma } from '@prisma/client';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 export async function GET(request: NextRequest) {
@@ -31,17 +30,12 @@ export async function POST(request: NextRequest) {
     const existing = await db.client.findUnique({ where: { name } });
     if (existing) return NextResponse.json({ error: 'Client already exists' }, { status: 409 });
 
-    // Create client with organizationId from auth context (if available)
-    const client = await db.client.create({
-      data: {
-        name,
-        organizationId: auth.organizationId,
-      },
-    });
+    const client = await db.client.create({ data: { name } });
     return NextResponse.json({ client }, { status: 201 });
   } catch (error) {
     // Handle Prisma unique constraint violation (P2002) as a safety net
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    const prismaError = error as { code?: string };
+    if (prismaError.code === 'P2002') {
       return NextResponse.json({ error: 'Client already exists' }, { status: 409 });
     }
     console.error('Create client error:', error);
