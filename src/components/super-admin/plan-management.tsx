@@ -618,7 +618,7 @@ export function PlanManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
             <div className="grid gap-5 py-2">
               {/* Name & Type */}
               <div className="grid gap-4 sm:grid-cols-2">

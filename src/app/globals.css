@@ -151,16 +151,20 @@
  * z-index resolve in the root stacking context.
  * ============================================================ */
 
-/* Do NOT set z-index on portal containers — must not create stacking context */
+/* Do NOT set z-index on portal containers — must not create stacking context.
+   But DO ensure pointer-events are restored so portaled Select/Dropdown content
+   inside a modal Dialog can receive clicks. */
 [data-radix-portal] {
   z-index: auto !important;
   isolation: auto !important;
+  pointer-events: none !important;   /* Dialog sets this on body; mirror on portals */
 }
 
-/* Do NOT set z-index on popper wrappers — must not trap children */
+/* Popper wrappers: no stacking context, allow pointer events for children */
 [data-radix-popper-content-wrapper] {
   z-index: auto !important;
   isolation: auto !important;
+  pointer-events: auto !important;   /* Re-enable for Select/Dropdown portals */
 }
 
 /* Dialog/Sheet/AlertDialog overlay: above mobile nav, below content */
@@ -179,11 +183,14 @@
 }
 
 /* Select/DropdownMenu/Popover: above Dialog content */
+/* pointer-events: auto is CRITICAL — modal Dialog sets pointer-events:none on body,
+   which blocks clicks on these portaled elements unless we re-enable them. */
 [data-slot="select-content"],
 [data-slot="dropdown-menu-content"],
 [data-slot="dropdown-menu-sub-content"],
 [data-slot="popover-content"] {
   z-index: 10002 !important;
+  pointer-events: auto !important;
 }
 
 /* Ensure close buttons inside dialogs are always clickable */

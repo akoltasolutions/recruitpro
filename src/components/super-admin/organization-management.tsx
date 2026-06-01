@@ -568,7 +568,7 @@ export function OrganizationManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-6 px-6">
+          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
             <div className="grid gap-4 py-2">
               {/* Name */}
               <div className="grid gap-2">
