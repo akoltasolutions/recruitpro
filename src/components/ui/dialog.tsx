@@ -57,7 +57,7 @@ const DialogContent = React.forwardRef<
         ref={ref}
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed z-[10001] inset-x-3 top-3 bottom-3 m-auto grid w-full max-w-[calc(100%-2rem)] max-h-[85vh] gap-4 rounded-lg border p-6 shadow-lg duration-200 overflow-y-auto sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg",
+          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed z-[10001] inset-x-3 top-3 bottom-3 m-auto grid w-full max-w-[calc(100%-2rem)] max-h-[85vh] gap-4 rounded-lg border p-6 shadow-lg duration-200 overflow-y-auto overflow-x-hidden sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg",
           className
         )}
         style={{ WebkitOverflowScrolling: 'touch', ...props.style }}

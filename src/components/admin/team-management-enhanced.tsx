@@ -967,7 +967,7 @@ export function TeamManagementEnhanced() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 min-w-0">
             <div className="grid gap-2">
               <Label htmlFor="dept-name">
                 Department Name <span className="text-red-500">*</span>
@@ -998,7 +998,7 @@ export function TeamManagementEnhanced() {
                 onValueChange={(value) => setDeptForm((f) => ({ ...f, headName: value }))}
                 modal={false}
               >
-                <SelectTrigger id="dept-head" className="w-full">
+                <SelectTrigger id="dept-head" className="w-full min-w-0">
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
                 <SelectContent>
