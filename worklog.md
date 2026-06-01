@@ -437,3 +437,54 @@ Stage Summary:
 - Smooth expand/collapse animation with max-height + opacity transition
 - Mobile bottom nav now shows Company items first (platform items in "More" menu)
 - No other sidebar navigation affected, all routing/permissions preserved
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Direct status switch + Idle Time + readable stat cards + accurate stats
+
+Work Log:
+- Analyzed screenshot via VLM — confirmed truncated labels (Total C..., Avg Tal...) and Shift Status section layout
+- Read status-management.tsx, user-status API, recruiter-dashboard.tsx, admin-dashboard.tsx, team-performance.tsx, stats-card.tsx
+
+Fix 1 — Direct Status Switch:
+- Removed confirmation overlay dialog entirely from status-management.tsx
+- Buttons now call handleStatusSwitch() directly on click
+- Removed confirmTarget state and ConfirmOverlay component
+- All transitions work: Active↔Break, Active↔Idle, Break↔Idle, any↔Lunch
+- Backend already supported direct transitions (creates BREAK_END before ACTIVE/IDLE if needed)
+
+Fix 2 — Idle Time in Shift Status:
+- API already calculated totalIdleDurationMs but didn't return it
+- Added totalIdleDurationMs to StatusInfo interface and all return paths
+- Added "Idle Time" column between Login and Break Total in Quick Stats section
+- Shows live timer when currently IDLE, total duration otherwise
+- Uses Moon icon for visual distinction
+
+Fix 3 — Readable Stat Cards (UI):
+- Redesigned StatsCard component: vertical layout (icon → value → label)
+- Removed truncate class — all text now fully visible
+- Changed grid from 6-col (lg:grid-cols-6) to 3-col (md:grid-cols-3)
+- Updated all labels: "Avg Talk Time" → "Average Talk Time", "Not Connect" → "Not Connected"
+- Updated team-performance.tsx stat cards to match vertical design
+- Icon backgrounds with color coding for each metric
+- Loading skeletons updated to match new card heights (140px)
+
+Fix 4 — Statistics Accuracy:
+- Verified recruiter-stats API: Total Calls, Connected, Not Connected, Avg Talk Time all calculate correctly
+- Admin dashboard API uses same calculations — data stays synced
+- No changes needed to stats calculation logic
+
+Lint passes clean. Dev server compiles without errors.
+
+Commit: c50f815
+Push: main → main (triggered GitHub Actions deploy)
+
+Stage Summary:
+- 6 files changed: status-management.tsx, user-status/route.ts, stats-card.tsx, recruiter-dashboard.tsx, admin-dashboard.tsx, team-performance.tsx
+- Direct status switching without intermediate Idle step
+- Idle Time visible in Shift Status section with live timer
+- All stat card labels fully readable (no truncation)
+- Vertical card layout: icon → value → label
+- Responsive grid: 2 cols mobile, 3 cols tablet/desktop
+- No existing functionality disturbed
