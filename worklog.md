@@ -125,3 +125,27 @@ Stage Summary:
 - All SelectTrigger components now default to w-full (proper form behavior)
 - Dialog overflow is now constrained both horizontally and vertically
 - Deploy triggered via GitHub Actions
+
+---
+Task ID: 6
+Agent: Main
+Task: Permanent global z-index fix for all overlapping issues across dialer, dialogs, selects
+
+Work Log:
+- Audited ALL z-index values across entire codebase (30+ occurrences)
+- Identified root cause: auto-dialer used 10 hardcoded inline zIndex values that bypassed the CSS hierarchy
+- Key conflict: Disposition bottom-sheet at inline zIndex:10001 same as Dialog content — Select dropdowns couldn't layer above
+- Created data-attribute system: [data-dialer-overlay] and [data-dialer-sheet] for all dialer overlays
+- Updated globals.css with new CSS selectors for disposition, timer, and template sheets
+- Removed ALL 10 hardcoded inline zIndex values from auto-dialer.tsx, replaced with data attributes
+- Added overflow-x-hidden to DialogContent (global) and SelectTrigger w-fit → w-full (global)
+- Added min-w-0 to department dialog form (component-level)
+- Lint passes clean, compiles clean
+- Committed (d0a91c9) and pushed to GitHub
+
+Stage Summary:
+- Z-index hierarchy is now single-source-of-truth in globals.css
+- ALL overlays (dialogs, dialer sheets, timers, selects) participate in the same CSS-driven hierarchy
+- No hardcoded z-index values remain in any component
+- Select/Dropdown menus always appear above Dialog content (z-10002 > z-10001)
+- Overflow-x-hidden on DialogContent prevents horizontal bleed globally
