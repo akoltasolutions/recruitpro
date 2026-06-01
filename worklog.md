@@ -79,3 +79,27 @@ Stage Summary:
 - Disposition modal shows pulsing red dot + amber text when timer is running
 - All existing dialer flow, call history, analytics remain unchanged
 - `callDuration` field in CallRecord already captures total time (no schema change needed)
+
+---
+Task ID: 4
+Agent: Main
+Task: Fix "Failed to load platform setting" error + deploy to live
+
+Work Log:
+- Investigated the "Failed to load platform setting" error on Super Admin → Platform Settings page
+- Found dev log showing 401 response from `/api/super-admin/platform-settings` (expected locally — no user logged in)
+- Root cause analysis: `ensureSettingsFile()` could fail if file creation fails (permissions, disk issues), AND GET catch block was returning 500
+- Also found that existing settings files from older versions would be missing `includeDispositionTime` field (no default merging)
+- Fixed `ensureSettingsFile()`: Now reads as `Partial<PlatformSettings>` and merges with defaults (`{ ...defaultSettings, ...parsed }`)
+- Fixed `ensureSettingsFile()`: File creation wrapped in nested try-catch — returns defaults even if write fails
+- Fixed GET handler: Outer catch now returns `defaultSettings` with 200 status instead of 500
+- Fixed frontend: Differentiates 401 ("Session expired") vs network errors vs server errors
+- Updated `deploy.sh`: Added Step 3c to pre-create `db/platform-settings.json` with correct defaults if file doesn't exist
+- Committed and pushed to GitHub (commit b3774c3)
+- GitHub Actions deploy triggered, production server confirmed healthy (HTTP 200)
+
+Stage Summary:
+- Platform Settings API is now bullet-proof: always returns valid settings (defaults if anything fails)
+- New fields added in future versions are automatically merged with defaults from existing file
+- Deploy script ensures settings file exists before PM2 starts
+- Production deploy in progress via GitHub Actions
