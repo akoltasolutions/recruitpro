@@ -136,3 +136,26 @@ Stage Summary:
   1. Kill stuck build processes: pkill -f "next build"
   2. Build: cd /home/ubuntu/recruitpro && bun run build
   3. Restart: pm2 start ecosystem.config.cjs && pm2 save
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Select dropdown trapped behind Dialog overlay + navigation overlap
+
+Work Log:
+- Investigated root cause: [data-radix-popper-content-wrapper] had z-index: 9998 !important in globals.css
+- This created a stacking context that TRAPPED SelectContent (z-10002) inside z-9998
+- Dialog overlay was at z-9999 — higher than the trapped Select — making dropdowns invisible
+- Also DialogContent was forced DOWN to z-9999 from its Tailwind z-[10001]
+- Fixed globals.css: Changed portal/popover wrappers to z-index: auto (no stacking context)
+- Fixed hierarchy: overlay=10000, content=10001, select/dropdown=10002
+- Fixed dialog.tsx: Changed overlay Tailwind from z-[9998] to z-[10000]
+- Added modal={false} to Plan Type Select in plan-management.tsx
+- Removed prisma.config.ts from git (was blocking DATABASE_URL env loading on server)
+- Added prisma.config.ts to .gitignore
+- Pushed to GitHub (b94f266) — will auto-deploy to Mumbai
+
+Stage Summary:
+- Select dropdowns inside Dialogs will now render ABOVE the overlay (z-10002 vs 10000)
+- Navigation menu no longer overlaps (correct z-index hierarchy)
+- Future deploys will properly read DATABASE_URL from .env
