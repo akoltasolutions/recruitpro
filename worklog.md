@@ -388,3 +388,27 @@ Stage Summary:
 - 1 file changed: call-list-management.tsx (+385, -94 lines)
 - 3 new features implemented
 - DropdownMenuSeparator added to imports
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix filter dropdowns not clickable, add search box, verify bulk actions
+
+Work Log:
+- Analyzed screenshot via VLM — confirmed filters visible but not clickable
+- Root cause: Radix Select portals SelectContent to <body>, Dialog intercepts pointer events on body-level elements
+- Fix: Replaced all 3 Radix Select filter dropdowns with native <select> elements (render inline, no portal issues)
+- Added search input with Search icon, searches across name/phone/role/location/email
+- Updated getFilteredCandidates() to include search query in filter logic
+- Updated hasActiveFilters and clearFilters to include searchQuery
+- Updated Delete Filtered confirmation dialog to show search query when active
+- Verified Bulk Actions Delete Selected and Update Status already exist and work (DropdownMenu works fine inside Dialog, only Select has the portal issue)
+
+Commit: 3d56848
+Push: main → main (triggered GitHub Actions deploy)
+
+Stage Summary:
+- 1 file changed: call-list-management.tsx (+59, -37 lines)
+- Filters now clickable with native <select>
+- Search box added for name/phone/location search
+- All bulk actions (Delete Selected, Update Status, Delete Filtered) verified working
