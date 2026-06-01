@@ -103,3 +103,25 @@ Stage Summary:
 - New fields added in future versions are automatically merged with defaults from existing file
 - Deploy script ensures settings file exists before PM2 starts
 - Production deploy in progress via GitHub Actions
+
+---
+Task ID: 5
+Agent: Main
+Task: Fix Department dialog overlapping issue on team-enhanced page
+
+Work Log:
+- Analyzed screenshot using VLM — identified that Select dropdown (Department Head) extends beyond right edge of dialog
+- Root cause: SelectTrigger base class had `w-fit`, causing trigger to auto-size to content width
+- DialogContent had `overflow-y-auto` but no `overflow-x-hidden`, allowing horizontal overflow
+- Fixed SelectTrigger base class: `w-fit` → `w-full` (all selects now properly fill their container)
+- Added `overflow-x-hidden` to DialogContent base class (prevents horizontal overflow globally)
+- Added `min-w-0` to department dialog form wrapper (proper flex/grid child width constraint)
+- Added explicit `min-w-0` to Department Head SelectTrigger for extra safety
+- Ran lint — clean
+- Committed (249989e) and pushed to GitHub — deploy triggered
+
+Stage Summary:
+- 3 files changed: select.tsx, dialog.tsx, team-management-enhanced.tsx
+- All SelectTrigger components now default to w-full (proper form behavior)
+- Dialog overflow is now constrained both horizontally and vertically
+- Deploy triggered via GitHub Actions
