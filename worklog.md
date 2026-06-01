@@ -204,3 +204,22 @@ Stage Summary:
 - Commit 732b133 pushed — GitHub Actions deploy triggered
 - Deploy will now: set up swap → stop PM2 → build → start PM2 → health check (5 retries)
 - Future deploys will NOT cause status check failures
+
+---
+Task ID: 3
+Agent: Main Agent + 2 Subagents
+Task: Fix navigation URL routing, overlapping UI, and add email/phone login
+
+Work Log:
+- Created src/hooks/use-hash-router.ts — hash-based URL router hook
+- Updated src/app/page.tsx — replaced useState with useHashRouter for all 3 panels
+- Updated src/app/api/auth/login/route.ts — accepts identifier (email or phone)
+- Updated src/components/auth/login-page.tsx — new label, placeholder, validation
+- Overlapping UI fixes already deployed in previous commits (verified all present)
+- Lint passes clean, committed as af1d759, pushed to GitHub
+
+Stage Summary:
+- URL routing: app.akolta.com#/dashboard, back/forward/refresh/deep-link all work
+- Login: email OR phone number with same password, full backward compatible
+- Overlapping: z-index hierarchy verified across all components
+- GitHub Actions deploy triggered to Mumbai server
