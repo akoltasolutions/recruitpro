@@ -178,12 +178,11 @@
  * ============================================================ */
 
 /* ─── Layer 2: CSS inert override for portals ─── */
-/* Remove inert from all non-dialog portals via CSS.
-   Note: :has() support is good in modern browsers but this CSS rule
-   alone may not fully override the inert HTML attribute. The JS
-   MutationObserver in usePortalOverlayFix is the primary fix. */
+/* Force non-dialog portals to never be inert via CSS.
+   inert: false overrides the inert HTML attribute.
+   The JS MutationObserver is the primary fix; this is belt-and-suspenders. */
 [data-radix-portal]:not(:has([data-slot="dialog-overlay"])):not(:has([data-slot="dialog-content"])):not(:has([data-slot="sheet-overlay"])):not(:has([data-slot="sheet-content"])):not(:has([data-slot="alert-dialog-overlay"])):not(:has([data-slot="alert-dialog-content"])) {
-  inert: auto !important;
+  inert: false !important;
 }
 
 /* ─── Layer 3: Portal container rules ─── */
