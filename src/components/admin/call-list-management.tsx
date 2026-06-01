@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -172,13 +172,23 @@ export function CallListManagement({ userId }: { userId: string }) {
 
   // Bulk actions state
   const [addNumbersOpen, setAddNumbersOpen] = useState(false)
+  const [addNumbersTab, setAddNumbersTab] = useState<'manual' | 'paste'>('manual')
   const [addNumbersEntries, setAddNumbersEntries] = useState<ManualEntry[]>([emptyManualEntry()])
   const [addNumbersSaving, setAddNumbersSaving] = useState(false)
+  const [addNumbersPasteText, setAddNumbersPasteText] = useState('')
+  const [addNumbersPasteParsed, setAddNumbersPasteParsed] = useState<ManualEntry[]>([])
   const [updateStatusOpen, setUpdateStatusOpen] = useState(false)
   const [updateStatusIds, setUpdateStatusIds] = useState<string[]>([])
   const [newStatus, setNewStatus] = useState('PENDING')
   const [updateStatusSaving, setUpdateStatusSaving] = useState(false)
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([])
+
+  // Candidate filter state
+  const [filterRole, setFilterRole] = useState('')
+  const [filterLocation, setFilterLocation] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [deleteFilteredConfirm, setDeleteFilteredConfirm] = useState(false)
+  const [deleteFilteredSaving, setDeleteFilteredSaving] = useState(false)
 
   // Deduplicate state
   const [dedupOpen, setDedupOpen] = useState(false)
@@ -638,6 +648,53 @@ export function CallListManagement({ userId }: { userId: string }) {
     finally { setMerging(false) }
   }
 
+  // ─── Add Numbers Paste helpers ───
+  const parseAddNumbersPaste = (text: string) => {
+    if (!text.trim()) { setAddNumbersPasteParsed([]); return }
+    const lines = text.trim().split(/\r?\n/)
+    const parsed: ManualEntry[] = []
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const cells = line.split(/\t|,/).map(c => c.trim())
+      if (cells.length >= 2) {
+        parsed.push({ name: cells[0] || '', phone: cells[1] || '', role: cells[2] || '', location: cells[3] || '', company: cells[4] || '', email: '', notes: '' })
+      }
+    }
+    setAddNumbersPasteParsed(parsed)
+  }
+
+  const handleAddNumbersPaste = async () => {
+    if (!selectedList) return
+    const valid = addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim())
+    if (valid.length === 0) { toast.error('No valid candidates. Ensure each line has Name,Phone (tab/comma separated)'); return }
+
+    setAddNumbersSaving(true)
+    try {
+      const seen = new Set<string>()
+      const unique = valid.filter(e => { const p = e.phone.trim(); if (seen.has(p)) return false; seen.add(p); return true })
+      const candidates = unique.map(e => ({
+        name: e.name.trim(), phone: e.phone.trim(),
+        role: e.role.trim() || undefined, location: e.location.trim() || undefined,
+        company: e.company.trim() || undefined,
+      }))
+
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ADD', data: { candidates } }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      const dupes = valid.length - unique.length
+      toast.success(`${json.count} candidates added${dupes > 0 ? ` (${dupes} duplicates skipped)` : ''}`)
+      setAddNumbersOpen(false)
+      setAddNumbersPasteText('')
+      setAddNumbersPasteParsed([])
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setAddNumbersSaving(false) }
+  }
+
   // ─── Add Numbers (bulk add to existing list) ───
   const updateAddNumberEntry = (index: number, field: keyof ManualEntry, value: string) => {
     setAddNumbersEntries(prev => {
@@ -689,6 +746,54 @@ export function CallListManagement({ userId }: { userId: string }) {
       fetchCallLists()
     } catch { toast.error('Something went wrong') }
     finally { setAddNumbersSaving(false) }
+  }
+
+  // ─── Delete by Filter helpers ───
+  const getFilteredCandidates = () => {
+    if (!selectedList) return []
+    return selectedList.candidates.filter(c => {
+      if (filterRole && (c.role || '').toLowerCase() !== filterRole.toLowerCase()) return false
+      if (filterLocation && (c.location || '').toLowerCase() !== filterLocation.toLowerCase()) return false
+      if (filterStatus && c.status !== filterStatus) return false
+      return true
+    })
+  }
+
+  const getUniqueValues = (field: 'role' | 'location' | 'status') => {
+    if (!selectedList) return []
+    const values = new Set(selectedList.candidates.map(c => c[field]).filter(Boolean) as string[])
+    return Array.from(values).sort()
+  }
+
+  const clearFilters = () => {
+    setFilterRole('')
+    setFilterLocation('')
+    setFilterStatus('')
+  }
+
+  const hasActiveFilters = !!(filterRole || filterLocation || filterStatus)
+
+  const handleDeleteFiltered = async () => {
+    if (!selectedList) return
+    const filtered = getFilteredCandidates()
+    if (filtered.length === 0) { toast.error('No candidates match the current filters'); return }
+
+    setDeleteFilteredSaving(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE', candidateIds: filtered.map(c => c.id) }),
+      })
+      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+      const json = await res.json()
+      toast.success(`${json.count} filtered candidates removed`)
+      setDeleteFilteredConfirm(false)
+      setSelectedCandidateIds([])
+      clearFilters()
+      fetchCallLists()
+    } catch { toast.error('Something went wrong') }
+    finally { setDeleteFilteredSaving(false) }
   }
 
   // ─── Bulk Delete Selected ───
@@ -1453,8 +1558,8 @@ export function CallListManagement({ userId }: { userId: string }) {
       </Dialog>
 
       {/* ═══════════ Candidates Dialog ═══════════ */}
-      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) setSelectedCandidateIds([]) }}>
-        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) { setSelectedCandidateIds([]); clearFilters() } }}>
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>{selectedList?.name} - Candidates ({selectedList?.candidates.length || 0})</DialogTitle>
             <DialogDescription>View and manage candidates in this calling list</DialogDescription>
@@ -1481,30 +1586,84 @@ export function CallListManagement({ userId }: { userId: string }) {
                 <DropdownMenuItem onClick={openUpdateStatusDialog} disabled={selectedCandidateIds.length === 0}>
                   <Copy className="h-4 w-4 mr-2" /> Update Status ({selectedCandidateIds.length})
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersOpen(true) }}>
+                <DropdownMenuItem onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersTab('manual'); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]); setAddNumbersOpen(true) }}>
                   <UserPlus className="h-4 w-4 mr-2" /> Add Numbers
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { if (getFilteredCandidates().length === 0) { toast.error('No candidates match filters'); return }; setDeleteFilteredConfirm(true) }} disabled={!hasActiveFilters} className="text-red-600">
+                  <Trash2 className="h-4 w-4 mr-2" /> Delete Filtered ({getFilteredCandidates().length})
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Button variant="outline" size="sm" onClick={() => { setSelectedCandidateIds([]); openDedupDialog() }}>
               <Search className="h-4 w-4 mr-1.5" /> Find Duplicates
             </Button>
-            <Button variant="outline" size="sm" onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersOpen(true) }}>
+            <Button variant="outline" size="sm" onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersTab('manual'); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]); setAddNumbersOpen(true) }}>
               <Plus className="h-4 w-4 mr-1.5" /> Add Numbers
             </Button>
             <Button variant="outline" size="sm" onClick={openImportMoreDialog}>
               <Upload className="h-4 w-4 mr-1.5" /> Import More
             </Button>
-            {selectedCandidateIds.length > 0 && (
+            {(selectedCandidateIds.length > 0 || hasActiveFilters) && (
               <div className="flex items-center gap-2 ml-auto">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateIds([])}>
-                  Clear selection
-                </Button>
+                {selectedCandidateIds.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateIds([])}>
+                    Clear selection
+                  </Button>
+                )}
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                )}
               </div>
             )}
           </div>
 
-          <div className="rounded-md border overflow-auto max-h-96">
+          {/* Filter row */}
+          <div className="flex flex-wrap items-center gap-2 py-1 border rounded-lg px-3 bg-muted/30">
+            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Filters:</span>
+            <Select value={filterRole} onValueChange={(v) => setFilterRole(v === '__all__' ? '' : v)} modal={false}>
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Roles</SelectItem>
+                {getUniqueValues('role').map(r => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterLocation} onValueChange={(v) => setFilterLocation(v === '__all__' ? '' : v)} modal={false}>
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
+                <SelectValue placeholder="All Locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Locations</SelectItem>
+                {getUniqueValues('location').map(l => (
+                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v === '__all__' ? '' : v)} modal={false}>
+              <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Statuses</SelectItem>
+                {getUniqueValues('status').map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="text-xs">
+                Showing {getFilteredCandidates().length} of {selectedList?.candidates.length || 0}
+              </Badge>
+            )}
+          </div>
+
+          <div className="rounded-md border overflow-auto max-h-96 flex-1 min-h-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1525,31 +1684,42 @@ export function CallListManagement({ userId }: { userId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {selectedList?.candidates.map(c => (
-                  <TableRow key={c.id} className={selectedCandidateIds.includes(c.id) ? 'bg-muted/50' : ''}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedCandidateIds.includes(c.id)}
-                        onCheckedChange={(checked) => {
-                          setSelectedCandidateIds(prev =>
-                            checked
-                              ? [...prev, c.id]
-                              : prev.filter(id => id !== c.id)
-                          )
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell>{c.phone}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{c.role || '-'}</TableCell>
-                    <TableCell className="hidden md:table-cell">{c.location || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={c.status === 'DONE' ? 'border-emerald-500 text-emerald-700' : c.status === 'SCHEDULED' ? 'border-amber-500 text-amber-700' : 'border-slate-400 text-slate-600'}>
-                        {c.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {selectedList && (() => {
+                  const displayCandidates = hasActiveFilters ? getFilteredCandidates() : selectedList.candidates
+                  return displayCandidates.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                        {hasActiveFilters ? 'No candidates match the current filters' : 'No candidates in this list'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    displayCandidates.map(c => (
+                      <TableRow key={c.id} className={selectedCandidateIds.includes(c.id) ? 'bg-muted/50' : ''}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedCandidateIds.includes(c.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedCandidateIds(prev =>
+                                checked
+                                  ? [...prev, c.id]
+                                  : prev.filter(id => id !== c.id)
+                              )
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell>{c.phone}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{c.role || '-'}</TableCell>
+                        <TableCell className="hidden md:table-cell">{c.location || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={c.status === 'DONE' ? 'border-emerald-500 text-emerald-700' : c.status === 'SCHEDULED' ? 'border-amber-500 text-amber-700' : 'border-slate-400 text-slate-600'}>
+                            {c.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )
+                })()}
               </TableBody>
             </Table>
           </div>
@@ -1660,76 +1830,197 @@ export function CallListManagement({ userId }: { userId: string }) {
       </Dialog>
 
       {/* ═══════════ Add Numbers Dialog ═══════════ */}
-      <Dialog open={addNumbersOpen} onOpenChange={(open) => { setAddNumbersOpen(open); if (!open) setAddNumbersEntries([emptyManualEntry()]) }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={addNumbersOpen} onOpenChange={(open) => { setAddNumbersOpen(open); if (!open) { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]) } }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
               Add Candidates to &ldquo;{selectedList?.name}&rdquo;
             </DialogTitle>
-            <DialogDescription>Add new candidates manually. Name and phone are required.</DialogDescription>
+            <DialogDescription>Add new candidates manually or by copy-paste.</DialogDescription>
+          </DialogHeader>
+          <Tabs value={addNumbersTab} onValueChange={(v) => setAddNumbersTab(v as 'manual' | 'paste')} className="flex-1 min-h-0 flex flex-col">
+            <TabsList className="mb-3">
+              <TabsTrigger value="manual" className="gap-1.5"><Pencil className="h-3.5 w-3.5" /> Manual Entry</TabsTrigger>
+              <TabsTrigger value="paste" className="gap-1.5"><ClipboardPaste className="h-3.5 w-3.5" /> Copy-Paste</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="manual" className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+              <div className="space-y-3 py-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="secondary" className="text-xs">
+                    {addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} valid entries
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={addAddNumberRow}>
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
+                  </Button>
+                </div>
+                <div className="rounded-md border overflow-auto max-h-72">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead className="min-w-[120px]">Name *</TableHead>
+                        <TableHead className="min-w-[130px]">Phone *</TableHead>
+                        <TableHead className="min-w-[140px] hidden sm:table-cell">Email</TableHead>
+                        <TableHead className="min-w-[120px] hidden lg:table-cell">Role</TableHead>
+                        <TableHead className="min-w-[100px] hidden lg:table-cell">Location</TableHead>
+                        <TableHead className="min-w-[100px] hidden lg:table-cell">Company</TableHead>
+                        <TableHead className="min-w-[100px] hidden lg:table-cell">Notes</TableHead>
+                        <TableHead className="w-10"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {addNumbersEntries.map((entry, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
+                          <TableCell><Input value={entry.name} onChange={e => updateAddNumberEntry(index, 'name', e.target.value)} placeholder="Name" className="h-8 text-sm" /></TableCell>
+                          <TableCell><Input value={entry.phone} onChange={e => updateAddNumberEntry(index, 'phone', e.target.value)} placeholder="Phone" className="h-8 text-sm" /></TableCell>
+                          <TableCell className="hidden sm:table-cell"><Input value={entry.email} onChange={e => updateAddNumberEntry(index, 'email', e.target.value)} placeholder="Email" className="h-8 text-sm" /></TableCell>
+                          <TableCell className="hidden lg:table-cell"><Input value={entry.role} onChange={e => updateAddNumberEntry(index, 'role', e.target.value)} placeholder="Role" className="h-8 text-sm" /></TableCell>
+                          <TableCell className="hidden lg:table-cell"><Input value={entry.location} onChange={e => updateAddNumberEntry(index, 'location', e.target.value)} placeholder="Location" className="h-8 text-sm" /></TableCell>
+                          <TableCell className="hidden lg:table-cell"><Input value={entry.company} onChange={e => updateAddNumberEntry(index, 'company', e.target.value)} placeholder="Company" className="h-8 text-sm" /></TableCell>
+                          <TableCell className="hidden lg:table-cell"><Input value={entry.notes} onChange={e => updateAddNumberEntry(index, 'notes', e.target.value)} placeholder="Notes" className="h-8 text-sm" /></TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
+                              onClick={() => removeAddNumberRow(index)}
+                              disabled={addNumbersEntries.length <= 1}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="paste" className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+              <div className="space-y-3 py-2">
+                <div className="space-y-2">
+                  <Label className="text-sm">Paste Candidate Data</Label>
+                  <Textarea
+                    placeholder={"Paste candidate data here. Each line should contain:\nName, Phone, Role, Location\n\nExample:\nRahul Sharma, 9876543210, Software Engineer, Bangalore\nPriya Patel, 9876543211, Product Manager, Mumbai"}
+                    value={addNumbersPasteText}
+                    onChange={(e) => { setAddNumbersPasteText(e.target.value); parseAddNumbersPaste(e.target.value) }}
+                    className="min-h-[160px] font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Supports tab-separated or comma-separated values. Columns: Name, Phone, Role (optional), Location (optional), Company (optional)
+                  </p>
+                </div>
+
+                {addNumbersPasteParsed.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold">Preview ({addNumbersPasteParsed.length} rows parsed)</Label>
+                      <Badge variant="secondary" className="text-xs">
+                        {addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} valid
+                      </Badge>
+                    </div>
+                    <div className="rounded-md border overflow-auto max-h-48">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">#</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Phone</TableHead>
+                            <TableHead className="hidden sm:table-cell">Role</TableHead>
+                            <TableHead className="hidden sm:table-cell">Location</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {addNumbersPasteParsed.slice(0, 20).map((entry, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                              <TableCell className="text-sm">{entry.name || <span className="text-red-400">missing</span>}</TableCell>
+                              <TableCell className="text-sm">{entry.phone || <span className="text-red-400">missing</span>}</TableCell>
+                              <TableCell className="hidden sm:table-cell text-sm">{entry.role || '-'}</TableCell>
+                              <TableCell className="hidden sm:table-cell text-sm">{entry.location || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {addNumbersPasteParsed.length > 20 && (
+                      <p className="text-xs text-muted-foreground">...and {addNumbersPasteParsed.length - 20} more rows</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+          <DialogFooter className="pt-2 border-t">
+            <Button variant="outline" onClick={() => setAddNumbersOpen(false)}>Cancel</Button>
+            {addNumbersTab === 'manual' ? (
+              <Button
+                onClick={handleAddNumbers}
+                disabled={addNumbersSaving || !addNumbersEntries.some(e => e.name.trim() && e.phone.trim())}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {addNumbersSaving ? 'Adding...' : `Add ${addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidates`}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleAddNumbersPaste}
+                disabled={addNumbersSaving || addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim()).length === 0}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {addNumbersSaving ? 'Adding...' : `Add ${addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} Candidates`}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Delete Filtered Confirm Dialog ═══════════ */}
+      <Dialog open={deleteFilteredConfirm} onOpenChange={setDeleteFilteredConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Filtered Candidates
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently remove all candidates matching the current filters.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary" className="text-xs">
-                {addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} valid entries
-              </Badge>
-              <Button variant="outline" size="sm" onClick={addAddNumberRow}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
-              </Button>
+            <div className="rounded-lg border p-3 space-y-1 bg-muted/30">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Role:</span>
+                <span className="font-medium">{filterRole || 'All'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Location:</span>
+                <span className="font-medium">{filterLocation || 'All'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-medium">{filterStatus || 'All'}</span>
+              </div>
+              <Separator />
+              <div className="flex justify-between text-sm font-semibold">
+                <span>Candidates to delete:</span>
+                <span className="text-red-600">{getFilteredCandidates().length}</span>
+              </div>
             </div>
-
-            <div className="rounded-md border overflow-auto max-h-72">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">#</TableHead>
-                    <TableHead className="min-w-[120px]">Name *</TableHead>
-                    <TableHead className="min-w-[130px]">Phone *</TableHead>
-                    <TableHead className="min-w-[140px] hidden sm:table-cell">Email</TableHead>
-                    <TableHead className="min-w-[120px] hidden lg:table-cell">Role</TableHead>
-                    <TableHead className="min-w-[100px] hidden lg:table-cell">Location</TableHead>
-                    <TableHead className="min-w-[100px] hidden lg:table-cell">Company</TableHead>
-                    <TableHead className="min-w-[100px] hidden lg:table-cell">Notes</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {addNumbersEntries.map((entry, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="text-xs text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell><Input value={entry.name} onChange={e => updateAddNumberEntry(index, 'name', e.target.value)} placeholder="Name" className="h-8 text-sm" /></TableCell>
-                      <TableCell><Input value={entry.phone} onChange={e => updateAddNumberEntry(index, 'phone', e.target.value)} placeholder="Phone" className="h-8 text-sm" /></TableCell>
-                      <TableCell className="hidden sm:table-cell"><Input value={entry.email} onChange={e => updateAddNumberEntry(index, 'email', e.target.value)} placeholder="Email" className="h-8 text-sm" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Input value={entry.role} onChange={e => updateAddNumberEntry(index, 'role', e.target.value)} placeholder="Role" className="h-8 text-sm" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Input value={entry.location} onChange={e => updateAddNumberEntry(index, 'location', e.target.value)} placeholder="Location" className="h-8 text-sm" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Input value={entry.company} onChange={e => updateAddNumberEntry(index, 'company', e.target.value)} placeholder="Company" className="h-8 text-sm" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Input value={entry.notes} onChange={e => updateAddNumberEntry(index, 'notes', e.target.value)} placeholder="Notes" className="h-8 text-sm" /></TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
-                          onClick={() => removeAddNumberRow(index)}
-                          disabled={addNumbersEntries.length <= 1}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                This action cannot be undone. {getFilteredCandidates().length} candidate{getFilteredCandidates().length !== 1 ? 's' : ''} will be permanently removed.
+              </AlertDescription>
+            </Alert>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddNumbersOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handleAddNumbers}
-              disabled={addNumbersSaving || !addNumbersEntries.some(e => e.name.trim() && e.phone.trim())}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {addNumbersSaving ? 'Adding...' : `Add ${addNumbersEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidates`}
+            <Button variant="outline" onClick={() => setDeleteFilteredConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteFiltered} disabled={deleteFilteredSaving}>
+              {deleteFilteredSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...</> : `Delete ${getFilteredCandidates().length} Candidates`}
             </Button>
           </DialogFooter>
         </DialogContent>
