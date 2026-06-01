@@ -273,3 +273,39 @@ Stage Summary:
   1. URL routing: hash-based navigation with pushState
   2. Login: email OR phone number detection
   3. Overlapping UI: z-index hierarchy (overlay=10000, content=10001, select=10002)
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix Plan Management dialog: scrolling + dropdown not working inside Dialog
+
+Work Log:
+- User reported 2 issues on app.akolta.com/#/plans:
+  1. Create Plan popup not scrollable — bottom content (Feature Access section) cut off
+  2. Plan Type dropdown not working — cannot select different plan types
+
+- Root Cause 1 (Dropdown): Modal Dialog sets `pointer-events: none` on <body>,
+  which blocks clicks on portaled SelectContent. The SelectContent portal renders
+  OUTSIDE DialogContent, so it doesn't inherit the dialog's pointer-events:auto.
+  The `modal={false}` on Select only prevents Select's own blocking, not Dialog's.
+  Fix: Added `pointer-events: auto !important` to select-content, dropdown-menu-content,
+  and popover-content selectors in globals.css. Also set pointer-events:none on
+  [data-radix-portal] and auto on [data-radix-popper-content-wrapper].
+
+- Root Cause 2 (Scrolling): DialogContent uses `max-h-[90vh] overflow-hidden flex flex-col`
+  with ScrollArea `flex-1`. But ScrollArea lacked `min-h-0`, so flex item's minimum
+  size equaled content height → it couldn't shrink → overflow-hidden clipped content
+  instead of ScrollArea scrolling.
+  Fix: Added `min-h-0` to ScrollArea in plan-management.tsx and organization-management.tsx.
+
+- Bonus: Rewrote useHashRouter to use `useSyncExternalStore` instead of
+  useState+useEffect — eliminates React 19 lint warning about setState-in-effect.
+
+- Production build verified: ✓ Compiled in 13.8s, 43/43 pages, lint clean
+- Committed as 24537ce, pushed to GitHub → deploy triggered
+
+Stage Summary:
+- Plan Type dropdown: now works inside Dialog (pointer-events: auto fix)
+- Create Plan dialog: now fully scrollable (min-h-0 fix on ScrollArea)
+- useHashRouter: rewritten with useSyncExternalStore, lint clean
+- All fixes apply globally to any Select/Dropdown inside any Dialog/Sheet
