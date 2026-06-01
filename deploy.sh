@@ -5,15 +5,12 @@
 #
 # Strategy (Memory-Safe for t3.small / 2GB):
 # 1. Kill stuck builds
-# 2. Ensure swap is active (2GB swap file)
-# 3. Pull code, install deps, sync DB
-# 4. STOP PM2 to free ~350MB memory
-# 5. Backup .next, build with reduced memory
-# 6. Start PM2, health check with retries
-# 7. If fails → rollback to .next-backup
+# 2. Pull code, install deps, sync DB
+# 3. STOP PM2 to free ~300MB memory
+# 4. Backup .next, build with reduced memory
+# 5. Start PM2, health check with retries
+# 6. If fails → rollback to .next-backup
 # ============================================
-
-set -e
 
 export PATH="$HOME/.bun/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
@@ -23,7 +20,6 @@ PROJECT_DIR="/home/ubuntu/recruitpro"
 LOG_FILE="$PROJECT_DIR/logs/deploy.log"
 BUILD_LOG="/tmp/recruitpro-build.log"
 LOCK_FILE="/tmp/recruitpro-deploy.lock"
-SWAP_FILE="/swapfile"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
@@ -41,44 +37,15 @@ which pm2 >/dev/null 2>&1 && log "  pm2 found" || { log "ERROR: pm2 not found"; 
 
 cd "$PROJECT_DIR"
 
-# ── Ensure swap space exists (prevents OOM on 2GB servers) ──
-log "Checking swap space..."
-SWAP_SIZE=$(free -m | awk '/Swap:/ {print $2}')
-if [ "$SWAP_SIZE" -lt 1024 ] 2>/dev/null; then
-    log "Swap is ${SWAP_SIZE}MB — setting up 2GB swap file..."
-    # Remove any existing swap
-    sudo swapoff "$SWAP_FILE" 2>/dev/null || true
-    sudo rm -f "$SWAP_FILE"
-    # Create 2GB swap file (with sudo for root permissions)
-    if sudo dd if=/dev/zero of="$SWAP_FILE" bs=1M count=2048 status=progress 2>&1 | tail -1; then
-        sudo chmod 600 "$SWAP_FILE"
-        sudo mkswap "$SWAP_FILE" >/dev/null
-        sudo swapon "$SWAP_FILE" >/dev/null
-        # Make it permanent in /etc/fstab
-        if ! sudo grep -q "$SWAP_FILE" /etc/fstab; then
-            echo "$SWAP_FILE none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
-        fi
-        # Set swappiness low (only use swap when memory is tight)
-        sudo sysctl vm.swappiness=10 >/dev/null 2>&1 || true
-        NEW_SWAP=$(free -m | awk '/Swap:/ {print $2}')
-        log "Swap configured: ${NEW_SWAP}MB"
-    else
-        log "WARNING: Could not create swap (permission denied?) — proceeding without swap"
-    fi
-else
-    log "Swap space: ${SWAP_SIZE}MB (sufficient)"
-fi
+# ── Memory report ──
+MEM_AVAIL=$(free -m | awk '/Mem:/ {print $7}')
+log "Memory available: ${MEM_AVAIL}MB"
 
 # ── Kill stuck builds from previous deploys ──
 log "Killing any stuck build processes..."
 pkill -f "next build" 2>/dev/null || true
 pkill -f "bun.*build" 2>/dev/null || true
 sleep 2
-
-# ── Memory report ──
-MEM_FREE=$(free -m | awk '/Mem:/ {print $4}')
-MEM_AVAIL=$(free -m | awk '/Mem:/ {print $7}')
-log "Memory: Free=${MEM_FREE}MB, Available=${MEM_AVAIL}MB"
 
 # ── Self-Healing: If PM2 not running and .next exists, start immediately ──
 PM2_STATUS=$(pm2 pid recruitpro 2>/dev/null || echo "stopped")
@@ -146,13 +113,11 @@ else
     log "No migration script found, skipping."
 fi
 
-# ── Clean caches to free memory before build ──
+# ── Clean caches to free memory ──
 log "Cleaning caches..."
 rm -rf /tmp/.bun-* 2>/dev/null || true
 rm -rf node_modules/.cache 2>/dev/null || true
 npm cache clean --force 2>/dev/null || true
-MEM_AFTER_CLEAN=$(free -m | awk '/Mem:/ {print $7}')
-log "Memory after cleanup: Available=${MEM_AFTER_CLEAN}MB"
 
 log "=========================================="
 log "QUICK STEPS DONE — starting build"
@@ -160,8 +125,6 @@ log "=========================================="
 
 # ── Build in BACKGROUND (memory-safe) ──
 nohup bash -c '
-set -e
-
 export PATH="$HOME/.bun/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node/ 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -196,20 +159,19 @@ else
     log "[BUILD] No existing .next to backup (first deploy)."
 fi
 
-# ── STEP B: STOP PM2 to free ~350MB for build ──
+# ── STEP B: STOP PM2 to free ~300MB for build ──
 log "[BUILD] Stopping PM2 to free memory for build..."
 PM2_PID=$(pm2 pid recruitpro 2>/dev/null || echo "stopped")
 if [ "$PM2_PID" != "stopped" ] && [ -n "$PM2_PID" ]; then
     pm2 stop recruitpro 2>/dev/null || true
     sleep 3
-    log "[BUILD] PM2 stopped (freed ~350MB)"
+    log "[BUILD] PM2 stopped (freed ~300MB)"
 else
     log "[BUILD] PM2 was not running"
 fi
 
-# Clear any remaining node/bun processes hogging memory
+# Kill any remaining build processes
 pkill -f "next build" 2>/dev/null || true
-sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
 sleep 1
 
 MEM_BEFORE=$(free -m | awk "/Mem:/ {print \$7}")
@@ -224,9 +186,8 @@ if NODE_OPTIONS="--max-old-space-size=256" npx next build >> "$BUILD_LOG" 2>&1; 
 else
     BUILD_EXIT=$?
     log "[BUILD] Build FAILED (exit code $BUILD_EXIT)"
-    # Show last 10 lines of build log
-    log "[BUILD] Build error tail:"
-    tail -10 "$BUILD_LOG" 2>/dev/null | while read line; do log "[BUILD]   $line"; done
+    log "[BUILD] Last 15 lines of build log:"
+    tail -15 "$BUILD_LOG" 2>/dev/null | while read line; do log "[BUILD]   $line"; done
 fi
 
 if [ "$BUILD_SUCCESS" = true ]; then
@@ -298,8 +259,6 @@ fi
 log "[BUILD] Cleaning up..."
 rm -f /home/ubuntu/bun.lock /home/ubuntu/package-lock.json /home/ubuntu/.env
 rm -f /tmp/recruitpro-deploy.lock
-MEM_FINAL=$(free -m | awk "/Mem:/ {print \$7}")
-log "[BUILD] Final available memory: ${MEM_FINAL}MB"
 log "[BUILD] Done."
 ' > /dev/null 2>&1 &
 
