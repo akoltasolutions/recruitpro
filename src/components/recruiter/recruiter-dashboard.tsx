@@ -164,9 +164,9 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
   if (loading) {
     return (
       <div className="p-4 sm:p-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-28 rounded-xl" />
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-[140px] rounded-xl" />
           ))}
         </div>
         <Skeleton className="h-64 rounded-xl" />
@@ -189,8 +189,8 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
         onStatusChange={(status) => setUserStatus(status)}
       />
 
-      {/* Stats Cards — matching Admin Dashboard */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <StatsCard
           title="Total Calls"
           value={dailyStats?.todayCalls ?? 0}
@@ -199,7 +199,7 @@ export function RecruiterDashboard({ userId, onNavigate }: RecruiterDashboardPro
           iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
         />
         <StatsCard
-          title="Avg Talk Time"
+          title="Average Talk Time"
           value={formatDuration(dailyStats?.avgTalkTime ?? 0)}
           icon={Clock}
           description="Per call average"

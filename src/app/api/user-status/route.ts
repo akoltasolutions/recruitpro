@@ -15,6 +15,7 @@ interface StatusInfo {
   loginTime: string | null;
   totalBreakDurationMs: number;
   totalActiveDurationMs: number;
+  totalIdleDurationMs: number;
   currentBreakStartTime: string | null;
 }
 
@@ -35,6 +36,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
       loginTime: null,
       totalBreakDurationMs: 0,
       totalActiveDurationMs: 0,
+      totalIdleDurationMs: 0,
       currentBreakStartTime: null,
     };
   }
@@ -136,6 +138,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     loginTime,
     totalBreakDurationMs,
     totalActiveDurationMs,
+    totalIdleDurationMs,
     currentBreakStartTime,
   };
 }
@@ -252,6 +255,7 @@ export async function POST(request: NextRequest) {
       loginTime: updatedInfo.loginTime,
       totalBreakDurationMs: updatedInfo.totalBreakDurationMs,
       totalActiveDurationMs: updatedInfo.totalActiveDurationMs,
+      totalIdleDurationMs: updatedInfo.totalIdleDurationMs,
       currentBreakStartTime: updatedInfo.currentBreakStartTime,
     });
   } catch (error) {

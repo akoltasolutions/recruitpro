@@ -296,49 +296,61 @@ export function TeamPerformance() {
         </div>
       </div>
 
-      {/* ─── Stats Row (matching Admin Dashboard) ─── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+      {/* ─── Stats Row ─── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <Phone className="h-4 w-4 text-emerald-600" />
-            <span className="text-xs text-muted-foreground font-medium">Total Calls</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+              <Phone className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold">{loading ? '—' : stats.totalCalls}</p>
+            <p className="text-xs font-medium text-muted-foreground">Total Calls</p>
           </div>
-          <p className="text-2xl font-bold">{loading ? '—' : stats.totalCalls}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-4 w-4 text-blue-600" />
-            <span className="text-xs text-muted-foreground font-medium">Avg Talk Time</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">
+              <Clock className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold text-blue-600">{loading ? '—' : formatCallDuration(stats.avgTalkTime)}</p>
+            <p className="text-xs font-medium text-muted-foreground">Average Talk Time</p>
           </div>
-          <p className="text-2xl font-bold text-blue-600">{loading ? '—' : formatCallDuration(stats.avgTalkTime)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <Timer className="h-4 w-4 text-purple-600" />
-            <span className="text-xs text-muted-foreground font-medium">Total Call Time</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-400">
+              <Timer className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold text-purple-600">{loading ? '—' : formatCallDuration(stats.totalDuration)}</p>
+            <p className="text-xs font-medium text-muted-foreground">Total Call Time</p>
           </div>
-          <p className="text-2xl font-bold text-purple-600">{loading ? '—' : formatCallDuration(stats.totalDuration)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="h-4 w-4 text-orange-600" />
-            <span className="text-xs text-muted-foreground font-medium">Active Hours</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold text-orange-600">{loading ? '—' : formatActiveHours(stats.activeMinutes)}</p>
+            <p className="text-xs font-medium text-muted-foreground">Active Hours</p>
           </div>
-          <p className="text-2xl font-bold text-orange-600">{loading ? '—' : formatActiveHours(stats.activeMinutes)}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <CheckCircle className="h-4 w-4 text-emerald-600" />
-            <span className="text-xs text-muted-foreground font-medium">Shortlisted</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+              <CheckCircle className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : stats.shortlisted}</p>
+            <p className="text-xs font-medium text-muted-foreground">Shortlisted</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : stats.shortlisted}</p>
         </div>
         <div className="rounded-lg border p-4 bg-card">
-          <div className="flex items-center gap-2 mb-1">
-            <XCircle className="h-4 w-4 text-red-600" />
-            <span className="text-xs text-muted-foreground font-medium">Not Connected</span>
+          <div className="flex flex-col items-center text-center gap-2">
+            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">
+              <XCircle className="h-5 w-5" />
+            </div>
+            <p className="text-2xl font-bold text-red-600">{loading ? '—' : stats.notConnected}</p>
+            <p className="text-xs font-medium text-muted-foreground">Not Connected</p>
           </div>
-          <p className="text-2xl font-bold text-red-600">{loading ? '—' : stats.notConnected}</p>
         </div>
       </div>
 

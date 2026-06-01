@@ -117,15 +117,15 @@ export function AdminDashboard() {
       </PageHeader>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-[120px] rounded-xl" />
+            <Skeleton key={i} className="h-[140px] rounded-xl" />
           ))}
         </div>
       ) : (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <StatsCard
               title="Total Calls"
               value={data?.totalCalls ?? 0}
@@ -134,7 +134,7 @@ export function AdminDashboard() {
               iconColor="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
             />
             <StatsCard
-              title="Avg Talk Time"
+              title="Average Talk Time"
               value={formatTime(data?.avgCallTime ?? 0)}
               icon={Clock}
               description="Per call average"
@@ -158,7 +158,7 @@ export function AdminDashboard() {
               title="Not Connected"
               value={data?.notConnectedCount ?? 0}
               icon={XCircle}
-              description="Switched Off / Invalid / Busy / Failed / Not Answered"
+              description="Switched Off / Busy / Failed / Not Answered"
               iconColor="bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
             />
             <StatsCard

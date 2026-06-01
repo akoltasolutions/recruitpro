@@ -21,6 +21,7 @@ interface StatusInfo {
   loginTime: string | null
   totalBreakDurationMs: number
   totalActiveDurationMs: number
+  totalIdleDurationMs: number
   currentBreakStartTime: string | null
 }
 
@@ -144,38 +145,6 @@ function formatLoginTime(dateStr: string | null): string {
 }
 
 // ---------------------------------------------------------------------------
-// Confirmation Dialog (inline)
-// ---------------------------------------------------------------------------
-
-function ConfirmOverlay({
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  message: string
-  onConfirm: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-background/80 backdrop-blur-sm">
-      <Card className="w-72 shadow-lg">
-        <CardContent className="p-5 text-center space-y-3">
-          <p className="text-sm font-medium">{message}</p>
-          <div className="flex gap-2 justify-center">
-            <Button variant="outline" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={onConfirm} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Confirm
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -183,7 +152,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   const [statusInfo, setStatusInfo] = useState<StatusInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)
-  const [confirmTarget, setConfirmTarget] = useState<UserStatus | null>(null)
   const mountedRef = useRef(true)
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const idleStartedAtRef = useRef<string | null>(null)
@@ -203,7 +171,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
       const data: StatusInfo = await res.json()
       if (mountedRef.current) {
         // Track when the IDLE period started (for live idle timer display)
-        // Use the loginTime from API as the idle start reference (since IDLE is the default)
         if (data.status === 'IDLE' && !idleStartedAtRef.current) {
           idleStartedAtRef.current = data.loginTime || new Date().toISOString()
         } else if (data.status !== 'IDLE') {
@@ -211,9 +178,9 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         }
         lastFetchTimeRef.current = Date.now()
         setStatusInfo(data)
-        // Sync status to localStorage so AutoDialer can check it (on every fetch, not just manual switch)
+        // Sync status to localStorage so AutoDialer can check it
         try { localStorage.setItem('recruiter_current_status', data.status) } catch { /* ignore */ }
-        // Notify parent of actual status on initial fetch (not on subsequent refreshes)
+        // Notify parent of actual status on initial fetch
         if (!initialFetchDoneRef.current) {
           initialFetchDoneRef.current = true
           onStatusChange?.(data.status)
@@ -244,7 +211,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   const currentStatus = statusInfo?.status || 'OFFLINE'
 
   const handleAutoIdle = useCallback(() => {
-    // When auto-idle fires, refresh status from API
     fetchStatus()
     onStatusChange?.('IDLE')
   }, [fetchStatus, onStatusChange])
@@ -255,22 +221,19 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   })
 
   // -----------------------------------------------------------------------
-  // Status switch handler
+  // Status switch handler — DIRECT, no intermediate step needed
   // -----------------------------------------------------------------------
 
   const handleStatusSwitch = useCallback(
     async (target: UserStatus) => {
-      // Don't switch to OFFLINE (that's a system status, not user-selectable)
-      if (target === 'OFFLINE') {
-        setConfirmTarget(null)
-        return
-      }
+      // Don't switch to OFFLINE (system status)
+      if (target === 'OFFLINE') return
 
-      // Don't switch if already on the same status (except LUNCH can be re-done)
-      if (statusInfo && statusInfo.status === target && target !== 'LUNCH') {
-        setConfirmTarget(null)
-        return
-      }
+      // Don't switch if already on the same status (except LUNCH)
+      if (statusInfo && statusInfo.status === target && target !== 'LUNCH') return
+
+      // Don't switch if already switching
+      if (switching) return
 
       setSwitching(true)
       try {
@@ -284,7 +247,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         }
         const updated: StatusInfo = await res.json()
         setStatusInfo(updated)
-        // Save to localStorage so AutoDialer can check status restriction
         try { localStorage.setItem('recruiter_current_status', target) } catch { /* ignore */ }
         toast.success(`Status changed to ${STATUS_CONFIG[target]?.label || target}`)
         onStatusChange?.(target)
@@ -292,18 +254,16 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
         toast.error(err instanceof Error ? err.message : 'Failed to update status')
       } finally {
         setSwitching(false)
-        setConfirmTarget(null)
       }
     },
-    [statusInfo, onStatusChange],
+    [statusInfo, onStatusChange, switching],
   )
 
   // -----------------------------------------------------------------------
   // Live timers
   // -----------------------------------------------------------------------
 
-  // Active timer: only counts up when status is ACTIVE (not IDLE, LUNCH, or BREAK)
-  // We use totalActiveDurationMs from the API plus elapsed time since last fetch
+  // Active timer: only counts up when status is ACTIVE
   const isActiveTimerStatus = currentStatus === 'ACTIVE'
 
   // Simple elapsed-since-fetch counter (1-second interval)
@@ -338,6 +298,10 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
 
   // Total break duration today (from API — already capped for orphaned breaks)
   const totalBreakTodayMs = statusInfo?.totalBreakDurationMs ?? 0
+
+  // Total idle duration today (from API + live if currently idle)
+  const totalIdleTodayMs = (statusInfo?.totalIdleDurationMs ?? 0) +
+    (statusInfo?.status === 'IDLE' ? idleElapsedMs - (statusInfo?.totalIdleDurationMs ? 0 : 0) : 0)
 
   // -----------------------------------------------------------------------
   // Render
@@ -402,14 +366,25 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             </div>
           </div>
 
-          {/* Right: Quick stats */}
-          <div className="flex items-center gap-4 text-sm">
+          {/* Right: Quick stats — Login, Idle Time, Break Total, Active */}
+          <div className="flex items-center gap-3 sm:gap-4 text-sm flex-wrap">
             <div className="flex flex-col items-center sm:items-end">
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Login
               </span>
               <span className="font-medium">{formatLoginTime(statusInfo?.loginTime ?? null)}</span>
+            </div>
+            <div className="flex flex-col items-center sm:items-end">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Moon className="h-3 w-3" />
+                Idle Time
+              </span>
+              <span className="font-medium text-slate-600 dark:text-slate-400">
+                {statusInfo?.status === 'IDLE'
+                  ? formatDuration(idleElapsedMs)
+                  : formatDuration(statusInfo?.totalIdleDurationMs ?? 0)}
+              </span>
             </div>
             <div className="flex flex-col items-center sm:items-end">
               <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -461,13 +436,13 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
           </div>
         )}
 
-        {/* ── Status Buttons ────────────────────────────────────────── */}
+        {/* ── Status Buttons — Direct Switch (No confirmation) ────────── */}
         <div className="mt-4 flex flex-wrap gap-2">
-          {/* Idle button */}
+          {/* Idle button — always enabled */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('IDLE')}
+            onClick={() => handleStatusSwitch('IDLE')}
             disabled={switching}
             className={
               currentStatus === 'IDLE'
@@ -475,7 +450,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'IDLE' ? (
+            {switching ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Moon className="h-3.5 w-3.5" />
@@ -487,7 +462,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('LUNCH')}
+            onClick={() => handleStatusSwitch('LUNCH')}
             disabled={switching}
             className={
               currentStatus === 'LUNCH'
@@ -495,7 +470,7 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'LUNCH' ? (
+            {switching ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Coffee className="h-3.5 w-3.5" />
@@ -503,19 +478,19 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             🍱 Lunch
           </Button>
 
-          {/* Break button */}
+          {/* Break button — always enabled (direct switch) */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('ON_BREAK')}
-            disabled={switching || currentStatus === 'OFFLINE'}
+            onClick={() => handleStatusSwitch('ON_BREAK')}
+            disabled={switching}
             className={
               currentStatus === 'ON_BREAK'
                 ? STATUS_CONFIG.ON_BREAK.activeBtnClass
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'ON_BREAK' ? (
+            {switching ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Coffee className="h-3.5 w-3.5" />
@@ -523,19 +498,19 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
             ☕ Break
           </Button>
 
-          {/* Active button */}
+          {/* Active button — always enabled (direct switch) */}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setConfirmTarget('ACTIVE')}
-            disabled={switching || currentStatus === 'OFFLINE'}
+            onClick={() => handleStatusSwitch('ACTIVE')}
+            disabled={switching}
             className={
               currentStatus === 'ACTIVE'
                 ? STATUS_CONFIG.ACTIVE.activeBtnClass
                 : 'gap-1.5'
             }
           >
-            {switching && confirmTarget === 'ACTIVE' ? (
+            {switching ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <CheckCircle className="h-3.5 w-3.5" />
@@ -544,15 +519,6 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
           </Button>
         </div>
       </CardContent>
-
-      {/* ── Confirmation Overlay ───────────────────────────────────── */}
-      {confirmTarget && (
-        <ConfirmOverlay
-          message={`Switch to ${STATUS_CONFIG[confirmTarget]?.label || confirmTarget}?`}
-          onConfirm={() => handleStatusSwitch(confirmTarget)}
-          onCancel={() => setConfirmTarget(null)}
-        />
-      )}
     </Card>
   )
 }
