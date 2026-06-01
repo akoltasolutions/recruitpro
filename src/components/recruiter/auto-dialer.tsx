@@ -1534,11 +1534,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             {isMobile && <div>
               <div
                 className="fixed inset-0 bg-black/50 flex items-center justify-center"
-                style={{ zIndex: 10003, touchAction: 'manipulation' }}
+                data-dialer-overlay="timer"
+                style={{ touchAction: 'manipulation' }}
               >
                 <div
                   className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
-                  style={{ touchAction: 'manipulation', zIndex: 10003 }}
+                  data-dialer-sheet="timer"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   {/* Close button */}
                   <button
@@ -1607,11 +1609,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             {isMobile && <div>
               <div
                 className="fixed inset-0 bg-black/50 flex items-center justify-center"
-                style={{ zIndex: 10003, touchAction: 'manipulation' }}
+                data-dialer-overlay="timer"
+                style={{ touchAction: 'manipulation' }}
               >
                 <div
                   className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
-                  style={{ touchAction: 'manipulation', zIndex: 10003 }}
+                  data-dialer-sheet="timer"
+                  style={{ touchAction: 'manipulation' }}
                 >
                   {/* Close button */}
                   <button
@@ -1694,7 +1698,8 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             {/* Overlay — clickable to close popup */}
             <div
               className="fixed inset-0 bg-black/40"
-              style={{ zIndex: 10000, touchAction: 'none' }}
+              data-dialer-overlay="disposition"
+              style={{ touchAction: 'none' }}
               onClick={() => {
                 if (!savingRecord) {
                   setIsDispositionModalOpen(false)
@@ -1712,9 +1717,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 Height is calculated from window.innerHeight (JS), NOT CSS dvh/vh units. */}
             <div
               className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
+              data-dialer-sheet="disposition"
               style={{
                 bottom: 0,
-                zIndex: 10001,
                 /* Use JS-measured height — reliable in all Android WebView versions */
                 height: sheetHeight > 100 ? `${sheetHeight}px` : '85vh',
                 display: 'flex',
@@ -2039,12 +2044,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
           <>
             <div
               className="fixed inset-0 bg-black/30"
-              style={{ zIndex: 10004, touchAction: 'none' }}
+              data-dialer-overlay="template"
+              style={{ touchAction: 'none' }}
               onClick={() => setTemplateSheetOpen(null)}
             />
             <div
               className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
-              style={{ bottom: 0, zIndex: 10005, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              data-dialer-sheet="template"
+              style={{ bottom: 0, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
               <div
                 className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0"
@@ -2338,10 +2345,11 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 {/* Template selection bottom-sheet (desktop) */}
                 {templateSheetOpen && (
                   <div>
-                    <div className="fixed inset-0 bg-black/30" style={{ zIndex: 10004, touchAction: 'none' }}
+                    <div className="fixed inset-0 bg-black/30" data-dialer-overlay="template" style={{ touchAction: 'none' }}
                       onClick={() => setTemplateSheetOpen(null)} />
                     <div className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
-                      style={{ bottom: 0, zIndex: 10005, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      data-dialer-sheet="template"
+              style={{ bottom: 0, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                       <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
                         <p className="text-sm font-semibold">
                           {templateSheetOpen === 'sms' ? 'Select SMS Template' : 'Select WhatsApp Template'}

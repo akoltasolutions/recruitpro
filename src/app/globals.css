@@ -136,19 +136,25 @@
 /* ============================================================
  * Z-INDEX HIERARCHY (Android WebView safe)
  * ============================================================
- * z-30      Desktop/Mobile header (sticky, backdrop-blur)
- * z-[9999]  Mobile bottom nav (below all overlays)
- * z-[10000] Sheet/Dialog/AlertDialog overlay (above nav)
- * z-[10001] Sheet/Dialog/AlertDialog content (above overlay)
- * z-[10002] Select/DropdownMenu/Popover/Tooltip (above Dialog)
- * z-[10003] Gap timer overlay (mobile, custom CSS)
- * z-[10004] Client/Template bottom-sheet overlay (mobile)
- * z-[10005] Client/Template bottom-sheet content (mobile)
+ * z-30       Desktop/Mobile header (sticky, backdrop-blur)
+ * z-[9999]   Mobile bottom nav (below all overlays)
+ * z-[10000]  Sheet/Dialog/AlertDialog overlay (above nav)
+ * z-[10001]  Sheet/Dialog/AlertDialog content (above overlay)
+ * z-[10001]  Dialer disposition sheet overlay + content (mobile)
+ * z-[10002]  Select/DropdownMenu/Popover/Tooltip (above Dialog)
+ * z-[10003]  Gap timer / pre-call timer overlay (mobile)
+ * z-[10004]  Client/Template bottom-sheet overlay (mobile)
+ * z-[10005]  Client/Template bottom-sheet content (mobile)
+ * z-[10006]  Toast/Sonner notifications (above everything)
  *
  * CRITICAL: Do NOT set z-index on [data-radix-portal] or
  * [data-radix-popper-content-wrapper] — that creates a stacking
  * context which TRAPS child z-index values. Let children's own
  * z-index resolve in the root stacking context.
+ *
+ * All auto-dialer overlays use [data-dialer-overlay] and
+ * [data-dialer-sheet] data attributes so they participate
+ * in this single-source-of-truth hierarchy.
  * ============================================================ */
 
 /* Do NOT set z-index on portal containers — must not create stacking context.
@@ -193,6 +199,37 @@
   pointer-events: auto !important;
 }
 
+/* ─── Auto-Dialer Custom Overlays (mobile bottom sheets) ─── */
+/* Disposition bottom-sheet: overlay + content at z-10001 (same as Dialog) */
+[data-dialer-overlay="disposition"] {
+  z-index: 10000 !important;
+  pointer-events: none !important;
+}
+[data-dialer-sheet="disposition"] {
+  z-index: 10001 !important;
+  pointer-events: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Pre-call countdown / Gap timer: z-10003 (above Select) */
+[data-dialer-overlay="timer"] {
+  z-index: 10003 !important;
+}
+[data-dialer-sheet="timer"] {
+  z-index: 10003 !important;
+}
+
+/* Template/Client selection bottom-sheet: overlay + content */
+[data-dialer-overlay="template"] {
+  z-index: 10004 !important;
+  pointer-events: none !important;
+}
+[data-dialer-sheet="template"] {
+  z-index: 10005 !important;
+  pointer-events: auto !important;
+  overflow-x: hidden !important;
+}
+
 /* Ensure close buttons inside dialogs are always clickable */
 [data-slot="dialog-close"] {
   pointer-events: auto !important;
@@ -203,7 +240,9 @@
 [data-slot="dialog-content"] button,
 [data-slot="dialog-content"] a,
 [data-slot="alert-dialog-content"] button,
-[data-slot="alert-dialog-content"] a {
+[data-slot="alert-dialog-content"] a,
+[data-dialer-sheet] button,
+[data-dialer-sheet] a {
   touch-action: manipulation;
   pointer-events: auto;
 }
