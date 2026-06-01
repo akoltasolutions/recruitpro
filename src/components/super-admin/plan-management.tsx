@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   CreditCard, Plus, Pencil, Copy, Trash2, Users, Phone, Upload, HardDrive,
@@ -30,7 +30,7 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// ScrollArea not needed — using native overflow for reliable scroll in flex dialog
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -198,6 +198,7 @@ function PlanStatusBadge({ status }: { status: boolean }) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PlanManagement() {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -608,7 +609,7 @@ export function PlanManagement() {
 
       {/* ═══════════ Create / Edit Dialog ═══════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" ref={dialogRef}>
           <DialogHeader>
             <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle>
             <DialogDescription>
@@ -618,7 +619,7 @@ export function PlanManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
             <div className="grid gap-5 py-2">
               {/* Name & Type */}
               <div className="grid gap-4 sm:grid-cols-2">
@@ -638,7 +639,7 @@ export function PlanManagement() {
                     <SelectTrigger id="plan-type">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent container={dialogRef.current}>
                       <SelectItem value="FREE">Free</SelectItem>
                       <SelectItem value="STARTER">Starter</SelectItem>
                       <SelectItem value="PAID">Paid</SelectItem>
@@ -818,7 +819,7 @@ export function PlanManagement() {
                 </div>
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
