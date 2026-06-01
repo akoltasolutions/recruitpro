@@ -548,3 +548,31 @@ Stage Summary:
 - Data sourced from same ActivityLog calculations as recruiter dashboard (synced)
 - Auto-refresh every 30s ensures real-time sync between recruiter panel and admin panel
 - No existing functionality disturbed
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Fix client creation "Creation failed" error at #/clients
+
+Work Log:
+- Analyzed screenshot via VLM — confirmed "Add Client" dialog with "Smile Ecom" and red "Creation failed" toast
+- Read client-management.tsx, /api/clients/route.ts, /api/clients/[id]/route.ts, auth-middleware.ts, auth-fetch.ts
+- Identified root causes:
+  1. **Error key mismatch**: API returns `{ error: 'Client already exists' }` but frontend reads `err.message` (always undefined → generic "Creation failed")
+  2. **Missing organizationId**: POST handler creates clients without org association, breaking multi-tenant isolation
+  3. **No Prisma error handling**: P2002 (unique constraint) and P2003 (FK constraint) errors thrown as generic 500
+  4. **No rename duplicate check**: PUT handler could cause unique violation when renaming
+- Fixed frontend: Changed all error reads from `err.message` to `err.error` in handleSubmit, handleDelete, handleToggleActive
+- Fixed backend POST: Added `organizationId: auth.organizationId` to client.create()
+- Fixed backend POST: Added Prisma P2002 catch returning 409
+- Fixed backend PUT: Added pre-rename duplicate name check + P2002 catch
+- Fixed backend DELETE: Added Prisma P2003 catch returning 409 with "Cannot delete client with existing call records"
+- Lint passes clean, dev server compiles without errors
+- Committed as 93dbd90, pushed to main → GitHub Actions deploy triggered
+
+Stage Summary:
+- 3 files changed: clients/route.ts (+13,-1), clients/[id]/route.ts (+15), client-management.tsx (+8,-8)
+- Client creation now works correctly with proper organization scoping
+- Error messages now properly propagate from API to toast notifications
+- Prisma constraint violations caught and return meaningful HTTP errors (409)
+- No existing functionality disturbed
