@@ -576,3 +576,27 @@ Stage Summary:
 - Error messages now properly propagate from API to toast notifications
 - Prisma constraint violations caught and return meaningful HTTP errors (409)
 - No existing functionality disturbed
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Fix persistent "Internal server error" on client creation at #/clients
+
+Work Log:
+- User reported still getting "Internal server error" after previous fix
+- Analyzed screenshot — confirmed same Add Client dialog with "Smile Ecom" showing 500 error
+- Tested db.client.findUnique({ where: { name } }) directly — it THREW a Prisma error:
+  "Invalid `prisma.client.findUnique()` invocation" — because Client.name has NO @unique constraint
+- Root cause: The API code uses findUnique on `name` field, but Prisma requires @unique for findUnique
+- Without @unique, findUnique throws an error caught by catch block → returns 500
+- This was the REAL root cause ALL ALONG — the "Creation failed" from the first report was also this 500 error
+  (just masked by the frontend err.message bug)
+- Added @unique annotation to Client.name in prisma/schema.prisma
+- Ran prisma db push --accept-data-loss to apply the unique constraint
+- Verified: findUnique now works, create works, duplicate detection works
+- Lint clean, dev server compiles
+
+Stage Summary:
+- 1 file changed: prisma/schema.prisma (+1, -1)
+- Added @unique constraint to Client.name — this was the actual root cause of client creation failure
+- Both the "Creation failed" and "Internal server error" errors were the same underlying Prisma error
