@@ -198,6 +198,35 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const all: CallListInfo[] = data.callLists || []
       const assigned = all.filter((l) => l.assignments.some((a) => a.recruiterId === userId))
       setCallLists(assigned)
+
+      // Auto-select list if redirected from "Start Dialing" button
+      try {
+        const autoListId = sessionStorage.getItem('auto_select_list_id')
+        if (autoListId) {
+          sessionStorage.removeItem('auto_select_list_id')
+          const targetList = assigned.find((l) => l.id === autoListId)
+          if (targetList) {
+            const pendingCount = targetList.candidates.filter(
+              (c) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+            ).length
+            if (pendingCount > 0) {
+              setSelectedList(targetList)
+              setScreen('list-summary')
+              // Load candidates for auto-selected list
+              const candRes = await authFetch(`/api/call-lists/${targetList.id}/candidates`)
+              if (candRes.ok) {
+                const candData = await candRes.json()
+                const pending = (candData.candidates || []).filter(
+                  (c: Candidate) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+                )
+                setCandidates(pending)
+              }
+            } else {
+              toast.info('This list has no pending candidates.', { duration: 3000 })
+            }
+          }
+        }
+      } catch { /* ignore sessionStorage errors */ }
     } catch {
       toast.error('Failed to load calling lists')
     }

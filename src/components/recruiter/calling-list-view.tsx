@@ -15,7 +15,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import {
-  PhoneCall, Users, Search, ChevronDown, ChevronUp, Eye, Clock,
+  PhoneCall, Users, Search, ChevronDown, ChevronUp, Eye, Clock, Play,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
@@ -129,6 +129,22 @@ export function CallingListView({ userId, onNavigate }: Props) {
     setCandidatesOpen(true)
   }
 
+  // Find the first list with pending candidates and start dialing
+  const handleStartDialing = () => {
+    const listWithPending = callingLists.find(
+      (l) => l.candidates.some((c) => c.status === 'PENDING' || c.status === 'SCHEDULED')
+    )
+    if (!listWithPending) {
+      toast.info('No pending calling lists available. All candidates have been called.', { duration: 4000 })
+      return
+    }
+    // Store the list ID in sessionStorage for AutoDialer to pick up
+    try {
+      sessionStorage.setItem('auto_select_list_id', listWithPending.id)
+    } catch { /* ignore */ }
+    onNavigate('pending')
+  }
+
   const getListStats = (list: CallingList) => {
     const total = list.candidates.length
     const pending = list.candidates.filter((c) => c.status === 'PENDING').length
@@ -157,6 +173,18 @@ export function CallingListView({ userId, onNavigate }: Props) {
         description="View your assigned calling lists and candidates"
         icon={PhoneCall}
       />
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button
+          onClick={handleStartDialing}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          disabled={callingLists.length === 0}
+        >
+          <Play className="h-4 w-4 mr-2" />
+          Start Dialing
+        </Button>
+      </div>
 
       {/* Search bar */}
       <div className="relative max-w-sm">
