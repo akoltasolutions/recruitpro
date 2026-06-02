@@ -223,15 +223,15 @@
 
 /* ─── Select/Dropdown/Popover: ABOVE Dialog content ─── */
 /* CRITICAL: pointer-events:auto overrides Dialog's body pointer-events:none.
-   These MUST be in the root stacking context (portal has isolation:auto). */
+   These MUST be in the root stacking context (portal has isolation:auto).
+   NOTE: Do NOT set position:fixed here — it breaks Radix Popper positioning.
+   The z-index alone is sufficient since portals resolve in root stacking context. */
 [data-slot="select-content"],
 [data-slot="dropdown-menu-content"],
 [data-slot="dropdown-menu-sub-content"],
 [data-slot="popover-content"] {
   z-index: 10002 !important;
   pointer-events: auto !important;
-  position: fixed !important;
-  overflow: visible !important;
 }
 
 /* ─── Tooltip: above Dialog content ─── */
