@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useApprovalPendingCount } from '@/hooks/useApprovalPendingCount'
 import { cn } from '@/lib/utils'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton,
+  SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuBadge, SidebarMenuButton,
   SidebarMenuItem, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -55,6 +56,7 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
   const { user } = useAuthStore()
   const isMobile = useIsMobile()
   const [moreOpen, setMoreOpen] = useState(false)
+  const approvalCount = useApprovalPendingCount()
 
   const sidebarContent = (
     <>
@@ -88,6 +90,11 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                     <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-emerald-600')} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
+                  {item.key === 'approvals' && approvalCount !== null && approvalCount > 0 && (
+                    <SidebarMenuBadge className="bg-amber-500 text-white hover:bg-amber-500">
+                      {approvalCount > 99 ? '99+' : approvalCount}
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -186,7 +193,12 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
+                      <span className="flex-1 text-left">{item.label}</span>
+                      {item.key === 'approvals' && approvalCount !== null && approvalCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none px-1.5 tabular-nums">
+                          {approvalCount > 99 ? '99+' : approvalCount}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

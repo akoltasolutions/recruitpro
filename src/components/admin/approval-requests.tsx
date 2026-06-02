@@ -8,6 +8,7 @@ import {
   Loader2, Eye, UserPlus,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/page-header'
+import { invalidateApprovalBadgeCount } from '@/hooks/useApprovalPendingCount'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -64,6 +65,7 @@ export function ApprovalRequests() {
       toast.success(`"${approveConfirm.name}" has been approved! They can now log in.`)
       setDetailOpen(false)
       setApproveConfirm(null)
+      invalidateApprovalBadgeCount()
       fetchPendingUsers()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to approve user')
@@ -83,6 +85,7 @@ export function ApprovalRequests() {
       }
       toast.success(`Registration for "${rejectConfirm.name}" has been rejected.`)
       setRejectConfirm(null)
+      invalidateApprovalBadgeCount()
       fetchPendingUsers()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to reject user')
