@@ -18,11 +18,12 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Tag, PhoneCall, MessageSquare, Building2, Users, LogOut,
   Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone, MoreHorizontal,
-  Settings2, Palette, Clock,
+  Settings2, Palette, Clock, Bell,
 } from 'lucide-react'
 
 const menuItems = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { key: 'approvals', label: 'Approval Requests', icon: UserCheck },
   { key: 'team-performance', label: 'Team Performance', icon: BarChart3 },
   { key: 'team-monitoring', label: 'Team Monitoring', icon: Activity },
   { key: 'shift-management', label: 'Shift Management', icon: Clock },
@@ -33,7 +34,6 @@ const menuItems = [
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'users', label: 'User Management', icon: Users },
   { key: 'team-enhanced', label: 'Team Management', icon: Users },
-  { key: 'approvals', label: 'Approval Requests', icon: UserCheck },
   { key: 'field-builder', label: 'Field Builder', icon: Settings2 },
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette },
   { key: 'settings', label: 'Settings', icon: Settings },
@@ -57,6 +57,7 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
   const isMobile = useIsMobile()
   const [moreOpen, setMoreOpen] = useState(false)
   const approvalCount = useApprovalPendingCount()
+  const hasApprovals = approvalCount !== null && approvalCount > 0
 
   const sidebarContent = (
     <>
@@ -90,9 +91,9 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                     <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-emerald-600')} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
-                  {item.key === 'approvals' && approvalCount !== null && approvalCount > 0 && (
+                  {item.key === 'approvals' && hasApprovals && (
                     <SidebarMenuBadge className="bg-amber-500 text-white hover:bg-amber-500">
-                      {approvalCount > 99 ? '99+' : approvalCount}
+                      {approvalCount! > 99 ? '99+' : approvalCount}
                     </SidebarMenuBadge>
                   )}
                 </SidebarMenuItem>
@@ -124,14 +125,38 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
     </>
   )
 
+  // Shared header content with approval notification bell
+  const headerRight = (
+    <div className="flex items-center gap-1 ml-auto">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative shrink-0"
+        onClick={() => onNavigate('approvals')}
+      >
+        <Bell className="h-4 w-4" />
+        {hasApprovals && (
+          <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none px-1">
+            {approvalCount! > 9 ? '9+' : approvalCount}
+          </span>
+        )}
+      </Button>
+    </div>
+  )
+
   if (isMobile) {
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="shrink-0">
+              <Button variant="ghost" size="icon" className="shrink-0 relative">
                 <Menu className="h-5 w-5" />
+                {hasApprovals && (
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                    {approvalCount! > 9 ? '9+' : approvalCount}
+                  </span>
+                )}
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
@@ -140,12 +165,13 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
               </div>
             </SheetContent>
           </Sheet>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-600 text-white">
               <Headphones className="h-4 w-4" />
             </div>
             <span className="font-semibold text-sm">RecruitPro</span>
           </div>
+          {headerRight}
         </header>
         <main className="p-4 pb-24">{children}</main>
         <nav className="fixed bottom-0 left-0 right-0 z-[9999] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -155,12 +181,17 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none relative',
                   activePage === item.key ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <item.icon className="h-5 w-5" />
                 <span className="truncate max-w-[56px]">{item.label.split(' ')[0]}</span>
+                {item.key === 'approvals' && hasApprovals && (
+                  <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                    {approvalCount! > 9 ? '9+' : approvalCount}
+                  </span>
+                )}
               </button>
             ))}
             {/* More menu for remaining items */}
@@ -168,12 +199,18 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
               <PopoverTrigger asChild>
                 <button
                   className={cn(
-                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none',
+                    'flex flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 min-w-[52px] min-h-[44px] transition-colors text-[10px] font-medium leading-none relative',
                     moreNavItems.some(item => item.key === activePage) ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
                   <MoreHorizontal className="h-5 w-5" />
                   <span>More</span>
+                  {/* Show badge on More button if approvals are in the More list */}
+                  {hasApprovals && (
+                    <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">
+                      {approvalCount! > 9 ? '9+' : approvalCount}
+                    </span>
+                  )}
                 </button>
               </PopoverTrigger>
               <PopoverContent side="top" align="center" className="w-56 p-2 mb-2">
@@ -194,9 +231,9 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span className="flex-1 text-left">{item.label}</span>
-                      {item.key === 'approvals' && approvalCount !== null && approvalCount > 0 && (
+                      {item.key === 'approvals' && hasApprovals && (
                         <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold leading-none px-1.5 tabular-nums">
-                          {approvalCount > 99 ? '99+' : approvalCount}
+                          {approvalCount! > 99 ? '99+' : approvalCount}
                         </span>
                       )}
                     </button>
@@ -225,6 +262,7 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
             </div>
             <span className="font-semibold text-sm">RecruitPro Admin</span>
           </div>
+          {headerRight}
         </header>
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
