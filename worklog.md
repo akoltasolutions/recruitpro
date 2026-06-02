@@ -193,3 +193,28 @@ Stage Summary:
 - Permanent fix applied: Action column now has minmax(90px,auto) constraint
 - Deploying to production via GitHub Actions
 
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: End-to-end audit and permanent fix for call tracking data not showing in Team Performance
+
+Work Log:
+- Analyzed screenshot showing Om Pratap's Team Performance page with all zeros
+- Read and audited full call tracking flow: AutoDialer → POST /api/call-records → GET /api/team-performance
+- Read Prisma schema: CallRecord model with calledAt, recruiterId, candidateId, organizationId
+- Identified ROOT CAUSE: dateTo filter in /api/team-performance used new Date(dateTo) which parses as midnight UTC
+- Any call made during the day in IST (UTC+5:30) was excluded because its timestamp > midnight UTC
+- Also found: organizationId was never set on CallRecord creation (always null)
+- Also found: no organizationId scoping in any admin APIs (data leak across orgs)
+- Also found: recruiter role filter used 'RECRUITER' but users may have 'USER' role
+
+Stage Summary:
+- Fixed /api/team-performance: startOfDay/endOfDay from date-fns, orgId scoping, recruiter role fix
+- Fixed /api/call-records POST: sets organizationId from recruiter's org
+- Fixed /api/call-records GET: startOfDay/endOfDay, orgId scoping
+- Fixed /api/dashboard: orgId scoping, recruiter role fix, custom date fix
+- Fixed /api/export-calls: startOfDay/endOfDay, orgId scoping
+- Fixed /api/reports/export: orgId scoping, recruiter role fix
+- All changes include error logging for call-tracking failures
+- Committed as e8dd24c and pushed to main, GitHub Actions deploying
