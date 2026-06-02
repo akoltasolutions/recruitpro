@@ -622,7 +622,7 @@ export function TeamMonitoring() {
         <Card className="hidden lg:block">
           <CardContent className="p-0">
             {/* Table header */}
-            <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_0.9fr_auto] items-center gap-3 border-b px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_minmax(90px,0.9fr)_minmax(90px,auto)] items-center gap-3 border-b px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               <span>Recruiter</span>
               <span>Status</span>
               <span className="text-center">Login</span>
@@ -645,7 +645,7 @@ export function TeamMonitoring() {
                 return (
                   <div
                     key={recruiter.userId}
-                    className={`grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_0.9fr_auto] items-center gap-3 px-5 py-3 text-sm ${
+                    className={`grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_minmax(90px,0.9fr)_minmax(90px,auto)] items-center gap-3 px-5 py-3 text-sm ${
                       idx !== statuses.length - 1 ? 'border-b' : ''
                     } hover:bg-muted/50 transition-colors`}
                   >
@@ -713,7 +713,7 @@ export function TeamMonitoring() {
                     </span>
 
                     {/* Action dropdown */}
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       {!offline ? (
                         toggling ? (
                           <Button size="sm" variant="outline" disabled className="h-7 text-xs">
