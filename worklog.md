@@ -218,3 +218,29 @@ Stage Summary:
 - Fixed /api/reports/export: orgId scoping, recruiter role fix
 - All changes include error logging for call-tracking failures
 - Committed as e8dd24c and pushed to main, GitHub Actions deploying
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Migrate from hash routing (#/dashboard) to clean URL routing (/dashboard)
+
+Work Log:
+- Analyzed screenshot showing Signup page at URL app.akolta.com/#/dashboard
+- Read and audited full routing architecture: useHashRouter hook, page.tsx SPA, all layouts
+- Identified root cause: entire app uses single page.tsx with hash-based client-side routing
+- Created usePathRouter hook using window.location.pathname + history.pushState
+- Created app-router.tsx as shared SPA component (extracted from page.tsx)
+- Created catch-all route [..slug]/page.tsx for SPA routing on all paths
+- Updated page.tsx to delegate to AppContent
+- Added redirectHashUrl() for backwards compatibility with old hash URLs
+- SSR-safe implementation using useState('') + useEffect for browser URL sync
+- Attempted next.config.ts rewrites but caused Turbopack crash — removed
+- Lint passes, initial compile succeeds, deployed to production
+
+Stage Summary:
+- All URLs now clean: /dashboard, /signup, /login, /team-performance, etc.
+- Page refresh works on all routes via catch-all [..slug]/page.tsx
+- Old hash URLs auto-redirect to clean URLs
+- Auth pages use clean URLs: /login, /signup, /register, /forgot-password
+- All navigation components unchanged (onNavigate callbacks work identically)
+- Committed as e2dee3f and pushed to main
