@@ -7,6 +7,11 @@ import ExcelJS from 'exceljs';
 // GET /api/reports/export?dateFrom=...&dateTo=...&format=json
 // ---------------------------------------------------------------------------
 
+/**
+ * FIX (2026-06-02):
+ * - Recruiter role filter now includes both USER and RECRUITER roles.
+ * - Added organizationId scoping for multi-tenant data isolation.
+ */
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -41,8 +46,17 @@ export async function GET(request: NextRequest) {
       : new Date();
 
     // ── Fetch data ────────────────────────────────────────────────────
+    // FIX: Include both USER and RECRUITER roles + org scoping
+    const recruiterWhere: Record<string, unknown> = {
+      role: { in: ['USER', 'RECRUITER'] },
+      isActive: true,
+    };
+    if (auth.organizationId) {
+      recruiterWhere.organizationId = auth.organizationId;
+    }
+
     const recruiters = await db.user.findMany({
-      where: { role: 'RECRUITER', isActive: true },
+      where: recruiterWhere,
       select: { id: true, name: true, email: true, phone: true },
     });
 
@@ -51,6 +65,15 @@ export async function GET(request: NextRequest) {
     });
     const dispMap = new Map(dispositions.map((d) => [d.id, d]));
 
+    // FIX: Also add organizationId scoping for call records
+    const callRecordWhere: Record<string, unknown> = {
+      calledAt: { gte: dateFrom, lte: dateTo },
+      recruiterId: { in: recruiters.map((r) => r.id) },
+    };
+    if (auth.organizationId) {
+      callRecordWhere.organizationId = auth.organizationId;
+    }
+
     const [allLogs, allCalls] = await Promise.all([
       db.activityLog.findMany({
         where: { createdAt: { gte: dateFrom, lte: dateTo }, userId: { in: recruiters.map((r) => r.id) } },
@@ -58,7 +81,7 @@ export async function GET(request: NextRequest) {
         select: { userId: true, action: true, status: true, createdAt: true },
       }),
       db.callRecord.findMany({
-        where: { calledAt: { gte: dateFrom, lte: dateTo }, recruiterId: { in: recruiters.map((r) => r.id) } },
+        where: callRecordWhere,
         select: { recruiterId: true, dispositionId: true, callStatus: true, callDuration: true },
       }),
     ]);

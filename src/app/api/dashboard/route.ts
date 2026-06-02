@@ -3,6 +3,15 @@ import { db } from '@/lib/db';
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
 
+/**
+ * GET /api/dashboard
+ * Admin dashboard analytics.
+ * 
+ * FIX (2026-06-02):
+ * - Added organizationId scoping for multi-tenant data isolation.
+ * - Recruiter stats now includes both USER and RECRUITER roles.
+ * - Custom date range now uses startOfDay/endOfDay.
+ */
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -36,8 +45,8 @@ export async function GET(request: NextRequest) {
         if (!customFrom || !customTo) {
           return NextResponse.json({ error: 'Custom date range requires from and to' }, { status: 400 });
         }
-        dateFrom = new Date(customFrom);
-        dateTo = new Date(customTo);
+        dateFrom = startOfDay(new Date(customFrom + 'T00:00:00'));
+        dateTo = endOfDay(new Date(customTo + 'T00:00:00'));
         // Validate that dates are valid
         if (isNaN(dateFrom.getTime()) || isNaN(dateTo.getTime())) {
           return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
@@ -51,14 +60,20 @@ export async function GET(request: NextRequest) {
         dateTo = endOfDay(now);
     }
 
+    // Organization scoping for multi-tenant isolation
+    const orgWhere: Record<string, unknown> = {};
+    if (auth.organizationId) {
+      orgWhere.organizationId = auth.organizationId;
+    }
+
     // Total calls
     const totalCalls = await db.callRecord.count({
-      where: { calledAt: { gte: dateFrom, lte: dateTo } },
+      where: { calledAt: { gte: dateFrom, lte: dateTo }, ...orgWhere },
     });
 
     // Total call duration
     const durationResult = await db.callRecord.aggregate({
-      where: { calledAt: { gte: dateFrom, lte: dateTo } },
+      where: { calledAt: { gte: dateFrom, lte: dateTo }, ...orgWhere },
       _sum: { callDuration: true },
     });
     const totalCallDuration = durationResult._sum.callDuration || 0;
@@ -69,7 +84,7 @@ export async function GET(request: NextRequest) {
     // Disposition counts
     const dispositionCounts = await db.callRecord.groupBy({
       by: ['dispositionId'],
-      where: { calledAt: { gte: dateFrom, lte: dateTo }, dispositionId: { not: null } },
+      where: { calledAt: { gte: dateFrom, lte: dateTo }, dispositionId: { not: null }, ...orgWhere },
       _count: true,
     });
 
@@ -97,12 +112,20 @@ export async function GET(request: NextRequest) {
 
     // WhatsApp sent count
     const whatsappCount = await db.whatsAppMessage.count({
-      where: { sentAt: { gte: dateFrom, lte: dateTo }, status: 'SENT' },
+      where: { sentAt: { gte: dateFrom, lte: dateTo }, status: 'SENT', ...orgWhere },
     });
 
-    // Recruiter-wise analytics (include disposition info for shortlisted count per recruiter)
+    // Recruiter-wise analytics (include both USER and RECRUITER roles)
+    const recruiterWhereClause: Record<string, unknown> = {
+      role: { in: ['USER', 'RECRUITER'] },
+      isActive: true,
+    };
+    if (auth.organizationId) {
+      recruiterWhereClause.organizationId = auth.organizationId;
+    }
+
     const recruiterStats = await db.user.findMany({
-      where: { role: 'RECRUITER', isActive: true },
+      where: recruiterWhereClause,
       select: {
         id: true, name: true,
         callRecords: {
@@ -166,7 +189,7 @@ export async function GET(request: NextRequest) {
       const dayStart = startOfDay(day);
       const dayEnd = endOfDay(day);
       const count = await db.callRecord.count({
-        where: { calledAt: { gte: dayStart, lte: dayEnd } },
+        where: { calledAt: { gte: dayStart, lte: dayEnd }, ...orgWhere },
       });
       dailyData.push({
         date: format(day, 'MMM dd'),
@@ -180,6 +203,7 @@ export async function GET(request: NextRequest) {
         calledAt: { gte: dateFrom, lte: dateTo },
         disposition: { type: 'SHORTLISTED' },
         clientId: { not: null },
+        ...orgWhere,
       },
       include: { client: { select: { name: true } } },
     });

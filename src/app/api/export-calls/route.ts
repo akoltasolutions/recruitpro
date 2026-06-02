@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 import * as XLSX from 'xlsx';
+import { startOfDay, endOfDay } from 'date-fns';
 
+/**
+ * GET /api/export-calls
+ * Export call records to Excel.
+ * 
+ * FIX (2026-06-02):
+ * - Uses startOfDay/endOfDay from date-fns for proper timezone-aware date filtering.
+ * - Added organizationId scoping for multi-tenant data isolation.
+ */
 export async function GET(request: NextRequest) {
   try {
     // ── Auth ──────────────────────────────────────────────────────────
@@ -18,8 +27,8 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     // ── Role-based access ─────────────────────────────────────────────
-    if (auth.role === 'RECRUITER') {
-      // Recruiters can only export their own data — ignore any passed recruiterId
+    if (!requireOrgAdmin(auth)) {
+      // Non-admin users can only export their own data — ignore any passed recruiterId
       recruiterId = auth.userId;
     }
 
@@ -28,22 +37,27 @@ export async function GET(request: NextRequest) {
       callStatus: 'COMPLETED',
     };
 
+    // Organization scoping
+    if (auth.organizationId) {
+      where.organizationId = auth.organizationId;
+    }
+
     if (recruiterId) {
       where.recruiterId = recruiterId;
     }
 
+    // FIX: Use startOfDay/endOfDay for proper timezone-aware date filtering
     if (dateFrom || dateTo) {
       where.calledAt = {};
       if (dateFrom) {
-        (where.calledAt as Record<string, unknown>).gte = new Date(dateFrom);
+        (where.calledAt as Record<string, unknown>).gte = startOfDay(new Date(dateFrom + 'T00:00:00'));
       }
       if (dateTo) {
-        // Include the entire end day by setting to 23:59:59.999
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        (where.calledAt as Record<string, unknown>).lte = toDate;
+        (where.calledAt as Record<string, unknown>).lte = endOfDay(new Date(dateTo + 'T00:00:00'));
       }
     }
+
+    console.log('[ExportCalls] Query where:', JSON.stringify(where));
 
     // ── Fetch records ─────────────────────────────────────────────────
     const callRecords = await db.callRecord.findMany({
@@ -123,7 +137,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[export-calls] Export failed:', error);
+    console.error('[ExportCalls] Export failed:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 },

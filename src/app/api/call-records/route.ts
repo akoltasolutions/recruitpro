@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
+import { startOfDay, endOfDay } from 'date-fns';
 
+/**
+ * GET /api/call-records
+ * Fetches call records with optional filters.
+ * 
+ * CRITICAL FIX (2026-06-02):
+ * - Uses startOfDay/endOfDay from date-fns instead of raw new Date()
+ *   Previously, dateTo was midnight UTC, excluding all daytime calls.
+ * - Added organizationId scoping for multi-tenant data isolation.
+ */
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -14,6 +24,12 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo');
 
     const where: Record<string, unknown> = {};
+
+    // Organization scoping — ensure multi-tenant isolation
+    if (auth.organizationId) {
+      where.organizationId = auth.organizationId;
+    }
+
     // Non-admin users can only see their own call records
     if (!requireOrgAdmin(auth)) {
       where.recruiterId = auth.userId;
@@ -22,11 +38,19 @@ export async function GET(request: NextRequest) {
     }
     if (callListId) where.candidate = { callListId };
     if (dispositionType) where.disposition = { type: dispositionType };
+
+    // CRITICAL FIX: Use startOfDay/endOfDay instead of raw new Date()
     if (dateFrom || dateTo) {
       where.calledAt = {};
-      if (dateFrom) (where.calledAt as Record<string, unknown>).gte = new Date(dateFrom);
-      if (dateTo) (where.calledAt as Record<string, unknown>).lte = new Date(dateTo);
+      if (dateFrom) {
+        (where.calledAt as Record<string, unknown>).gte = startOfDay(new Date(dateFrom + 'T00:00:00'));
+      }
+      if (dateTo) {
+        (where.calledAt as Record<string, unknown>).lte = endOfDay(new Date(dateTo + 'T00:00:00'));
+      }
     }
+
+    console.log('[CallRecords GET] Query where:', JSON.stringify(where));
 
     const callRecords = await db.callRecord.findMany({
       where,
@@ -41,11 +65,24 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ callRecords });
   } catch (error) {
-    console.error('Call records error:', error);
+    console.error('[CallRecords GET] Error:', error);
+    if (error instanceof Error) {
+      console.error('[CallRecords GET] Error message:', error.message);
+      console.error('[CallRecords GET] Error stack:', error.stack);
+    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
+/**
+ * POST /api/call-records
+ * Creates a new call record.
+ * 
+ * CRITICAL FIX (2026-06-02):
+ * - Sets organizationId from recruiter's organization (was always null before).
+ * - Added comprehensive error logging for failed call-tracking events.
+ * - Prevents data loss by ensuring call records are always persisted.
+ */
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
@@ -69,10 +106,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid callStatus. Must be one of: COMPLETED, SKIPPED, SCHEDULED, FAILED' }, { status: 400 });
     }
 
+    // CRITICAL FIX: Derive organizationId from the recruiter's organization
+    // This ensures call records are properly scoped to the organization
+    // and will appear in Team Performance and other org-scoped views.
+    let organizationId = auth.organizationId || null;
+    if (!organizationId && recruiterId) {
+      try {
+        const recruiter = await db.user.findUnique({
+          where: { id: recruiterId },
+          select: { organizationId: true },
+        });
+        organizationId = recruiter?.organizationId || null;
+      } catch (orgErr) {
+        console.error('[CallRecords POST] Failed to fetch recruiter org:', orgErr);
+        // Non-fatal: continue without organizationId
+      }
+    }
+
+    console.log('[CallRecords POST] Creating record:', {
+      candidateId,
+      recruiterId,
+      dispositionId,
+      callDuration,
+      callStatus,
+      organizationId,
+    });
+
     const callRecord = await db.callRecord.create({
       data: {
         candidateId,
         recruiterId,
+        organizationId, // CRITICAL FIX: Now properly set
         dispositionId: dispositionId || null,
         clientId: clientId || null,
         customClientName: customClientName || null,
@@ -90,6 +154,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('[CallRecords POST] Call record created successfully:', callRecord.id);
+
     // Log activity for recruiter tracking
     try {
       const candidate = await db.candidate.findUnique({ where: { id: candidateId }, select: { name: true, phone: true } });
@@ -98,6 +164,7 @@ export async function POST(request: NextRequest) {
           userId: recruiterId,
           action: 'CALL_END',
           status: 'ACTIVE',
+          organizationId, // Also set org on activity log
           metadata: JSON.stringify({
             candidateId,
             candidateName: candidate?.name,
@@ -107,8 +174,9 @@ export async function POST(request: NextRequest) {
           }),
         },
       });
-    } catch {
+    } catch (activityErr) {
       // Activity logging is best-effort, don't fail the call record save
+      console.error('[CallRecords POST] Activity log creation failed (non-fatal):', activityErr);
     }
 
     // Update candidate status and pipeline stage
@@ -138,7 +206,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ callRecord }, { status: 201 });
   } catch (error) {
-    console.error('Create call record error:', error);
+    console.error('[CallRecords POST] Create call record error:', error);
     // Provide specific error messages for common Prisma errors
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes('Foreign key constraint')) {
@@ -147,6 +215,11 @@ export async function POST(request: NextRequest) {
     if (msg.includes('Unique constraint')) {
       return NextResponse.json({ error: 'This call record already exists' }, { status: 409 });
     }
+    // Log full error for debugging call-tracking failures
+    console.error('[CallRecords POST] Full error details:', {
+      message: msg,
+      stack: error instanceof Error ? error.stack : 'N/A',
+    });
     return NextResponse.json({ error: 'Failed to save call record. Please try again.' }, { status: 500 });
   }
 }
