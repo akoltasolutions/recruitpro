@@ -175,3 +175,21 @@ Stage Summary:
 - Files modified: select.tsx, dialog.tsx, sheet.tsx, alert-dialog.tsx, globals.css, layout.tsx
 - Files created: hooks/usePortalOverlayFix.ts, providers/portal-overlay-provider.tsx
 
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Team Monitoring Action button overlapping right side
+
+Work Log:
+- Analyzed screenshot showing 9-column desktop table in Team Monitoring
+- Identified root cause: grid-cols-[...]...auto for Action column gets squeezed
+  by the 8 preceding fr columns on narrower desktop viewports
+- Changed Action column from auto to minmax(90px,auto) — guaranteed minimum width
+- Changed Last Activity column from 0.9fr to minmax(90px,0.9fr)
+- Added shrink-0 on Action dropdown wrapper div
+- Committed as 69210cd, pushed to origin/main
+
+Stage Summary:
+- Permanent fix applied: Action column now has minmax(90px,auto) constraint
+- Deploying to production via GitHub Actions
+
