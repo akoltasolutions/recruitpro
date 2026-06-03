@@ -96,8 +96,10 @@ export function BackupRestorePage() {
 
 function CodeBackupSection() {
   const [loading, setLoading] = useState(false)
+  const [preDeployLoading, setPreDeployLoading] = useState(false)
   const [lastBackup, setLastBackup] = useState<string | null>(null)
-  const [format, setFormat] = useState<'tar' | 'zip'>('tar')
+  const [preDeployInfo, setPreDeployInfo] = useState<{ filename: string; size: string; time: string } | null>(null)
+  const [format, setFormat] = useState<'zip' | 'tar' | 'tar.gz' | '7z'>('tar.gz')
 
   const handleCodeBackup = useCallback(async () => {
     setLoading(true)
@@ -118,6 +120,30 @@ function CodeBackupSection() {
     }
   }, [format])
 
+  const handlePreDeployBackup = useCallback(async () => {
+    setPreDeployLoading(true)
+    try {
+      const res = await authFetch('/api/admin/backup/code', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'pre-deploy' }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create pre-deploy backup')
+      }
+      setPreDeployInfo({
+        filename: data.filename,
+        size: data.size,
+        time: new Date().toLocaleString(),
+      })
+      toast.success(`Pre-deploy backup saved: ${data.filename} (${data.size})`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create pre-deploy backup')
+    } finally {
+      setPreDeployLoading(false)
+    }
+  }, [])
+
   return (
     <TabsContent value="code" className="space-y-4">
       <Card>
@@ -132,13 +158,15 @@ function CodeBackupSection() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Select value={format} onValueChange={(v) => setFormat(v as 'tar' | 'zip')} modal={false}>
+            <Select value={format} onValueChange={(v) => setFormat(v as 'zip' | 'tar' | 'tar.gz' | '7z')} modal={false}>
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tar">TAR.GZ</SelectItem>
+                <SelectItem value="tar.gz">TAR.GZ</SelectItem>
                 <SelectItem value="zip">ZIP</SelectItem>
+                <SelectItem value="tar">TAR</SelectItem>
+                <SelectItem value="7z">7Z</SelectItem>
               </SelectContent>
             </Select>
 
@@ -151,7 +179,7 @@ function CodeBackupSection() {
               ) : (
                 <>
                   <Download className="h-4 w-4 mr-2" />
-                  Generate Code Backup
+                  Download Code Backup
                 </>
               )}
             </Button>
@@ -160,9 +188,53 @@ function CodeBackupSection() {
           {lastBackup && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <CheckCircle className="h-4 w-4 text-green-500" />
-              Last backup: {lastBackup}
+              Last download: {lastBackup}
             </div>
           )}
+
+          <Separator className="my-3" />
+
+          {/* Pre-Deploy Backup */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-4 w-4 text-amber-500" />
+              <p className="text-sm font-medium">Pre-Deploy Backup</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Creates a .tar.gz backup on the server filesystem (backups/ folder) before deploying updates. Keeps the last 5 backups automatically.
+            </p>
+            <Button
+              onClick={handlePreDeployBackup}
+              disabled={preDeployLoading}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              {preDeployLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Pre-Deploy Backup...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Create Pre-Deploy Backup (.tar.gz)
+                </>
+              )}
+            </Button>
+
+            {preDeployInfo && (
+              <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-green-700 dark:text-green-400 space-y-0.5">
+                    <p className="font-semibold">Pre-deploy backup saved</p>
+                    <p>File: <span className="font-mono">{preDeployInfo.filename}</span></p>
+                    <p>Size: {preDeployInfo.size} &middot; Time: {preDeployInfo.time}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           <Separator className="my-3" />
 
