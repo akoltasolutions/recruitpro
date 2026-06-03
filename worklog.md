@@ -562,3 +562,39 @@ Stage Summary:
 - 1 bug fixed in [...slug]/page.tsx (missing error boundary)
 - Changes deployed to production via GitHub Actions
 - Production verified: https://app.akolta.com/pipeline returns 200 with correct SPA content
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Move Pipeline under Team Performance navigation (navigation restructuring only)
+
+Work Log:
+- Read app-router.tsx to understand SPA routing: currentPath → switch → page component rendering
+- Read admin-layout.tsx, super-admin-layout.tsx, recruiter-layout.tsx for navigation menu structure
+- Read team-performance.tsx (507 lines) and admin-pipeline.tsx (1307 lines) for page components
+- Removed 'pipeline' from AdminPage and SuperAdminPage type unions in app-router.tsx
+- Added sub-path parsing: basePath splits on '/', isPipelineSubPage checks for 'team-performance/pipeline'
+- Added useEffect redirect: admin/superadmin visiting /pipeline auto-redirects to /team-performance/pipeline
+- Added null return in render functions for old /pipeline path (prevents flash)
+- Changed activePage prop to pass full currentPath instead of base page (enables sidebar sub-item highlighting)
+- Updated admin-layout.tsx: removed standalone Pipeline menu item, added collapsible Team Performance group with children (Call Reports, Pipeline)
+- Added ChevronRight icon import, tpSectionOpen state, isTpActive helper
+- Created flatMenuItems for mobile bottom nav (team-performance children expanded individually)
+- Updated super-admin-layout.tsx: same collapsible group pattern for Team Performance
+- Added GitBranch import back (was accidentally removed)
+- Added sub-navigation tabs to team-performance.tsx (Call Reports | Pipeline switching)
+- Added sub-navigation tabs to admin-pipeline.tsx (Call Reports | Pipeline switching)
+- Added navigateTo import, cn import, BarChart3 icon to both pages
+- Recruiter pipeline at /pipeline is UNCHANGED (recruiters don't have Team Performance)
+- Ran ESLint: 0 errors, 0 warnings
+- Committed as 8b59bf0, pushed to main
+- Verified deployment: all 3 URLs return 200 (team-performance, team-performance/pipeline, pipeline)
+
+Stage Summary:
+- Navigation restructuring only — no data, API, or database changes
+- Admin/SuperAdmin: Team Performance sidebar → collapsible group with "Call Reports" + "Pipeline"
+- URL: /team-performance → Call Reports, /team-performance/pipeline → Pipeline
+- Old /pipeline URL auto-redirects to /team-performance/pipeline for admin/superadmin
+- Both pages have tab navigation bar for easy switching
+- Recruiter pipeline unchanged at /pipeline
+- 5 files changed: app-router.tsx, admin-layout.tsx, super-admin-layout.tsx, team-performance.tsx, admin-pipeline.tsx
