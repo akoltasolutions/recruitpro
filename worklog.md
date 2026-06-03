@@ -272,3 +272,24 @@ Stage Summary:
 - Notification badges appear in 5 locations: sidebar, header bell, mobile hamburger, mobile bottom nav, mobile More button
 - Badge auto-updates every 30s via polling and instantly on approve/reject actions
 - Count is org-scoped (ORG_ADMIN sees only their org's pending, SUPER_ADMIN sees all)
+---
+Task ID: 5
+Agent: Main Agent
+Task: Enable Forgot Password email sending via Resend
+
+Work Log:
+- Analyzed existing forgot-password flow: 3-step wizard (request → verify → success)
+- Found root cause: API generates tokens but NEVER sends emails (no email library installed)
+- Installed resend@6.12.4 package
+- Added sendResetEmail() function with professional HTML email template (green branded RecruitPro header, 6-char code, 15-min expiry)
+- Updated forgot-password API to call sendResetEmail after generating token
+- Graceful fallback: if RESEND_API_KEY not set, logs error but doesn't fail the request
+- Updated deploy.sh default .env template with RESEND_API_KEY and EMAIL_FROM
+- Updated GitHub Actions deploy workflow to inject RESEND_API_KEY from GitHub secrets
+
+Stage Summary:
+- 3 files changed: forgot-password/route.ts, deploy.sh, deploy.yml
+- resend package added to dependencies
+- Professional email template with RecruitPro branding
+- Phone OTP flow unchanged (still needs SMS provider integration separately)
+- ACTION REQUIRED: User must add RESEND_API_KEY as GitHub Actions secret
