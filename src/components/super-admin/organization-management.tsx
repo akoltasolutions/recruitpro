@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ScrollArea } from '@/components/ui/scroll-area'
+// Using native overflow-y-auto instead of Radix ScrollArea for reliable scroll inside flex dialogs
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -568,7 +568,7 @@ export function OrganizationManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
             <div className="grid gap-4 py-2">
               {/* Name */}
               <div className="grid gap-2">
@@ -739,7 +739,7 @@ export function OrganizationManagement() {
                 </>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
