@@ -99,10 +99,22 @@ TOKEN_SECRET="recruitpro-prod-secret-key-2024"
 NODE_ENV="production"
 ALLOW_SEED="true"
 WEBHOOK_SECRET="recruitpro-webhook-secret-2024"
-RESEND_API_KEY=""
 EMAIL_FROM="RecruitPro <noreply@akolta.com>"
 ENVEOF
     fi
+fi
+
+# Step 1c: Safety net — inject secrets if passed via env vars (GitHub Actions or manual)
+log "Step 1c: Checking for deployment secrets..."
+if [ -n "$RESEND_API_KEY" ]; then
+    if grep -q 'RESEND_API_KEY=' .env 2>/dev/null; then
+        sed -i 's|^RESEND_API_KEY=.*|RESEND_API_KEY="'"$RESEND_API_KEY"'"|' .env
+    else
+        echo 'RESEND_API_KEY="'"$RESEND_API_KEY"'"' >> .env
+    fi
+    log "RESEND_API_KEY present in .env"
+else
+    log "NOTE: RESEND_API_KEY not set — forgot-password emails will not be sent"
 fi
 
 # Step 2: Install dependencies
