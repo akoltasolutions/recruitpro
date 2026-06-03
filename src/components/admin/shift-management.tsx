@@ -448,7 +448,7 @@ function BulkAssignDialog({ open, onOpenChange, users, onSubmit }: BulkAssignDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bulk Assign Shifts</DialogTitle>
           <DialogDescription>

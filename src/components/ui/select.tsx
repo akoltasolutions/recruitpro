@@ -5,7 +5,6 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useDialogContainer } from "@/hooks/useDialogContainer"
 
 function Select({
   modal = false,
@@ -56,20 +55,16 @@ function SelectContent({
   className,
   children,
   position = "popper",
-  container,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content> & {
-  container?: HTMLElement | null
-}) {
-  // Auto-detect if we're inside a Dialog/Sheet/AlertDialog.
-  // If so, render the portal INSIDE the dialog so the dropdown stays
-  // visually contained within the dialog boundary.
-  // Explicit `container` prop always wins over auto-detection.
-  const dialogContainer = useDialogContainer()
-  const portalContainer = container ?? dialogContainer
+}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  // Dropdowns portal to document.body by default (NOT inside dialog container).
+  // This prevents clipping by the dialog's overflow-hidden.
+  // z-index hierarchy: Dialog overlay [10000] < Dialog content [10001] < Select [10002].
+  // usePortalOverlayFix in DialogContent prevents Radix useHideOthers from
+  // making body-level portals inert while a dialog is open.
 
   return (
-    <SelectPrimitive.Portal container={portalContainer}>
+    <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(

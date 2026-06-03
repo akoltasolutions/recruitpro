@@ -537,7 +537,7 @@ export function UserManagement() {
 
       {/* ═══════════ Create / Edit Dialog ═══════════ */}
       <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setShowPassword(false) }}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingUser ? 'Edit Recruiter' : 'Add Recruiter'}</DialogTitle>
             <DialogDescription>
@@ -547,7 +547,7 @@ export function UserManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 grid gap-4 py-2">
             {/* Name */}
             <div className="grid gap-2">
               <Label htmlFor="user-name">Name <span className="text-red-500">*</span></Label>
@@ -671,7 +671,7 @@ export function UserManagement() {
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setFormOpen(false)} disabled={submitting}>
               Cancel
             </Button>

@@ -5,7 +5,6 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useDialogContainer } from "@/hooks/useDialogContainer"
 
 function DropdownMenu({
   ...props
@@ -37,11 +36,14 @@ function DropdownMenuContent({
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
-  // Auto-detect dialog container for proper portal rendering
-  const dialogContainer = useDialogContainer()
+  // Dropdowns portal to document.body by default (NOT inside dialog container).
+  // This prevents clipping by the dialog's overflow-hidden.
+  // z-index hierarchy: Dialog overlay [10000] < Dialog content [10001] < Dropdown [10002].
+  // usePortalOverlayFix in DialogContent prevents Radix useHideOthers from
+  // making body-level portals inert while a dialog is open.
 
   return (
-    <DropdownMenuPrimitive.Portal container={dialogContainer}>
+    <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}

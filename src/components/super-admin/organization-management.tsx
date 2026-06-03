@@ -558,7 +558,7 @@ export function OrganizationManagement() {
 
       {/* ═══════════ Create / Edit Dialog ═══════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-lg max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingOrg ? 'Edit Organization' : 'Add Organization'}</DialogTitle>
             <DialogDescription>

@@ -49,7 +49,7 @@ function DialogOverlay({
 }
 
 /**
- * DialogContent — Two-Layer Architecture
+ * DialogContent — Two-Layer Architecture with Global Scroll Support
  *
  * OUTER LAYER (DialogPrimitive.Content):
  *   - fixed inset-0: covers the full viewport
@@ -60,9 +60,17 @@ function DialogOverlay({
  * INNER LAYER (visual dialog box):
  *   - pointer-events-auto: captures clicks inside the dialog
  *   - The actual visible dialog with border, shadow, background
- *   - NO overflow-y-auto: prevents clipping of portaled dropdowns
+ *   - flex flex-col: enables header/body/footer vertical layout
+ *   - overflow-hidden: constrains content to max-h, enables body scroll
  *   - The ref and data-slot are on THIS element (the visible dialog)
  *   - Provided via DialogContainerContext to child Select/Dropdown portals
+ *
+ * GLOBAL SCROLL PATTERN:
+ *   All dialogs automatically support the sticky header/footer scroll pattern:
+ *   - DialogHeader: stays visible at the top (natural flex flow)
+ *   - Body area: use className="flex-1 min-h-0 overflow-y-auto" to scroll
+ *     (or use ScrollArea with className="flex-1 min-h-0")
+ *   - DialogFooter: stays accessible at the bottom (natural flex flow)
  *
  * WHY NO TRANSFORM?
  * CSS spec: "If the containing block has a transform, the position: fixed
@@ -71,6 +79,15 @@ function DialogOverlay({
  * If DialogContent had transform:translate(-50%,-50%), the dropdown would
  * be positioned relative to the dialog, causing offset errors.
  * By using flex centering instead of transform, position:fixed works correctly.
+ *
+ * DROPDOWN PORTAL STRATEGY:
+ * Select/DropdownMenu components portal to document.body by default
+ * (not inside the dialog container). This means overflow-hidden on the
+ * dialog does NOT clip dropdowns. z-index hierarchy ensures layering:
+ *   - Dialog overlay: z-[10000]
+ *   - Dialog content: z-[10001]
+ *   - Select/Dropdown content: z-[10002]
+ * usePortalOverlayFix prevents Radix's useHideOthers from making them inert.
  */
 const DialogContent = React.forwardRef<
   HTMLDivElement,
@@ -110,7 +127,7 @@ const DialogContent = React.forwardRef<
           ref={setRefs}
           data-slot="dialog-content"
           className={cn(
-            "bg-background pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 w-full max-w-[calc(100%-2rem)] max-h-[85vh] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+            "bg-background pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 w-full max-w-[calc(100%-2rem)] max-h-[85vh] flex flex-col overflow-hidden gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
             className
           )}
         >

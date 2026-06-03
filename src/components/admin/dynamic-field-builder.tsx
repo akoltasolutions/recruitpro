@@ -467,7 +467,7 @@ export function DynamicFieldBuilder() {
 
       {/* Edit Field Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>
               {editingField ? 'Configure Field' : 'New Field'}
@@ -476,7 +476,7 @@ export function DynamicFieldBuilder() {
               Set the display label, type, and options for this field.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-5 py-2">
             {/* Label */}
             <div className="space-y-2">
               <Label htmlFor="field-label">Display Label</Label>
@@ -594,7 +594,7 @@ export function DynamicFieldBuilder() {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
               {saving ? 'Saving...' : 'Save Changes'}

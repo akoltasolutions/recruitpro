@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   CreditCard, Plus, Pencil, Copy, Trash2, Users, Phone, Upload, HardDrive,
@@ -198,7 +198,6 @@ function PlanStatusBadge({ status }: { status: boolean }) {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PlanManagement() {
-  const dialogRef = useRef<HTMLDivElement>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -609,7 +608,7 @@ export function PlanManagement() {
 
       {/* ═══════════ Create / Edit Dialog ═══════════ */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" ref={dialogRef}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle>
             <DialogDescription>
@@ -639,7 +638,7 @@ export function PlanManagement() {
                     <SelectTrigger id="plan-type">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
-                    <SelectContent container={dialogRef.current}>
+                    <SelectContent>
                       <SelectItem value="FREE">Free</SelectItem>
                       <SelectItem value="STARTER">Starter</SelectItem>
                       <SelectItem value="PAID">Paid</SelectItem>

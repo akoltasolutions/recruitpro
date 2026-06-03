@@ -7,7 +7,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -852,7 +852,7 @@ function ImportSection() {
 
       {/* ── Preview / Column Mapping Dialog ──────────────────────────── */}
       <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
-        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-2xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <TableProperties className="h-5 w-5" />
@@ -864,7 +864,8 @@ function ImportSection() {
           </DialogHeader>
 
           {previewData && (
-            <div className="space-y-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant="outline">{previewData.totalRows} rows</Badge>
                 <Badge variant="outline">{previewData.headers.length} columns</Badge>
@@ -937,26 +938,27 @@ function ImportSection() {
               <p className="text-xs text-muted-foreground">
                 Showing first 3 rows of {previewData.totalRows} total rows.
               </p>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
-                  Close
-                </Button>
-                <Button onClick={() => {
-                  setPreviewDialogOpen(false)
-                  // Import will happen via the main Import button
-                }}>
-                  Apply Mapping
-                </Button>
-              </div>
             </div>
+
+            <DialogFooter className="pt-2 border-t">
+              <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
+                Close
+              </Button>
+              <Button onClick={() => {
+                setPreviewDialogOpen(false)
+                // Import will happen via the main Import button
+              }}>
+                Apply Mapping
+              </Button>
+            </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
 
       {/* ── Import Result Dialog ──────────────────────────────────────── */}
       <Dialog open={resultDialogOpen} onOpenChange={setResultDialogOpen}>
-        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100%-1.5rem)] sm:max-w-lg max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
@@ -968,7 +970,8 @@ function ImportSection() {
           </DialogHeader>
 
           {importResult && (
-            <div className="space-y-4">
+            <>
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4">
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg border bg-green-50 dark:bg-green-950/30 p-3 text-center">
                   <p className="text-2xl font-bold text-green-600">{importResult.imported}</p>
@@ -1004,11 +1007,12 @@ function ImportSection() {
               <p className="text-xs text-muted-foreground">
                 All imported users have been assigned random passwords. They will need to reset their password on first login.
               </p>
-
-              <div className="flex justify-end">
-                <Button onClick={() => setResultDialogOpen(false)}>Close</Button>
-              </div>
             </div>
+
+            <DialogFooter className="pt-2 border-t">
+              <Button onClick={() => setResultDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>

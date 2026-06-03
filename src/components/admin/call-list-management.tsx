@@ -1136,10 +1136,10 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Create List Dialog (Manual Entry + Copy-Paste) ═══════════ */}
       <Dialog open={createOpen} onOpenChange={(open) => { if (!open) resetCreateForm(); setCreateOpen(open) }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
           <DialogHeader><DialogTitle>Create Calling List</DialogTitle></DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
             {/* Shared: list name & description */}
             <div className="space-y-3">
               <div className="space-y-2">
@@ -1291,7 +1291,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </Tabs>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false) }}>Cancel</Button>
             <Button
               onClick={createTab === 'manual' ? handleCreateWithManual : handleCreateWithPaste}
@@ -1309,14 +1309,14 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Upload Dialog (CSV / XLSX) ═══════════ */}
       <Dialog open={uploadOpen} onOpenChange={(open) => { setUploadOpen(open); if (!open) { setParsedData([]); setCsvColumns([]); setColumnMapping({}); setUploadSource('CSV') } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {uploadSource === 'XLSX' ? <FileSpreadsheet className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
               Import from {uploadSource === 'XLSX' ? 'XLS/XLSX' : 'CSV'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
             <div className="space-y-2"><Label>List Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Name for this calling list" /></div>
             <div className="space-y-2"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" rows={2} /></div>
             <div className="space-y-2">
@@ -1382,7 +1382,7 @@ export function CallListManagement({ userId }: { userId: string }) {
               </>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
             <Button onClick={handleImportCSV} disabled={saving || parsedData.length === 0 || !name} className="bg-emerald-600 hover:bg-emerald-700">
               {saving ? 'Importing...' : `Import ${parsedData.length} Candidates`}
@@ -1393,7 +1393,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Google Sheets Import Dialog ═══════════ */}
       <Dialog open={gsOpen} onOpenChange={(open) => { if (!open) handleGsClose() }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5 text-blue-600" />
@@ -1401,7 +1401,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
             {/* Section 1: List Name & Description */}
             <div className="space-y-3">
               <div className="space-y-2">
@@ -1551,7 +1551,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={handleGsClose}>Cancel</Button>
             <Button
               onClick={handleGsImport}
@@ -1566,7 +1566,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Candidates Dialog ═══════════ */}
       <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) { setSelectedCandidateIds([]); clearFilters() } }}>
-        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{selectedList?.name} - Candidates ({selectedList?.candidates.length || 0})</DialogTitle>
             <DialogDescription>View and manage candidates in this calling list</DialogDescription>
@@ -1766,7 +1766,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Merge List Dialog ═══════════ */}
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GitMerge className="h-5 w-5" />
@@ -1774,7 +1774,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </DialogTitle>
             <DialogDescription>Import candidates from another calling list into this one.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
             <div className="space-y-2">
               <Label>Source List *</Label>
               <Select value={mergeSourceListId} onValueChange={setMergeSourceListId} modal={false}>
@@ -1836,7 +1836,7 @@ export function CallListManagement({ userId }: { userId: string }) {
               </Alert>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setMergeOpen(false)}>Cancel</Button>
             <Button onClick={handleMerge} disabled={merging || !mergeSourceListId} className="bg-emerald-600 hover:bg-emerald-700">
               {merging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Merging...</> : 'Merge Lists'}
@@ -1847,7 +1847,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Add Numbers Dialog ═══════════ */}
       <Dialog open={addNumbersOpen} onOpenChange={(open) => { setAddNumbersOpen(open); if (!open) { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]) } }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
@@ -2080,7 +2080,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Deduplicate Dialog ═══════════ */}
       <Dialog open={dedupOpen} onOpenChange={(open) => { setDedupOpen(open); if (!open) setDuplicates([]) }}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-5 w-5" />
@@ -2098,7 +2098,7 @@ export function CallListManagement({ userId }: { userId: string }) {
               <p className="text-sm">No duplicate phone numbers found in this list.</p>
             </div>
           ) : (
-            <div className="space-y-3 py-2">
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-3 py-2">
               <Alert>
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-sm">
@@ -2133,7 +2133,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setDedupOpen(false)}>Close</Button>
             {duplicates.length > 0 && (
               <Button variant="destructive" onClick={handleRemoveDuplicates}>
@@ -2146,7 +2146,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
       {/* ═══════════ Import More Dialog ═══════════ */}
       <Dialog open={importMoreOpen} onOpenChange={(open) => { setImportMoreOpen(open); if (!open) { setImportMoreParsedData([]); setImportMoreCsvColumns([]); setImportMoreColumnMapping({}) } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
@@ -2154,7 +2154,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </DialogTitle>
             <DialogDescription>Import additional candidates from CSV or Excel into this existing list.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
             <div className="space-y-2">
               <Label>Upload File (CSV or Excel)</Label>
               <Input ref={importMoreFileRef} type="file" accept=".csv,.xls,.xlsx" onChange={handleImportMoreUpload} />
@@ -2209,7 +2209,7 @@ export function CallListManagement({ userId }: { userId: string }) {
               </>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2 border-t">
             <Button variant="outline" onClick={() => setImportMoreOpen(false)}>Cancel</Button>
             <Button onClick={handleImportMore} disabled={addNumbersSaving || importMoreParsedData.length === 0} className="bg-emerald-600 hover:bg-emerald-700">
               {addNumbersSaving ? 'Importing...' : `Import ${importMoreParsedData.length} Candidates`}

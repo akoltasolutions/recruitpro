@@ -2172,7 +2172,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             callInitiatedRef.current = false
             stopCallTimer()
           }}>
-            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-md max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base">
                   <PhoneIncoming className="h-4 w-4 text-emerald-600" />
@@ -2183,7 +2183,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-5 py-2">
+              <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-5 py-2">
                 {/* Candidate summary */}
                 <div className="p-3 rounded-lg bg-muted/50 space-y-2">
                   <div className="flex items-center gap-3">
@@ -2443,9 +2443,11 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   </div>
                 )}
 
-                {/* Action buttons: Save & Next Call / Save Only */}
-                <Separator />
-                <DialogFooter className="flex-col gap-2 sm:flex-col">
+              </div>
+
+              {/* Action buttons: Save & Next Call / Save Only */}
+              <Separator />
+              <DialogFooter className="pt-2 border-t flex-col gap-2 sm:flex-col">
                   <Button
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-12"
                     onClick={handleSaveAndNext}
@@ -2480,7 +2482,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     )}
                   </Button>
                 </DialogFooter>
-              </div>
             </DialogContent>
           </Dialog>
         )}
