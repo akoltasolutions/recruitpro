@@ -153,10 +153,19 @@ export function TeamManagementEnhanced() {
   // Revoke invitation state
   const [revokeConfirm, setRevokeConfirm] = useState<PendingInvitation | null>(null)
 
+  // Ref element for department dialog content (used to contain Select portal within dialog)
+  const [deptDialogEl, setDeptDialogEl] = useState<HTMLDivElement | null>(null)
+
   // ─── Members (placeholder state) ──────────────────────────────────────────
   const [invitations, setInvitations] = useState<PendingInvitation[]>(mockInvitations)
   const [designations, setDesignations] = useState<Designation[]>(mockDesignations)
   const [departments, setDepartments] = useState<Department[]>(mockDepartments)
+
+  // ─── Member state (declared before filteredMembers to avoid TDZ) ──────────
+  const [members, setMembers] = useState<TeamMember[]>(mockMembers)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
 
   // ─── Filtered Members ────────────────────────────────────────────────────
 
@@ -318,11 +327,6 @@ export function TeamManagementEnhanced() {
   }
 
   // ─── Member Actions ────────────────────────────────────────────────────────
-
-  const [members, setMembers] = useState<TeamMember[]>(mockMembers)
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
-  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
-  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
 
   function openEditMemberDialog(member: TeamMember) {
     setEditingMember(member)
@@ -1171,7 +1175,7 @@ export function TeamManagementEnhanced() {
 
       {/* ═══════════ Department Dialog ═══════════ */}
       <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" ref={setDeptDialogEl}>
           <DialogHeader>
             <DialogTitle>{editingDept ? 'Edit Department' : 'Add Department'}</DialogTitle>
             <DialogDescription>
@@ -1213,7 +1217,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="dept-head" className="w-full min-w-0">
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent position="popper" className="max-h-60">
+                <SelectContent position="popper" className="max-h-60" container={deptDialogEl}>
                   {members.filter((m) => m.status === 'active').map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name} — {m.designation}

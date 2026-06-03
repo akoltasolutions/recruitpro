@@ -352,3 +352,29 @@ Stage Summary:
 - Pre-deploy backup (.tar.gz) now works WITHOUT system tar (pure JavaScript)
 - 7Z still needs system tool but provides clear error message
 - No existing functionality broken — all other tabs (Database, Restore, Export, Import) unchanged
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Fix Team Management page — "Something went wrong" crash + dropdown issues
+
+Work Log:
+- Analyzed screenshot showing "Something went wrong" error at /team-management
+- Read full component: src/components/admin/team-management-enhanced.tsx (1277 lines)
+- Identified ROOT CAUSE of crash: `members` state variable declared at line 322 with `const` but referenced at line 163 in `filteredMembers` computation
+- JavaScript Temporal Dead Zone (TDZ): `const` variables cannot be accessed before their declaration — throws ReferenceError
+- This caused the entire component to crash, triggering Next.js error boundary with "Something went wrong"
+- Fix #1: Moved `const [members, setMembers] = useState(...)` and related member state from line 322 to line 162 (before filteredMembers computation)
+- Identified Members Actions dropdown "not working" was caused by the same crash — component never rendered
+- Identified Department Head dropdown "overlapping outside" issue: SelectContent renders via portal at body level (z-10002) above Dialog (z-10001), extending beyond dialog boundary
+- Fix #2: Added `deptDialogEl` state + callback ref on DialogContent + `container` prop on SelectContent for Department Head Select
+- This renders the Select portal INSIDE the dialog DOM, so the dialog's overflow constraints contain it
+- Ran ESLint — passes clean
+- Verified via agent-browser: page loads, Members tab shows 6 members with actions dropdown, Departments tab shows 3 departments, Department Head dropdown contained within dialog
+
+Stage Summary:
+- 1 file changed: src/components/admin/team-management-enhanced.tsx
+- Fix 1 (CRASH): Moved `members` state declaration before `filteredMembers` to resolve TDZ ReferenceError
+- Fix 2 (DROPDOWN): Used `container` prop on SelectContent to render Department Head dropdown inside Dialog
+- All three reported issues resolved: page crash, members actions dropdown, department head dropdown overflow
+- No other functionality affected
