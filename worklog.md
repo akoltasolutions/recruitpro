@@ -536,3 +536,29 @@ Stage Summary:
 - SUPER_ADMIN: full access across all organizations
 - ORG_ADMIN: restricted to own organization
 - 7 files changed, 2064 insertions, 6 deletions
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Pipeline page error at /pipeline
+
+Work Log:
+- Investigated pipeline error: user reported "Something went wrong" (global-error.tsx) on /pipeline route
+- Found root cause #1: API returned `stageCounts` but frontend expected `counts` — stage counts never displayed in tabs
+- Found root cause #2: Catch-all route `[...slug]/page.tsx` lacked `AppErrorBoundary` wrapper — any render error goes straight to global-error
+- Found root cause #3: Search debounce had circular dependency — `useMemo(() => searchQuery)` + `useCallback(fetchCandidates, [debouncedSearch])` + `useEffect([debouncedSearch, fetchCandidates])` created infinite re-render loop
+- Found root cause #4: Notes API field mismatch — frontend sent `text` but API expected `note`; frontend interface had `text` but API returned `note`
+- Fixed API route to return `counts` instead of `stageCounts`
+- Rewrote catch-all route with proper `AppErrorBoundary` + `OfflineOverlay` wrapper
+- Replaced search debounce with proper `useState`-based approach (no more circular dependency)
+- Split fetchCandidates useEffect into two separate effects: one for filter changes, one for debounced search
+- Fixed PipelineNote interface and POST body to use `note` instead of `text`
+- Ran lint — 0 errors, 0 warnings
+- Committed and pushed to GitHub to trigger production deployment
+- Verified production returns 200 on /pipeline with correct SPA rendering
+
+Stage Summary:
+- 4 bugs fixed in admin-pipeline.tsx and 1 in api/admin/pipeline/route.ts
+- 1 bug fixed in [...slug]/page.tsx (missing error boundary)
+- Changes deployed to production via GitHub Actions
+- Production verified: https://app.akolta.com/pipeline returns 200 with correct SPA content
