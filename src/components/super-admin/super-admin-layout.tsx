@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useApprovalPendingCount } from '@/hooks/useApprovalPendingCount'
@@ -40,10 +40,15 @@ const platformMenuItems: MenuItem[] = [
   { key: 'backup-restore', label: 'Backup & Restore', icon: DatabaseBackup, section: 'platform' },
 ]
 
+const teamPerformanceChildren = [
+  { key: 'team-performance', label: 'Call Reports', icon: BarChart3, section: 'company' as const },
+  { key: 'team-performance/pipeline', label: 'Pipeline', icon: GitBranch, section: 'company' as const },
+]
+
 const companyMenuItems: MenuItem[] = [
   { key: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'company' },
   { key: 'approvals', label: 'Approval Requests', icon: UserCheck, section: 'company' },
-  { key: 'team-performance', label: 'Team Performance', icon: BarChart3, section: 'company' },
+  { key: 'team-performance', label: 'Team Performance', icon: BarChart3, section: 'company', isGroup: true },
   { key: 'team-monitoring', label: 'Team Monitoring', icon: Activity, section: 'company' },
   { key: 'shift-management', label: 'Shift Management', icon: Clock, section: 'company' },
   { key: 'dispositions', label: 'Disposition', icon: Tag, section: 'company' },
@@ -57,15 +62,21 @@ const companyMenuItems: MenuItem[] = [
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette, section: 'company' },
   { key: 'admin-settings', label: 'Settings', icon: Settings, section: 'company' },
   { key: 'organization-settings', label: 'Organization Settings', icon: Building2, section: 'company' },
-  { key: 'pipeline', label: 'Pipeline', icon: GitBranch, section: 'company' },
 ]
 
 const allMenuItems = [...companyMenuItems, ...platformMenuItems]
 
+// Flat list for mobile bottom nav (team-performance children are expanded)
+const flatAllMenuItems: MenuItem[] = [
+  ...companyMenuItems.filter(i => !('isGroup' in i)),
+  ...teamPerformanceChildren,
+  ...platformMenuItems,
+]
+
 // First 5 items shown directly in bottom nav
-const bottomNavItems = allMenuItems.slice(0, 5)
+const bottomNavItems = flatAllMenuItems.slice(0, 5)
 // Remaining items shown in "More" popover
-const moreNavItems = allMenuItems.slice(5)
+const moreNavItems = flatAllMenuItems.slice(5)
 
 interface SuperAdminLayoutProps {
   activePage: string
@@ -79,8 +90,11 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
   const isMobile = useIsMobile()
   const [moreOpen, setMoreOpen] = useState(false)
   const [platformSectionOpen, setPlatformSectionOpen] = useState(false)
+  const [tpSectionOpen, setTpSectionOpen] = useState(activePage.startsWith('team-performance'))
   const approvalCount = useApprovalPendingCount()
   const hasApprovals = approvalCount !== null && approvalCount > 0
+
+  const isTpActive = activePage.startsWith('team-performance')
 
   const sidebarContent = (
     <>
@@ -102,26 +116,73 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
           <SidebarGroupLabel>Company Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {companyMenuItems.map((item) => (
-                <SidebarMenuItem key={item.key}>
-                  <SidebarMenuButton
-                    isActive={activePage === item.key}
-                    onClick={() => onNavigate(item.key)}
-                    className={cn(
-                      'cursor-pointer',
-                      activePage === item.key && 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/15'
+              {companyMenuItems.map((item) => {
+                // Handle Team Performance as a collapsible group
+                if ('isGroup' in item && item.isGroup) {
+                  return (
+                    <React.Fragment key={item.key}>
+                      <div
+                        className="flex items-center h-8 rounded-md px-2 cursor-pointer select-none hover:bg-sidebar-accent transition-colors"
+                        onClick={() => setTpSectionOpen(!tpSectionOpen)}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'h-4 w-4 mr-1 shrink-0 transition-transform duration-200 text-sidebar-foreground/70',
+                            tpSectionOpen && 'rotate-90'
+                          )}
+                        />
+                        <item.icon className={cn('h-4 w-4 mr-2 shrink-0', isTpActive && 'text-emerald-600')} />
+                        <span className={cn('text-sm font-medium', isTpActive && 'text-emerald-700 dark:text-emerald-400')}>{item.label}</span>
+                      </div>
+                      <div
+                        className={cn(
+                          'overflow-hidden transition-all duration-200 ease-in-out',
+                          tpSectionOpen ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0'
+                        )}
+                      >
+                        <SidebarMenu>
+                          {teamPerformanceChildren.map((child) => (
+                            <SidebarMenuItem key={child.key}>
+                              <SidebarMenuButton
+                                isActive={activePage === child.key}
+                                onClick={() => onNavigate(child.key)}
+                                className={cn(
+                                  'cursor-pointer pl-8',
+                                  activePage === child.key && 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/15'
+                                )}
+                              >
+                                <child.icon className={cn('h-4 w-4', activePage === child.key && 'text-emerald-600')} />
+                                <span>{child.label}</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </div>
+                    </React.Fragment>
+                  )
+                }
+
+                return (
+                  <SidebarMenuItem key={item.key}>
+                    <SidebarMenuButton
+                      isActive={activePage === item.key}
+                      onClick={() => onNavigate(item.key)}
+                      className={cn(
+                        'cursor-pointer',
+                        activePage === item.key && 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-600/15'
+                      )}
+                    >
+                      <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-emerald-600')} />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                    {item.key === 'approvals' && hasApprovals && (
+                      <SidebarMenuBadge className="bg-amber-500 text-white hover:bg-amber-500">
+                        {approvalCount! > 99 ? '99+' : approvalCount}
+                      </SidebarMenuBadge>
                     )}
-                  >
-                    <item.icon className={cn('h-4 w-4', activePage === item.key && 'text-emerald-600')} />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                  {item.key === 'approvals' && hasApprovals && (
-                    <SidebarMenuBadge className="bg-amber-500 text-white hover:bg-amber-500">
-                      {approvalCount! > 99 ? '99+' : approvalCount}
-                    </SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              ))}
+                  </SidebarMenuItem>
+                )
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

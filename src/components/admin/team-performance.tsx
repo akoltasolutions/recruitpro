@@ -10,11 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw, XCircle, CheckCircle, Timer, TrendingUp } from 'lucide-react'
+import { BarChart3, Download, Filter, User, Phone, Clock, RefreshCw, XCircle, CheckCircle, Timer, TrendingUp, GitBranch } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { format, intervalToDuration } from 'date-fns'
+import { navigateTo } from '@/components/app-router'
+import { cn } from '@/lib/utils'
 
 interface CallRecord {
   id: string
@@ -235,6 +237,30 @@ export function TeamPerformance() {
           {exporting ? 'Exporting...' : 'Export Excel'}
         </Button>
       </PageHeader>
+
+      {/* ─── Sub Navigation Tabs ─── */}
+      <div className="flex items-center gap-1 mb-4 rounded-lg border bg-card p-1">
+        <button
+          onClick={() => navigateTo('team-performance')}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+            'bg-emerald-600 text-white'
+          )}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Call Reports</span>
+        </button>
+        <button
+          onClick={() => navigateTo('team-performance/pipeline')}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+            'text-muted-foreground hover:text-foreground hover:bg-muted'
+          )}
+        >
+          <GitBranch className="h-4 w-4" />
+          <span>Pipeline</span>
+        </button>
+      </div>
 
       {/* ─── Filter Bar ─── */}
       <div className="rounded-lg border p-4 bg-card mb-4">

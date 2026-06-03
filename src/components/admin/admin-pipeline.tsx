@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   GitBranch, Search, Download, Filter, Loader2, ChevronDown,
   Phone, Mail, Building2, Briefcase, User, Calendar, StickyNote,
-  Edit2, Eye, X, Check, MessageSquare, FileSpreadsheet
+  Edit2, Eye, X, Check, MessageSquare, FileSpreadsheet, BarChart3
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ import { authFetch } from '@/stores/auth-store'
 import { useAuthStore, type UserRole } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+import { navigateTo } from '@/components/app-router'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1256,6 +1257,30 @@ export function AdminPipeline() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
+      {/* Sub Navigation Tabs */}
+      <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
+        <button
+          onClick={() => navigateTo('team-performance')}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+            'text-muted-foreground hover:text-foreground hover:bg-muted'
+          )}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Call Reports</span>
+        </button>
+        <button
+          onClick={() => navigateTo('team-performance/pipeline')}
+          className={cn(
+            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+            'bg-emerald-600 text-white'
+          )}
+        >
+          <GitBranch className="h-4 w-4" />
+          <span>Pipeline</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1">

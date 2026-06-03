@@ -46,8 +46,8 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
 const AUTH_ROUTES = ['login', 'signup', 'register', 'forgot-password'] as const
 type AuthView = typeof AUTH_ROUTES[number]
 
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder' | 'pipeline'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder' | 'pipeline'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 /**
@@ -106,17 +106,34 @@ export function AppContent() {
   }, [])
 
   // Determine admin/recruiter/super-admin page from the URL path
-  const adminPage = (isAuthenticated && (user?.role === 'ORG_ADMIN' || user?.role === 'ADMIN'))
-    ? (currentPath as AdminPage) || 'dashboard'
+  // Handle team-performance sub-paths (e.g. team-performance/pipeline)
+  const isAdmin = isAuthenticated && (user?.role === 'ORG_ADMIN' || user?.role === 'ADMIN')
+  const isSuperAdmin = isAuthenticated && user?.role === 'SUPER_ADMIN'
+  const isAdminOrSuperAdmin = isAdmin || isSuperAdmin
+
+  // Parse base page from path (strip sub-paths for page matching)
+  const basePath = currentPath.includes('/') ? currentPath.split('/')[0] : currentPath
+  const subPath = currentPath.includes('/') ? currentPath.slice(currentPath.indexOf('/') + 1) : null
+  const isPipelineSubPage = currentPath === 'team-performance/pipeline'
+
+  const adminPage = isAdmin
+    ? ((basePath || 'dashboard') as AdminPage)
     : 'dashboard'
 
   const recruiterPage = (isAuthenticated && user?.role === 'RECRUITER')
     ? (currentPath as RecruiterPage) || 'home'
     : 'home'
 
-  const superAdminPage = (isAuthenticated && user?.role === 'SUPER_ADMIN')
-    ? (currentPath as SuperAdminPage) || 'platform-dashboard'
+  const superAdminPage = isSuperAdmin
+    ? ((basePath || 'platform-dashboard') as SuperAdminPage)
     : 'platform-dashboard'
+
+  // Redirect old /pipeline URL to /team-performance/pipeline for admin/superadmin
+  useEffect(() => {
+    if (isAdminOrSuperAdmin && currentPath === 'pipeline') {
+      navigateTo('team-performance/pipeline')
+    }
+  }, [currentPath, isAdminOrSuperAdmin])
 
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -252,6 +269,8 @@ export function AppContent() {
   // Super Admin Panel
   if (user.role === 'SUPER_ADMIN') {
     const renderSuperAdminPage = () => {
+      // If on old /pipeline URL, show nothing (redirect will happen via useEffect)
+      if (currentPath === 'pipeline') return null
       switch (superAdminPage) {
         case 'platform-dashboard': return <PlatformDashboard />
         case 'organizations': return <OrganizationManagement />
@@ -259,7 +278,7 @@ export function AppContent() {
         case 'platform-settings': return <PlatformSettingsPage />
         case 'backup-restore': return <BackupRestorePage />
         case 'admin-dashboard': return <AdminDashboard />
-        case 'team-performance': return <TeamPerformance />
+        case 'team-performance': return isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />
         case 'team-monitoring': return <TeamMonitoring />
         case 'shift-management': return <ShiftManagement />
         case 'dispositions': return <DispositionManagement />
@@ -274,13 +293,12 @@ export function AppContent() {
         case 'disposition-builder': return <DispositionBuilder />
         case 'admin-settings': return <AdminSettings userId={user.id} />
         case 'organization-settings': return <OrganizationSettings />
-        case 'pipeline': return <AdminPipeline />
         default: return <PlatformDashboard />
       }
     }
 
     return (
-      <SuperAdminLayout activePage={superAdminPage} onNavigate={(page) => go(page)} onLogout={handleLogout}>
+      <SuperAdminLayout activePage={currentPath || 'platform-dashboard'} onNavigate={(page) => go(page)} onLogout={handleLogout}>
         {renderSuperAdminPage()}
       </SuperAdminLayout>
     )
@@ -289,9 +307,11 @@ export function AppContent() {
   // Org Admin Panel
   if (user.role === 'ORG_ADMIN' || user.role === 'ADMIN') {
     const renderAdminPage = () => {
+      // If on old /pipeline URL, show nothing (redirect will happen via useEffect)
+      if (currentPath === 'pipeline') return null
       switch (adminPage) {
         case 'dashboard': return <AdminDashboard />
-        case 'team-performance': return <TeamPerformance />
+        case 'team-performance': return isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />
         case 'team-monitoring': return <TeamMonitoring />
         case 'shift-management': return <ShiftManagement />
         case 'dispositions': return <DispositionManagement />
@@ -306,13 +326,12 @@ export function AppContent() {
         case 'organization-settings': return <OrganizationSettings />
         case 'field-builder': return <DynamicFieldBuilder />
         case 'disposition-builder': return <DispositionBuilder />
-        case 'pipeline': return <AdminPipeline />
         default: return <AdminDashboard />
       }
     }
 
     return (
-      <AdminLayout activePage={adminPage} onNavigate={(page) => go(page)} onLogout={handleLogout}>
+      <AdminLayout activePage={currentPath || 'dashboard'} onNavigate={(page) => go(page)} onLogout={handleLogout}>
         {renderAdminPage()}
       </AdminLayout>
     )
