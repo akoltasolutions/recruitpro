@@ -277,10 +277,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       candidates: flatCandidates,
+      counts: stageCounts,
       totalCount,
       page,
       totalPages,
-      stageCounts,
     });
   } catch (error) {
     console.error('[GET /api/admin/pipeline]', error);

@@ -33,7 +33,7 @@ type CandidateStatus = 'PENDING' | 'DONE' | 'SCHEDULED' | 'SKIPPED'
 
 interface PipelineNote {
   id: string
-  text: string
+  note: string
   authorName: string
   createdAt: string
 }
@@ -217,18 +217,17 @@ export function AdminPipeline() {
 
   // ── Search debounce ──
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const debouncedSearch = useMemo(() => searchQuery, [searchQuery])
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => {
-      // Trigger re-fetch when search changes
-      fetchCandidates()
+      setDebouncedSearch(searchQuery)
     }, 300)
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current)
     }
-  }, [debouncedSearch, fetchCandidates])
+  }, [searchQuery])
 
   // ── Fetch dropdown data ──
   const fetchDropdownData = useCallback(async () => {
@@ -324,9 +323,15 @@ export function AdminPipeline() {
     }
   }, [activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization])
 
+  // Fetch candidates when filters change
   useEffect(() => {
     fetchCandidates()
-  }, [fetchCandidates])
+  }, [activeStage, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization?.id])
+
+  // Fetch candidates when debounced search changes
+  useEffect(() => {
+    fetchCandidates()
+  }, [debouncedSearch])
 
   // ── Export ──
   const handleExport = async (format: 'csv' | 'xlsx') => {
@@ -458,7 +463,7 @@ export function AdminPipeline() {
         method: 'POST',
         body: JSON.stringify({
           candidateId: notesCandidate.id,
-          text: newNoteText.trim(),
+          note: newNoteText.trim(),
         }),
       })
       if (!res.ok) throw new Error('Failed to add note')
@@ -1179,7 +1184,7 @@ export function AdminPipeline() {
               <div className="space-y-2">
                 {notesHistory.map((note) => (
                   <div key={note.id} className="border rounded-lg p-3 space-y-1">
-                    <p className="text-sm">{note.text}</p>
+                    <p className="text-sm">{note.note}</p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className="font-medium">{note.authorName}</span>
                       <span>•</span>
