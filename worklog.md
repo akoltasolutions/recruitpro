@@ -293,3 +293,24 @@ Stage Summary:
 - Professional email template with RecruitPro branding
 - Phone OTP flow unchanged (still needs SMS provider integration separately)
 - ACTION REQUIRED: User must add RESEND_API_KEY as GitHub Actions secret
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix Forgot Password — Resend package missing from package.json
+
+Work Log:
+- User reported "Forgot Password not working" and confirmed RESEND_API_KEY added to GitHub secrets
+- Previous commit (90d6425) already had full Resend integration code and GitHub Actions workflow
+- Found TWO critical issues preventing the feature from working:
+  1. `resend` package NOT in package.json — `bun install` on production server wouldn't install it, causing `await import('resend')` to fail at runtime
+  2. Default .env template had `RESEND_API_KEY=""` (empty) — though GitHub Actions workflow already injects it, removed from template
+- Added `resend@^6.12.4` to package.json dependencies
+- Updated deploy.sh: removed empty RESEND_API_KEY from default .env, added Step 1c safety net for secret injection
+- Committed as c7ffbd7 and pushed to main
+
+Stage Summary:
+- Root cause: resend npm package was never added to package.json, only existed in local node_modules
+- GitHub Actions workflow already configured to pass RESEND_API_KEY to server
+- Deploy will now: install resend via bun install + inject RESEND_API_KEY from GitHub secrets
+- Forgot Password flow: Email method sends via Resend (6-char code, 15-min expiry)
