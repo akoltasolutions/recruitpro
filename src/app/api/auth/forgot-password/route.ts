@@ -21,7 +21,7 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
 
     const resend = new Resend(apiKey);
 
-    const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@akolta.com>';
+    const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@app.akolta.com>';
     console.log('[ForgotPassword] Sending email from:', fromAddress, 'to:', to);
 
     const { data, error: resendError } = await resend.emails.send({

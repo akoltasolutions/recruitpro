@@ -47,7 +47,7 @@ export async function GET() {
   }
 
   // ── 3. EMAIL_FROM ──
-  diagnostics.emailFrom = process.env.EMAIL_FROM || '(not set — default: RecruitPro <noreply@akolta.com>)';
+  diagnostics.emailFrom = process.env.EMAIL_FROM || '(not set — default: RecruitPro <noreply@app.akolta.com>)';
 
   // ── 4. Check .env file for RESEND_API_KEY line ──
   try {
@@ -86,7 +86,7 @@ export async function GET() {
 
     // ── 6. Test actual Resend API call ──
     const resend = new Resend(apiKey);
-    const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@akolta.com>';
+    const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@app.akolta.com>';
 
     console.log('[ResendTest] Attempting to send test email from:', fromAddress, 'to:', fromAddress);
 
