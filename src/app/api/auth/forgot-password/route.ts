@@ -2,6 +2,65 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { db } from '@/lib/db';
 
+/**
+ * Send password reset email via Resend.
+ * Falls back gracefully if Resend is not configured.
+ */
+async function sendResetEmail(to: string, name: string, code: string): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('[ForgotPassword] RESEND_API_KEY not set — email not sent');
+    return false;
+  }
+
+  try {
+    const { Resend } = await import('resend');
+    const resend = new Resend(apiKey);
+
+    const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@akolta.com>';
+
+    await resend.emails.send({
+      from: fromAddress,
+      to,
+      subject: 'RecruitPro — Password Reset Code',
+      html: `
+        <div style="max-width:480px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f9fafb;border-radius:12px;overflow:hidden">
+          <div style="background:#059669;padding:24px 32px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700">RecruitPro</h1>
+            <p style="color:#d1fae5;margin:4px 0 0;font-size:13px">Password Reset</p>
+          </div>
+          <div style="padding:32px;background:#fff">
+            <p style="margin:0 0 8px;font-size:15px;color:#111827">Hello ${name},</p>
+            <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.5">
+              We received a request to reset your password. Use the verification code below to set a new password. This code expires in <strong>15 minutes</strong>.
+            </p>
+            <div style="background:#f0fdf4;border:2px dashed #059669;border-radius:8px;padding:20px;text-align:center;margin:0 0 24px">
+              <span style="font-size:32px;font-weight:700;letter-spacing:6px;color:#059669;font-family:monospace">${code}</span>
+            </div>
+            <p style="margin:0 0 8px;font-size:13px;color:#9ca3af">
+              If you did not request a password reset, please ignore this email. Your password will remain unchanged.
+            </p>
+            <p style="margin:0;font-size:12px;color:#d1d5db">
+              — The RecruitPro Team
+            </p>
+          </div>
+          <div style="background:#f9fafb;padding:16px 32px;text-align:center;border-top:1px solid #e5e7eb">
+            <p style="margin:0;font-size:11px;color:#9ca3af">
+              &copy; ${new Date().getFullYear()} RecruitPro. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+    });
+
+    console.log('[ForgotPassword] Reset email sent to:', to);
+    return true;
+  } catch (error) {
+    console.error('[ForgotPassword] Failed to send email via Resend:', error);
+    return false;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -34,7 +93,7 @@ export async function POST(request: NextRequest) {
       if (!user) {
         // Don't leak user existence — return same success message
         return NextResponse.json({
-          message: 'If an account exists, a reset code has been sent.',
+          message: 'If an account exists, a reset code has been sent to your email.',
         });
       }
 
@@ -42,7 +101,7 @@ export async function POST(request: NextRequest) {
       if (!user.isActive) {
         // Don't leak user existence — return same success message
         return NextResponse.json({
-          message: 'If an account exists, a reset code has been sent.',
+          message: 'If an account exists, a reset code has been sent to your email.',
         });
       }
 
@@ -58,12 +117,20 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const response: Record<string, string> = {
-        message: 'If an account exists, a reset code has been sent.',
+      // Send email via Resend (non-blocking — don't fail the request if email fails)
+      const emailSent = await sendResetEmail(email, user.name || 'User', token);
+
+      const response: Record<string, unknown> = {
+        message: emailSent
+          ? 'A password reset code has been sent to your email.'
+          : 'If an account exists, a reset code has been sent.',
       };
+
+      // In non-production, include the code for testing
       if (process.env.NODE_ENV !== 'production') {
         response.resetCode = token;
       }
+
       return NextResponse.json(response);
     }
 
@@ -115,12 +182,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const response: Record<string, string> = {
+    const response: Record<string, unknown> = {
       message: 'If an account exists, a reset code has been sent.',
     };
+
+    // In non-production, include the code for testing
     if (process.env.NODE_ENV !== 'production') {
       response.otp = otp;
     }
+
     return NextResponse.json(response);
   } catch (error) {
     console.error('Forgot password error:', error);

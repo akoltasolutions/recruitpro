@@ -23,7 +23,19 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 60s
           command_timeout: 4m
+          envs: RESEND_API_KEY
           script: |
             cd /home/ubuntu/recruitpro
+            # Ensure RESEND_API_KEY is set in .env
+            if [ -n "$RESEND_API_KEY" ]; then
+              if grep -q 'RESEND_API_KEY=' .env 2>/dev/null; then
+                sed -i 's|^RESEND_API_KEY=.*|RESEND_API_KEY="'"$RESEND_API_KEY"'"|' .env
+              else
+                echo 'RESEND_API_KEY="'"$RESEND_API_KEY"'"' >> .env
+              fi
+              echo "[deploy] RESEND_API_KEY injected into .env"
+            else
+              echo "[deploy] WARNING: RESEND_API_KEY not available (GitHub secret not set)"
+            fi
             chmod +x deploy.sh
             bash deploy.sh 2>&1

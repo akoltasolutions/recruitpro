@@ -99,6 +99,8 @@ TOKEN_SECRET="recruitpro-prod-secret-key-2024"
 NODE_ENV="production"
 ALLOW_SEED="true"
 WEBHOOK_SECRET="recruitpro-webhook-secret-2024"
+RESEND_API_KEY=""
+EMAIL_FROM="RecruitPro <noreply@akolta.com>"
 ENVEOF
     fi
 fi
