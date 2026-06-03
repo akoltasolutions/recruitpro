@@ -162,14 +162,14 @@ export function TeamManagementEnhanced() {
   const [departments, setDepartments] = useState<Department[]>(mockDepartments)
 
   // ─── Member state (declared before filteredMembers to avoid TDZ) ──────────
-  const [members, setMembers] = useState<TeamMember[]>(mockMembers)
+  const [teamList, setTeamList] = useState<TeamMember[]>(mockMembers)
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
-  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
-  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
+  const [mmemberDialogOpen, setMemberDialogOpen = useState(false)
+  const [mmemberForm, setMemberForm = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
 
   // ─── Filtered Members ────────────────────────────────────────────────────
 
-  const filteredMembers = members.filter((m) => {
+  const filteredMembers = teamList.filter((m) => {
     const q = search.toLowerCase().trim()
     if (!q) return true
     return (
@@ -206,7 +206,6 @@ export function TeamManagementEnhanced() {
     }
 
     setInviteSubmitting(true)
-    // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     const newInvitation: PendingInvitation = {
@@ -347,7 +346,7 @@ export function TeamManagementEnhanced() {
       return
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
-    setMembers((prev) =>
+    setTeamList((prev) =>
       prev.map((m) =>
         m.id === editingMember?.id
           ? { ...m, ...memberForm, phone: memberForm.phone || null }
@@ -361,20 +360,20 @@ export function TeamManagementEnhanced() {
 
   function handleToggleMemberStatus(member: TeamMember) {
     const newStatus = member.status === 'active' ? 'inactive' : 'active'
-    setMembers((prev) =>
+    setTeamList((prev) =>
       prev.map((m) => (m.id === member.id ? { ...m, status: newStatus } : m)),
     )
     toast.success(`${member.name} is now ${newStatus}`)
   }
 
   function handleRemoveMember(member: TeamMember) {
-    setMembers((prev) => prev.filter((m) => m.id !== member.id))
+    setTeamList((prev) => prev.filter((m) => m.id !== member.id))
     toast.success(`${member.name} has been removed`)
   }
 
   function handleToggleMemberRole(member: TeamMember) {
     const newRole = member.role === 'ORG_ADMIN' ? 'USER' : 'ORG_ADMIN'
-    setMembers((prev) =>
+    setTeamList((prev) =>
       prev.map((m) => (m.id === member.id ? { ...m, role: newRole } : m)),
     )
     toast.success(`${member.name} is now ${newRole === 'ORG_ADMIN' ? 'Admin' : 'Member'}`)
@@ -1218,7 +1217,7 @@ export function TeamManagementEnhanced() {
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="max-h-60" container={deptDialogEl}>
-                  {members.filter((m) => m.status === 'active').map((m) => (
+                  {teamList.filter((m) => m.status === 'active').map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name} — {m.designation}
                     </SelectItem>
