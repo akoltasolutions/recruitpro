@@ -6,6 +6,7 @@ import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { usePortalOverlayFix } from "@/hooks/usePortalOverlayFix"
+import { DialogContainerProvider } from "@/hooks/useDialogContainer"
 
 function Dialog({
   ...props
@@ -47,38 +48,85 @@ function DialogOverlay({
   )
 }
 
+/**
+ * DialogContent — Two-Layer Architecture
+ *
+ * OUTER LAYER (DialogPrimitive.Content):
+ *   - fixed inset-0: covers the full viewport
+ *   - flex centering: positions the inner dialog box
+ *   - pointer-events-none: clicks pass through to the overlay behind
+ *   - NO transform: avoids stacking context issues for portaled children
+ *
+ * INNER LAYER (visual dialog box):
+ *   - pointer-events-auto: captures clicks inside the dialog
+ *   - The actual visible dialog with border, shadow, background
+ *   - NO overflow-y-auto: prevents clipping of portaled dropdowns
+ *   - The ref and data-slot are on THIS element (the visible dialog)
+ *   - Provided via DialogContainerContext to child Select/Dropdown portals
+ *
+ * WHY NO TRANSFORM?
+ * CSS spec: "If the containing block has a transform, the position: fixed
+ * child is positioned relative to that containing block, not the viewport."
+ * Radix Select/Dropdown use position:fixed for popper positioning.
+ * If DialogContent had transform:translate(-50%,-50%), the dropdown would
+ * be positioned relative to the dialog, causing offset errors.
+ * By using flex centering instead of transform, position:fixed works correctly.
+ */
 const DialogContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }
 >(({ className, children, showCloseButton = true, ...props }, ref) => {
   // Activates the global portal overlay fix while this dialog content is mounted.
-  // This removes `inert` from non-dialog portals (Select, Dropdown, Popover, etc.)
-  // that Radix Dialog's modal behavior marks as inert.
   usePortalOverlayFix(true)
+
+  // Track inner content element for DialogContainerContext.
+  // Using useState (not ref) because the value is read during render
+  // to pass to DialogContainerProvider. State updates trigger re-render
+  // so children (Select/Dropdown) get the correct container element.
+  const [innerEl, setInnerEl] = React.useState<HTMLDivElement | null>(null)
+
+  // Merge refs: user's ref + our state setter
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setInnerEl(node)
+      if (typeof ref === "function") ref(node)
+      else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
+    },
+    [ref]
+  )
 
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={ref}
-        data-slot="dialog-content"
+        data-slot="dialog-outer"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed z-[10001] inset-x-3 top-3 bottom-3 m-auto grid w-full max-w-[calc(100%-2rem)] max-h-[85vh] gap-4 rounded-lg border p-6 shadow-lg duration-200 overflow-y-auto overflow-x-hidden sm:left-1/2 sm:right-auto sm:top-1/2 sm:bottom-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-lg",
-          className
+          "fixed inset-0 z-[10001] flex items-center justify-center p-3 pointer-events-none"
         )}
-        style={{ WebkitOverflowScrolling: 'touch', ...props.style }}
         {...props}
       >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
+        {/* Inner visual dialog box — the actual dialog the user sees */}
+        <div
+          ref={setRefs}
+          data-slot="dialog-content"
+          className={cn(
+            "bg-background pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 w-full max-w-[calc(100%-2rem)] max-h-[85vh] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+            className
+          )}
+        >
+          <DialogContainerProvider element={innerEl}>
+            {children}
+            {showCloseButton && (
+              <DialogPrimitive.Close
+                data-slot="dialog-close"
+                className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              >
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            )}
+          </DialogContainerProvider>
+        </div>
       </DialogPrimitive.Content>
     </DialogPortal>
   )

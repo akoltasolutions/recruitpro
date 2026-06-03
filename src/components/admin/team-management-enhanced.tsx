@@ -153,8 +153,7 @@ export function TeamManagementEnhanced() {
   // Revoke invitation state
   const [revokeConfirm, setRevokeConfirm] = useState<PendingInvitation | null>(null)
 
-  // Ref element for department dialog content (used to contain Select portal within dialog)
-  const [deptDialogEl, setDeptDialogEl] = useState<HTMLDivElement | null>(null)
+  // Note: Department Head Select dropdown auto-detects dialog container via DialogContainerContext
 
   // ─── Members (placeholder state) ──────────────────────────────────────────
   const [invitations, setInvitations] = useState<PendingInvitation[]>(mockInvitations)
@@ -920,7 +919,7 @@ export function TeamManagementEnhanced() {
 
       {/* ═══════════ Invite Member Dialog ═══════════ */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Invite Team Member</DialogTitle>
             <DialogDescription>
@@ -928,7 +927,7 @@ export function TeamManagementEnhanced() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 flex-1 overflow-y-auto -mx-1 px-1">
             <div className="grid gap-2">
               <Label htmlFor="invite-email">
                 Email Address <span className="text-red-500">*</span>
@@ -1001,7 +1000,7 @@ export function TeamManagementEnhanced() {
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-2 flex-shrink-0">
             <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSubmitting}>
               Cancel
             </Button>
@@ -1019,7 +1018,7 @@ export function TeamManagementEnhanced() {
 
       {/* ═══════════ Edit Member Dialog ═══════════ */}
       <Dialog open={memberDialogOpen} onOpenChange={setMemberDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit Team Member</DialogTitle>
             <DialogDescription>
@@ -1027,7 +1026,7 @@ export function TeamManagementEnhanced() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 flex-1 overflow-y-auto -mx-1 px-1">
             <div className="grid gap-2">
               <Label htmlFor="member-name">Name <span className="text-red-500">*</span></Label>
               <Input
@@ -1112,7 +1111,7 @@ export function TeamManagementEnhanced() {
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-2 flex-shrink-0">
             <Button variant="outline" onClick={() => setMemberDialogOpen(false)}>
               Cancel
             </Button>
@@ -1174,7 +1173,7 @@ export function TeamManagementEnhanced() {
 
       {/* ═══════════ Department Dialog ═══════════ */}
       <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
-        <DialogContent className="sm:max-w-md" ref={setDeptDialogEl}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingDept ? 'Edit Department' : 'Add Department'}</DialogTitle>
             <DialogDescription>
@@ -1216,7 +1215,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="dept-head" className="w-full min-w-0">
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent position="popper" className="max-h-60" container={deptDialogEl}>
+                <SelectContent position="popper" className="max-h-60">
                   {teamList.filter((m) => m.status === 'active').map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name} — {m.designation}
