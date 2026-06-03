@@ -112,15 +112,33 @@ if [ -n "$RESEND_API_KEY" ]; then
     else
         echo 'RESEND_API_KEY="'"$RESEND_API_KEY"'"' >> .env
     fi
-    log "RESEND_API_KEY present in .env"
+    log "RESEND_API_KEY injected into .env (length: ${#RESEND_API_KEY})"
 else
-    log "NOTE: RESEND_API_KEY not set — forgot-password emails will not be sent"
+    # Check if .env already has a non-empty RESEND_API_KEY (from GitHub Actions pre-script)
+    EXISTING_KEY=$(grep '^RESEND_API_KEY=' .env 2>/dev/null | sed 's/^RESEND_API_KEY=//' | tr -d '"')
+    if [ -n "$EXISTING_KEY" ]; then
+        log "RESEND_API_KEY already in .env from pre-script (length: ${#EXISTING_KEY})"
+    else
+        log "WARNING: RESEND_API_KEY not set — forgot-password emails will NOT be sent"
+    fi
 fi
+# Log .env status (masked)
+log ".env has RESEND_API_KEY line: $(grep -c 'RESEND_API_KEY=' .env 2>/dev/null || echo 0)"
+log ".env has EMAIL_FROM line: $(grep -c 'EMAIL_FROM=' .env 2>/dev/null || echo 0)"
 
 # Step 2: Install dependencies
 log "Step 2: Installing dependencies..."
 bun install --frozen-lockfile 2>/dev/null || bun install
 log "Dependencies installed."
+
+# Step 2b: Verify resend package is installed
+log "Step 2b: Verifying resend package..."
+if [ -d node_modules/resend ]; then
+    RESEND_VERSION=$(node -e "console.log(require('./node_modules/resend/package.json').version)" 2>/dev/null || echo "unknown")
+    log "resend package found (v$RESEND_VERSION)"
+else
+    log "WARNING: resend package NOT found — forgot-password emails will fail!"
+fi
 
 # Step 3: Sync database
 log "Step 3: Syncing database schema..."
@@ -251,6 +269,15 @@ if [ "$BUILD_SUCCESS" = true ]; then
         # ✅ New build confirmed — clean up
         rm -rf .next-backup
         rm -f /tmp/recruitpro-deploy.lock
+
+        # ── Verify Resend diagnostic endpoint exists (confirms new code is live) ──
+        RESEND_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/debug/resend-test 2>/dev/null || echo "000")
+        if [ "$RESEND_CHECK" = "200" ]; then
+            log "[BUILD] Resend diagnostic endpoint confirmed (HTTP $RESEND_CHECK) — new code is LIVE"
+        else
+            log "[BUILD] Resend diagnostic endpoint returned HTTP $RESEND_CHECK — may need investigation"
+        fi
+
         log "=========================================="
         log "DEPLOYMENT COMPLETED SUCCESSFULLY"
         log "Zero-downtime: old build served during build"
