@@ -462,3 +462,26 @@ Stage Summary:
 - Dialogs now have sticky header/footer scroll pattern by default
 - Short dialogs unaffected (content fits within max-h)
 - 12 files changed, 98 insertions, 80 deletions
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Investigate and resolve deployment failure for dialog scrolling fix
+
+Work Log:
+- User reported modal/dialog scrolling fix not working on live site
+- Checked dev log: found old syntax error (line 167) but current code is correct
+- Checked live site: JS chunks did NOT contain overflow-hidden (deployment hadn't happened)
+- Found .github/workflows/deploy.yml file was corrupted: `branches: ain]` instead of `branches: [main]`
+- Upon deeper byte-level inspection, file was actually correct ([main]) — initial shell display was truncated
+- Root cause: GitHub Actions workflow wasn't triggering deploys (possibly secrets misconfigured or workflow silently failing)
+- Pushed empty commit to re-trigger deployment
+- Monitored deployment: site returned 502 during build (PM2 restart), then 200 after
+- Verified new JS chunks appeared on live site (different hashes from before)
+- Confirmed `flex flex-col overflow-hidden` present in production build chunk 75ed98401967f862
+- Verified locally with agent-browser: dialog has proper flex-col layout, body is scrollable (scrollHeight > height), dropdowns render at z-index 10002 above dialog
+
+Stage Summary:
+- Deployment is now live with the dialog scrolling fix
+- All dialogs across the app now support sticky header/footer scroll pattern
+- Production chunk confirmed: `max-h-[85vh] flex flex-col overflow-hidden gap-4 rounded-lg border p-6`
