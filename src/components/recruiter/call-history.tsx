@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { History, Search, Filter, Clock, Phone, MapPin, Briefcase, FileText, Download, X, MessageSquare } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { cn, formatPhoneForWhatsApp } from '@/lib/utils'
@@ -74,50 +75,113 @@ export function CallHistory({ userId }: CallHistoryProps) {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dispositionFilter, setDispositionFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
+  // Pagination state
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Debounce search (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Build query params helper
+  const buildParams = useCallback((page: number, limit: number) => {
+    const params = new URLSearchParams({ recruiterId: userId })
+    params.set('page', String(page))
+    params.set('limit', String(limit))
+    if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+    if (dispositionFilter !== 'all') params.set('dispositionType', dispositionFilter)
+    if (dateFrom) params.set('dateFrom', new Date(dateFrom).toISOString())
+    if (dateTo) params.set('dateTo', new Date(dateTo).toISOString())
+    return params
+  }, [userId, debouncedSearch, dispositionFilter, dateFrom, dateTo])
+
+  // Fetch records — initial load (page 1, replaces data)
   const fetchRecords = useCallback(async () => {
     setLoading(true)
+    setCurrentPage(1)
     try {
-      const params = new URLSearchParams({ recruiterId: userId })
-      if (dateFrom) params.set('dateFrom', new Date(dateFrom).toISOString())
-      if (dateTo) params.set('dateTo', new Date(dateTo).toISOString())
+      const params = buildParams(1, pageSize)
       const res = await authFetch(`/api/call-records?${params.toString()}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
       setRecords(data.callRecords || [])
+      setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 1)
     } catch {
       toast.error('Failed to load call history')
     }
     setLoading(false)
-  }, [userId, dateFrom, dateTo])
+  }, [buildParams, pageSize])
 
+  // Trigger fetchRecords when filters/pageSize change
   useEffect(() => {
     fetchRecords()
   }, [fetchRecords])
 
-  const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        const matchName = r.candidate.name.toLowerCase().includes(query)
-        const matchPhone = r.candidate.phone.includes(query)
-        if (!matchName && !matchPhone) return false
-      }
-      if (dispositionFilter !== 'all') {
-        if (r.disposition?.type !== dispositionFilter) return false
-      }
-      return true
-    })
-  }, [records, searchQuery, dispositionFilter])
+  // Load more — fetches next page, appends data
+  const loadMore = useCallback(async () => {
+    if (loadingMore || currentPage >= totalPages) return
+    setLoadingMore(true)
+    const nextPage = currentPage + 1
+    try {
+      const params = buildParams(nextPage, pageSize)
+      const res = await authFetch(`/api/call-records?${params.toString()}`)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setRecords(prev => [...prev, ...(data.callRecords || [])])
+      setCurrentPage(nextPage)
+      setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 1)
+    } catch {
+      toast.error('Failed to load more records')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, currentPage, totalPages, buildParams, pageSize])
+
+  // IntersectionObserver for infinite scroll
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { rootMargin: '300px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+  }
 
   const handleExport = async () => {
     setExporting(true)
     try {
       const params = new URLSearchParams({ recruiterId: userId })
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim())
+      if (dispositionFilter !== 'all') params.set('dispositionType', dispositionFilter)
       if (dateFrom) params.set('dateFrom', new Date(dateFrom).toISOString())
       if (dateTo) params.set('dateTo', new Date(dateTo).toISOString())
       const res = await authFetch(`/api/export-calls?${params.toString()}`)
@@ -173,7 +237,7 @@ export function CallHistory({ userId }: CallHistoryProps) {
           variant="outline"
           size="sm"
           onClick={handleExport}
-          disabled={exporting || filteredRecords.length === 0}
+          disabled={exporting || records.length === 0}
           className="w-full sm:w-auto min-h-[40px]"
         >
           <Download className="h-4 w-4 mr-2" />
@@ -185,7 +249,7 @@ export function CallHistory({ userId }: CallHistoryProps) {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by name or phone..."
+          placeholder="Search by name, phone, email, or disposition..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9 h-11"
@@ -258,7 +322,7 @@ export function CallHistory({ userId }: CallHistoryProps) {
           {/* Active filter summary */}
           {hasActiveFilters && (
             <p className="text-xs text-muted-foreground text-center pt-1">
-              {filteredRecords.length} result{filteredRecords.length !== 1 ? 's' : ''}
+              {records.length} of {totalCount} result{totalCount !== 1 ? 's' : ''}
             </p>
           )}
         </div>
@@ -281,14 +345,14 @@ export function CallHistory({ userId }: CallHistoryProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredRecords.length === 0 ? (
+            {records.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                   No records found
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRecords.map((record) => (
+              records.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell className="font-medium">{record.candidate.name}</TableCell>
                   <TableCell className="font-mono text-sm">{record.candidate.phone}</TableCell>
@@ -343,14 +407,14 @@ export function CallHistory({ userId }: CallHistoryProps) {
 
       {/* Mobile Card View */}
       <div className="md:hidden space-y-3">
-        {filteredRecords.length === 0 ? (
+        {records.length === 0 ? (
           <EmptyState
             icon={History}
             title="No Records Found"
             description={hasActiveFilters ? 'Try adjusting your filters.' : 'No call history yet.'}
           />
         ) : (
-          filteredRecords.map((record) => (
+          records.map((record) => (
             <Card key={record.id} className="overflow-hidden">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
@@ -441,6 +505,30 @@ export function CallHistory({ userId }: CallHistoryProps) {
           ))
         )}
       </div>
+
+      {/* Infinite scroll sentinel */}
+      <div ref={sentinelRef} className="h-1" />
+
+      {/* Loading indicator for infinite scroll */}
+      <InfiniteScrollLoader
+        loadingMore={loadingMore}
+        isEnd={currentPage >= totalPages && records.length > 0}
+      />
+
+      {/* Pagination controls */}
+      <PaginationControls
+        totalCount={totalCount}
+        displayedCount={records.length}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        pageSizeOptions={[50, 100]}
+        onPageSizeChange={handlePageSizeChange}
+        onLoadMore={loadMore}
+        loadingMore={loadingMore}
+        loading={loading}
+        hasMore={currentPage < totalPages}
+      />
     </div>
   )
 }

@@ -1,600 +1,70 @@
 ---
 Task ID: 1
-Agent: Main
-Task: Analyze screenshot and explore codebase for Call Timer + Disposition Timer Enhancement
-
-Work Log:
-- Analyzed uploaded screenshot showing Post-Call Disposition dialog with candidate info, disposition buttons, client dropdown, and call timer badge showing 00:12
-- Read complete auto-dialer.tsx (2395 lines) — understood 3 call paths, timer start/stop logic, disposition modal, save flow
-- Read call-records API route — understood save body including callDuration
-- Read recruiter-stats, dashboard, team-performance APIs — verified analytics already sum callDuration
-- Read platform-settings API + UI — understood JSON-based settings pattern
-- Read Prisma schema — CallRecord model has callDuration Int field
-
-Stage Summary:
-- Timer currently starts in executeCall() after ~3s pre-call countdown (startPreCallTimer → countdown → executeCall → startCallTimer)
-- Timer stops on return from dialer (handleReturnFromDialer calls stopCallTimer)
-- Disposition modal shows frozen timer value
-- callDuration is already saved in buildSaveBody() and aggregated in all analytics APIs
-- Platform settings use JSON file at db/platform-settings.json
-
-
----
-Task ID: 2-a
-Agent: Main
-Task: Add includeDispositionTime to Platform Settings API + public read endpoint
-
-Work Log:
-- Added `includeDispositionTime: boolean` to PlatformSettings interface (default: true)
-- Updated GET/PUT handlers in `/api/super-admin/platform-settings/route.ts`
-- Created new public endpoint `/api/settings/call-timer-config/route.ts` accessible to any authenticated user
-- Endpoint reads from same platform-settings.json, returns `{ includeDispositionTime: boolean }`
-
-Stage Summary:
-- Super admin can toggle includeDispositionTime via existing platform settings UI
-- Recruiters can read the setting via `/api/settings/call-timer-config` (auth required)
-- Default is ON (true) — timer includes disposition time
-
----
-Task ID: 2-b
-Agent: Main
-Task: Add admin toggle UI for disposition timer
-
-Work Log:
-- Added Timer icon import from lucide-react
-- Added `includeDispositionTime` to PlatformSettings interface and defaults in component
-- Added new "Call Timer Settings" Card with toggle switch between Subscription Enforcement and Default Limits cards
-- Toggle shows contextual description based on ON/OFF state
-
-Stage Summary:
-- Super Admin → Platform Settings now shows "Include Disposition Time in Call Timer" toggle
-- ON: "Call timer runs from Call button click until disposition is submitted"
-- OFF: "Call timer stops when recruiter returns from call"
-
----
-Task ID: 3
-Agent: Main
-Task: Implement immediate timer start + continuous timer + disposition modal running timer
-
-Work Log:
-- Added `includeDispositionTime` state and `includeDispositionTimeRef` ref to AutoDialer component
-- Added useEffect to fetch setting from `/api/settings/call-timer-config` on mount
-- Modified `startCallTimer()` to start from 1 second immediately (setCallTimer(1)) — no delay
-- Modified `startPreCallTimer()` to call `startCallTimer()` immediately when Call button is clicked (before countdown starts) — eliminates ~3s delay
-- Modified `executeCall()` to only start timer if not already running (timer started earlier in flow)
-- Modified `handleReturnFromDialer()` to NOT stop timer when `includeDispositionTime` is ON
-- Modified `showPostCallDisposition` Android bridge handler to NOT stop timer when ON
-- Modified `handleManualEndCall()` to NOT stop timer when ON
-- Added `stopCallTimer()` call in `handleSaveAndNext()` AFTER successful save
-- Added `stopCallTimer()` call in `handleSaveOnly()` AFTER successful save
-- Updated mobile disposition modal timer badge with pulsing red dot + "Timer running" label
-- Updated desktop disposition modal timer badge with same running indicator
-- Close/discard handlers (overlay, close button, Android back) still stop timer (correct behavior)
-
-Stage Summary:
-- Timer starts from 00:01 immediately when Call button clicked (no ~3s delay)
-- Timer continues through call disconnect, ringing, and disposition fill when setting is ON
-- Timer stops ONLY on disposition save/submit
-- Timer stops on discard/close without saving
-- Disposition modal shows pulsing red dot + amber text when timer is running
-- All existing dialer flow, call history, analytics remain unchanged
-- `callDuration` field in CallRecord already captures total time (no schema change needed)
-
----
-Task ID: 4
-Agent: Main
-Task: Fix "Failed to load platform setting" error + deploy to live
-
-Work Log:
-- Investigated the "Failed to load platform setting" error on Super Admin → Platform Settings page
-- Found dev log showing 401 response from `/api/super-admin/platform-settings` (expected locally — no user logged in)
-- Root cause analysis: `ensureSettingsFile()` could fail if file creation fails (permissions, disk issues), AND GET catch block was returning 500
-- Also found that existing settings files from older versions would be missing `includeDispositionTime` field (no default merging)
-- Fixed `ensureSettingsFile()`: Now reads as `Partial<PlatformSettings>` and merges with defaults (`{ ...defaultSettings, ...parsed }`)
-- Fixed `ensureSettingsFile()`: File creation wrapped in nested try-catch — returns defaults even if write fails
-- Fixed GET handler: Outer catch now returns `defaultSettings` with 200 status instead of 500
-- Fixed frontend: Differentiates 401 ("Session expired") vs network errors vs server errors
-- Updated `deploy.sh`: Added Step 3c to pre-create `db/platform-settings.json` with correct defaults if file doesn't exist
-- Committed and pushed to GitHub (commit b3774c3)
-- GitHub Actions deploy triggered, production server confirmed healthy (HTTP 200)
-
-Stage Summary:
-- Platform Settings API is now bullet-proof: always returns valid settings (defaults if anything fails)
-- New fields added in future versions are automatically merged with defaults from existing file
-- Deploy script ensures settings file exists before PM2 starts
-- Production deploy in progress via GitHub Actions
-
----
-Task ID: 5
-Agent: Main
-Task: Fix Department dialog overlapping issue on team-enhanced page
-
-Work Log:
-- Analyzed screenshot using VLM — identified that Select dropdown (Department Head) extends beyond right edge of dialog
-- Root cause: SelectTrigger base class had `w-fit`, causing trigger to auto-size to content width
-- DialogContent had `overflow-y-auto` but no `overflow-x-hidden`, allowing horizontal overflow
-- Fixed SelectTrigger base class: `w-fit` → `w-full` (all selects now properly fill their container)
-- Added `overflow-x-hidden` to DialogContent base class (prevents horizontal overflow globally)
-- Added `min-w-0` to department dialog form wrapper (proper flex/grid child width constraint)
-- Added explicit `min-w-0` to Department Head SelectTrigger for extra safety
-- Ran lint — clean
-- Committed (249989e) and pushed to GitHub — deploy triggered
-
-Stage Summary:
-- 3 files changed: select.tsx, dialog.tsx, team-management-enhanced.tsx
-- All SelectTrigger components now default to w-full (proper form behavior)
-- Dialog overflow is now constrained both horizontally and vertically
-- Deploy triggered via GitHub Actions
-
----
-Task ID: 6
-Agent: Main
-Task: Permanent global z-index fix for all overlapping issues across dialer, dialogs, selects
-
-Work Log:
-- Audited ALL z-index values across entire codebase (30+ occurrences)
-- Identified root cause: auto-dialer used 10 hardcoded inline zIndex values that bypassed the CSS hierarchy
-- Key conflict: Disposition bottom-sheet at inline zIndex:10001 same as Dialog content — Select dropdowns couldn't layer above
-- Created data-attribute system: [data-dialer-overlay] and [data-dialer-sheet] for all dialer overlays
-- Updated globals.css with new CSS selectors for disposition, timer, and template sheets
-- Removed ALL 10 hardcoded inline zIndex values from auto-dialer.tsx, replaced with data attributes
-- Added overflow-x-hidden to DialogContent (global) and SelectTrigger w-fit → w-full (global)
-- Added min-w-0 to department dialog form (component-level)
-- Lint passes clean, compiles clean
-- Committed (d0a91c9) and pushed to GitHub
-
-Stage Summary:
-- Z-index hierarchy is now single-source-of-truth in globals.css
-- ALL overlays (dialogs, dialer sheets, timers, selects) participate in the same CSS-driven hierarchy
-- No hardcoded z-index values remain in any component
-- Select/Dropdown menus always appear above Dialog content (z-10002 > z-10001)
-- Overflow-x-hidden on DialogContent prevents horizontal bleed globally
----
-Task ID: 1
 Agent: Main Agent
-Task: Global Popup Dropdown Overlay Fix (Permanent) for RecruitPro
+Task: Global Infinite Scroll + Pagination Architecture for RecruitPro
 
 Work Log:
-- Analyzed root cause: Radix Dialog modal={true} adds `inert` HTML attribute to ALL sibling portals on document.body, including Select/Dropdown/Popover portals, making them completely non-interactive
-- Previous fix (commit 249989e) only addressed CSS overflow/width — missed the fundamental `inert` issue
-- Read all UI primitives: select.tsx, dialog.tsx, dropdown-menu.tsx, popover.tsx, sheet.tsx, alert-dialog.tsx, command.tsx, tooltip.tsx
-- Created usePortalOverlayFix.ts hook with MutationObserver to remove `inert` from non-dialog portals
-- Created usePortalBootstrap hook for persistent observer
-- Created PortalOverlayProvider client component for root layout
-- Updated Dialog/Sheet/AlertDialog components to activate portal fix on mount
-- Updated Select component: modal={false} default, position: fixed, max-height override
-- Updated globals.css with comprehensive z-index hierarchy, inert CSS override, pointer-events rules
-- Removed incorrect pointer-events:none from [data-radix-portal] CSS rule
-- All lint checks pass, dev server compiles successfully (200)
+- Explored project structure: 40+ page components, 68 API routes, 7 hooks
+- Identified 6 critical API routes lacking pagination: call-lists, call-records, team-performance, pipeline (recruiter), users, activity
+- Identified 7 data-heavy components needing pagination: admin-pipeline, team-performance, user-management, call-list-management, call-history, candidate-pipeline, calling-list-view
 
 Stage Summary:
-- Permanent 3-layer fix implemented:
-  - Layer 1 (JS): MutationObserver removes `inert` from non-dialog portals in real-time
-  - Layer 2 (CSS): `inert: auto` override + proper z-index hierarchy + pointer-events
-  - Layer 3 (Component): Select defaults modal={false}, position: fixed positioning
-- Files modified: select.tsx, dialog.tsx, sheet.tsx, alert-dialog.tsx, globals.css, layout.tsx
-- Files created: hooks/usePortalOverlayFix.ts, providers/portal-overlay-provider.tsx
-
----
-Task ID: 1
-Agent: Main Agent
-Task: Fix Team Monitoring Action button overlapping right side
-
-Work Log:
-- Analyzed screenshot showing 9-column desktop table in Team Monitoring
-- Identified root cause: grid-cols-[...]...auto for Action column gets squeezed
-  by the 8 preceding fr columns on narrower desktop viewports
-- Changed Action column from auto to minmax(90px,auto) — guaranteed minimum width
-- Changed Last Activity column from 0.9fr to minmax(90px,0.9fr)
-- Added shrink-0 on Action dropdown wrapper div
-- Committed as 69210cd, pushed to origin/main
-
-Stage Summary:
-- Permanent fix applied: Action column now has minmax(90px,auto) constraint
-- Deploying to production via GitHub Actions
-
-
----
-Task ID: 1
-Agent: Main Agent
-Task: End-to-end audit and permanent fix for call tracking data not showing in Team Performance
-
-Work Log:
-- Analyzed screenshot showing Om Pratap's Team Performance page with all zeros
-- Read and audited full call tracking flow: AutoDialer → POST /api/call-records → GET /api/team-performance
-- Read Prisma schema: CallRecord model with calledAt, recruiterId, candidateId, organizationId
-- Identified ROOT CAUSE: dateTo filter in /api/team-performance used new Date(dateTo) which parses as midnight UTC
-- Any call made during the day in IST (UTC+5:30) was excluded because its timestamp > midnight UTC
-- Also found: organizationId was never set on CallRecord creation (always null)
-- Also found: no organizationId scoping in any admin APIs (data leak across orgs)
-- Also found: recruiter role filter used 'RECRUITER' but users may have 'USER' role
-
-Stage Summary:
-- Fixed /api/team-performance: startOfDay/endOfDay from date-fns, orgId scoping, recruiter role fix
-- Fixed /api/call-records POST: sets organizationId from recruiter's org
-- Fixed /api/call-records GET: startOfDay/endOfDay, orgId scoping
-- Fixed /api/dashboard: orgId scoping, recruiter role fix, custom date fix
-- Fixed /api/export-calls: startOfDay/endOfDay, orgId scoping
-- Fixed /api/reports/export: orgId scoping, recruiter role fix
-- All changes include error logging for call-tracking failures
-- Committed as e8dd24c and pushed to main, GitHub Actions deploying
+- Created reusable `usePagination` hook (`src/hooks/use-infinite-scroll.ts`) with IntersectionObserver, abort controller, load more support
+- Created reusable `PaginationControls` + `InfiniteScrollLoader` components (`src/components/shared/pagination-controls.tsx`)
+- Pattern: "Showing X of Y" + Per Page selector (50/100) + Load More button + Infinite Scroll sentinel + Loading/End indicators
 
 ---
 Task ID: 2
-Agent: Main Agent
-Task: Migrate from hash routing (#/dashboard) to clean URL routing (/dashboard)
+Agent: Full Stack Developer Subagent
+Task: Update 6 API routes with server-side pagination
 
 Work Log:
-- Analyzed screenshot showing Signup page at URL app.akolta.com/#/dashboard
-- Read and audited full routing architecture: useHashRouter hook, page.tsx SPA, all layouts
-- Identified root cause: entire app uses single page.tsx with hash-based client-side routing
-- Created usePathRouter hook using window.location.pathname + history.pushState
-- Created app-router.tsx as shared SPA component (extracted from page.tsx)
-- Created catch-all route [..slug]/page.tsx for SPA routing on all paths
-- Updated page.tsx to delegate to AppContent
-- Added redirectHashUrl() for backwards compatibility with old hash URLs
-- SSR-safe implementation using useState('') + useEffect for browser URL sync
-- Attempted next.config.ts rewrites but caused Turbopack crash — removed
-- Lint passes, initial compile succeeds, deployed to production
+- Updated `/api/call-records` — Added page/limit/search params, skip/take on findMany, parallel count query
+- Updated `/api/users` — Added page/limit/search/role params, skip/take, parallel count, server-side search
+- Updated `/api/team-performance` — Added page/limit, aggregate stats query (computed from ALL records, not just page), parallel count
+- Updated `/api/pipeline` — Added page/limit, skip/take, parallel count, preserved stage counts
+- Updated `/api/call-lists` — Added page/limit/search, changed candidates include from full objects to `{ select: { id: true } }` for performance, parallel count
+- Updated `/api/activity` — Added page param, changed default limit from 200→50 and max from 1000→200, added skip/take, parallel count
 
 Stage Summary:
-- All URLs now clean: /dashboard, /signup, /login, /team-performance, etc.
-- Page refresh works on all routes via catch-all [..slug]/page.tsx
-- Old hash URLs auto-redirect to clean URLs
-- Auth pages use clean URLs: /login, /signup, /register, /forgot-password
-- All navigation components unchanged (onNavigate callbacks work identically)
-- Committed as e2dee3f and pushed to main
----
-Task ID: 3
-Agent: Main Agent
-Task: Approval Requests Notification Badge on sidebar menu item
-
-Work Log:
-- Analyzed screenshot showing Approval Requests page with "3 Pending" badge on page header but NO badge on sidebar menu item
-- Explored full approval system: User.isActive=false = pending, approve/reject endpoints, admin-layout.tsx, super-admin-layout.tsx
-- Created lightweight API endpoint: /api/users/pending-count (returns {count: N}, auth-protected, org-scoped)
-- Created shared hook: useApprovalPendingCount.ts with global pub/sub store, 30s polling, invalidateApprovalBadgeCount()
-- Updated admin-layout.tsx: SidebarMenuBadge on "Approval Requests" item + Bell icon in header + mobile badges
-- Updated super-admin-layout.tsx: Same badge treatment
-- Updated approval-requests.tsx: Calls invalidateApprovalBadgeCount() after approve/reject
-- Initial implementation had badge rendering but NOT visible (item #12 in sidebar, below fold)
-- Fix: Moved "Approval Requests" from position #12 to position #2 (right after Dashboard) in both layouts
-- Added Bell notification icon in desktop header (top-right) with amber badge
-- Added amber badge on mobile hamburger menu button
-- Added amber badge on mobile bottom nav "Approval" button
-- Added amber badge on mobile "More" popover button
-- Verified all 7 checks pass via browser automation: sidebar badge ✅, header bell ✅, mobile nav ✅, no console errors ✅
-
-Stage Summary:
-- Files created: /api/users/pending-count/route.ts, hooks/useApprovalPendingCount.ts
-- Files modified: admin-layout.tsx, super-admin-layout.tsx, approval-requests.tsx
-- "Approval Requests" moved to position #2 in both admin and super-admin sidebars
-- Notification badges appear in 5 locations: sidebar, header bell, mobile hamburger, mobile bottom nav, mobile More button
-- Badge auto-updates every 30s via polling and instantly on approve/reject actions
-- Count is org-scoped (ORG_ADMIN sees only their org's pending, SUPER_ADMIN sees all)
----
-Task ID: 5
-Agent: Main Agent
-Task: Enable Forgot Password email sending via Resend
-
-Work Log:
-- Analyzed existing forgot-password flow: 3-step wizard (request → verify → success)
-- Found root cause: API generates tokens but NEVER sends emails (no email library installed)
-- Installed resend@6.12.4 package
-- Added sendResetEmail() function with professional HTML email template (green branded RecruitPro header, 6-char code, 15-min expiry)
-- Updated forgot-password API to call sendResetEmail after generating token
-- Graceful fallback: if RESEND_API_KEY not set, logs error but doesn't fail the request
-- Updated deploy.sh default .env template with RESEND_API_KEY and EMAIL_FROM
-- Updated GitHub Actions deploy workflow to inject RESEND_API_KEY from GitHub secrets
-
-Stage Summary:
-- 3 files changed: forgot-password/route.ts, deploy.sh, deploy.yml
-- resend package added to dependencies
-- Professional email template with RecruitPro branding
-- Phone OTP flow unchanged (still needs SMS provider integration separately)
-- ACTION REQUIRED: User must add RESEND_API_KEY as GitHub Actions secret
-
----
-Task ID: 6
-Agent: Main Agent
-Task: Fix Forgot Password — Resend package missing from package.json
-
-Work Log:
-- User reported "Forgot Password not working" and confirmed RESEND_API_KEY added to GitHub secrets
-- Previous commit (90d6425) already had full Resend integration code and GitHub Actions workflow
-- Found TWO critical issues preventing the feature from working:
-  1. `resend` package NOT in package.json — `bun install` on production server wouldn't install it, causing `await import('resend')` to fail at runtime
-  2. Default .env template had `RESEND_API_KEY=""` (empty) — though GitHub Actions workflow already injects it, removed from template
-- Added `resend@^6.12.4` to package.json dependencies
-- Updated deploy.sh: removed empty RESEND_API_KEY from default .env, added Step 1c safety net for secret injection
-- Committed as c7ffbd7 and pushed to main
-
-Stage Summary:
-- Root cause: resend npm package was never added to package.json, only existed in local node_modules
-- GitHub Actions workflow already configured to pass RESEND_API_KEY to server
-- Deploy will now: install resend via bun install + inject RESEND_API_KEY from GitHub secrets
-- Forgot Password flow: Email method sends via Resend (6-char code, 15-min expiry)
-
----
-Task ID: 7
-Agent: Main Agent
-Task: Fix Backup/Restore page — permanent fix for code backup downloads and pre-deploy backup
-
-Work Log:
-- Analyzed existing Backup/Restore implementation: 5-tab UI (Code, Database, Restore, Export, Import)
-- Identified ROOT CAUSE: Backend API `/api/admin/backup/code/route.ts` used `execSync` to call system commands (`zip`, `tar`, `7z`) which are NOT installed on the production server
-- ZIP download error: "zip command is not installed" — returned 400 error
-- Pre-deploy backup error: tar command failed — returned "Failed to create pre-deploy archive" 500 error
-- Solution: Replace ALL system command-based archiving with `archiver` v8 npm package (pure JavaScript, zero system dependencies)
-- Installed `archiver@8.0.0` + `@types/archiver@7.0.0`
-- Discovered archiver v8 uses class-based API: `new ZipArchive(options)` / `new TarArchive(options)` instead of old `archiver('zip', options)`
-- Rewrote `/api/admin/backup/code/route.ts`:
-  - GET endpoint: Uses `ZipArchive`/`TarArchive` with `PassThrough` stream → streams directly to HTTP response (no temp files)
-  - POST endpoint: Uses `TarArchive` with gzip → writes to `backups/` directory on server (no system tar needed)
-  - 7z format: Falls back to system command with clear error message if 7z not installed
-  - Smart file exclusion: Recursively collects files, excludes node_modules/.next/.git/upload/skills/backups/hidden dirs, skips files >50MB
-- Updated frontend `backup-restore.tsx`:
-  - Replaced dropdown+single-download-button with individual format cards in a grid layout
-  - Each format (.ZIP, .TAR, .TAR.GZ, .7Z) has its own card with icon, description, color coding, and download button
-  - TAR.GZ marked as "Recommended" with badge
-  - 7Z marked with "System" badge (requires p7zip-full)
-  - Separate Card for Pre-Deploy Backup with prominent "Create Pre-Deploy Backup (.tar.gz)" button
-  - Each download button has independent loading state
-  - Improved `downloadBlob()` helper with fallback filename parameter
-- Verified with integration test: 195 files archived to 15MB ZIP successfully
-- Verified pre-deploy tar.gz creation works
-- ESLint passes clean, dev server compiles successfully
-
-Stage Summary:
-- Files modified: src/app/api/admin/backup/code/route.ts, src/components/admin/backup-restore.tsx
-- Package added: archiver@8.0.0, @types/archiver@7.0.0
-- ZIP, TAR, TAR.GZ downloads now work WITHOUT any system tools (pure JavaScript)
-- Pre-deploy backup (.tar.gz) now works WITHOUT system tar (pure JavaScript)
-- 7Z still needs system tool but provides clear error message
-- No existing functionality broken — all other tabs (Database, Restore, Export, Import) unchanged
-
----
-Task ID: 8
-Agent: Main Agent
-Task: Fix Team Management page — "Something went wrong" crash + dropdown issues
-
-Work Log:
-- Analyzed screenshot showing "Something went wrong" error at /team-management
-- Read full component: src/components/admin/team-management-enhanced.tsx (1277 lines)
-- Identified ROOT CAUSE of crash: `members` state variable declared at line 322 with `const` but referenced at line 163 in `filteredMembers` computation
-- JavaScript Temporal Dead Zone (TDZ): `const` variables cannot be accessed before their declaration — throws ReferenceError
-- This caused the entire component to crash, triggering Next.js error boundary with "Something went wrong"
-- Fix #1: Moved `const [members, setMembers] = useState(...)` and related member state from line 322 to line 162 (before filteredMembers computation)
-- Identified Members Actions dropdown "not working" was caused by the same crash — component never rendered
-- Identified Department Head dropdown "overlapping outside" issue: SelectContent renders via portal at body level (z-10002) above Dialog (z-10001), extending beyond dialog boundary
-- Fix #2: Added `deptDialogEl` state + callback ref on DialogContent + `container` prop on SelectContent for Department Head Select
-- This renders the Select portal INSIDE the dialog DOM, so the dialog's overflow constraints contain it
-- Ran ESLint — passes clean
-- Verified via agent-browser: page loads, Members tab shows 6 members with actions dropdown, Departments tab shows 3 departments, Department Head dropdown contained within dialog
-
-Stage Summary:
-- 1 file changed: src/components/admin/team-management-enhanced.tsx
-- Fix 1 (CRASH): Moved `members` state declaration before `filteredMembers` to resolve TDZ ReferenceError
-- Fix 2 (DROPDOWN): Used `container` prop on SelectContent to render Department Head dropdown inside Dialog
-- All three reported issues resolved: page crash, members actions dropdown, department head dropdown overflow
-- No other functionality affected
-
----
-Task ID: 9
-Agent: Main Agent
-Task: Deploy team-management fix to production and verify
-
-Work Log:
-- Checked git status: all code changes already committed and pushed (commit 5a17f6e)
-- Checked GitHub Actions: Run #73 completed/success for commit 5a17f6e
-- Re-triggered deploy via empty commit (d2a338e) — Run #74 completed/success
-- Used agent-browser to verify live site at app.akolta.com/team-management — loads login page (expected, not authenticated)
-- DISCOVERED CRITICAL BUG: Lines 167-168 had syntax error — missing `]` bracket in array destructuring AND wrong variable names (`mmemberDialogOpen`/`mmemberForm` vs `memberDialogOpen`/`memberForm`)
-- This syntax error was the TRUE root cause of "Something went wrong" — the component could not be parsed
-- Fixed lines 167-168: proper destructuring with correct variable names
-- ESLint passes clean after fix
-- Committed as d47f93d and pushed to main
-- Run #75 triggered and completed/success
-- Verified live site: both /team-management and /team-enhanced load the app without error
-
-Stage Summary:
-- Root cause of "Something went wrong" was a SYNTAX ERROR (not TDZ): missing `]` in useState destructuring on lines 167-168
-- Fixed: `const [memberDialogOpen, setMemberDialogOpen] = useState(false)` and `const [memberForm, setMemberForm] = useState({...})`
-- All URL references use `team-management` (no `team-enhanced` in codebase)
-- 3 deploys triggered total (#73, #74, #75) — all succeeded
-- Live site verified working at app.akolta.com/team-management
-
----
-Task ID: 10
-Agent: Main Agent
-Task: Permanent global dropdown-in-dialog fix — Team Management View/Edit Profile
-
-Work Log:
-- Analyzed screenshot via VLM: dropdown options clipped/overflowing in View/Edit Profile dialog
-- Audited entire codebase: 21 files with DialogContent, 9 files with SelectContent
-- Identified 3 root causes:
-  1. DialogContent used CSS transform for centering (translate -50%,-50%), creating a stacking
-     context that breaks position:fixed on portaled Select/Dropdown elements
-  2. overflow-y-auto on DialogContent created a scroll container that drifted popper positioning
-  3. No automatic connection between Dialog and Select/Dropdown portal containers
-- Implemented comprehensive 5-file global fix:
-  1. Created hooks/useDialogContainer.tsx — React context for dialog element ref
-  2. Restructured dialog.tsx — Two-layer architecture (outer flex centering + inner visual box)
-  3. Updated select.tsx — Auto-detect dialog container via useDialogContainer()
-  4. Updated dropdown-menu.tsx — Same auto-detection
-  5. Updated team-management-enhanced.tsx — flex layout + inner scroll wrappers
-- Removed overflow-y-auto from DialogContent base class
-- ESLint passes clean, dev server compiles without errors
-- Committed as e106ea1, deployed via GitHub Actions (Run #76, success)
-- Verified live site: app.akolta.com/team-management returns 200, no errors
-
-Stage Summary:
-- Permanent global fix: ALL Select/Dropdown inside ANY Dialog auto-detect container
-- No manual container props needed anywhere in the codebase
-- Two-layer DialogContent: outer (flex centering, pointer-events:none) + inner (visual box)
-- Inner scroll wrappers for form-heavy dialogs (flex-1 overflow-y-auto)
-- 5 files changed: dialog.tsx, select.tsx, dropdown-menu.tsx, team-management-enhanced.tsx, useDialogContainer.tsx (new)
-
----
-Task ID: 1
-Agent: Main Agent
-Task: Implement permanent global modal/dialog scrolling fix for RecruitPro
-
-Work Log:
-- Analyzed current dialog.tsx two-layer architecture (outer: fixed flex centering, inner: visual dialog box)
-- Identified that base inner div lacked flex-col and overflow handling
-- Analyzed select.tsx and dropdown-menu.tsx container-based portaling (useDialogContainer hook)
-- Identified conflict: overflow-hidden on dialog clips container-based dropdowns
-- Decided to remove container approach — dropdowns now portal to body with z-[10002] (above dialog z-[10001])
-- Added flex flex-col overflow-hidden to base DialogContent inner div
-- Removed useDialogContainer from select.tsx and dropdown-menu.tsx
-- Removed explicit container={dialogRef.current} from plan-management.tsx
-- Cleaned up redundant overflow-hidden/flex/flex-col from 6 dialog classNames
-- Converted 12 dialogs from whole-dialog scroll (overflow-y-auto on DialogContent) to body-scroll pattern (flex-1 min-h-0 overflow-y-auto on body div)
-- Fixed organization-management, plan-management, team-management, shift-management, call-list-management, dynamic-field-builder, user-management, backup-restore, auto-dialer
-- All changes pass ESLint with zero errors
-- Committed as 2409454, pushed to main, GitHub Actions deploying
-
-Stage Summary:
-- Key decision: Body-level portaling for dropdowns + overflow-hidden on dialog = clean separation
-- z-index hierarchy: overlay [10000] < dialog [10001] < select/dropdown [10002]
-- usePortalOverlayFix hook prevents inert issues on body-level portals
-- Dialogs now have sticky header/footer scroll pattern by default
-- Short dialogs unaffected (content fits within max-h)
-- 12 files changed, 98 insertions, 80 deletions
-
----
-Task ID: 2
-Agent: Main Agent
-Task: Investigate and resolve deployment failure for dialog scrolling fix
-
-Work Log:
-- User reported modal/dialog scrolling fix not working on live site
-- Checked dev log: found old syntax error (line 167) but current code is correct
-- Checked live site: JS chunks did NOT contain overflow-hidden (deployment hadn't happened)
-- Found .github/workflows/deploy.yml file was corrupted: `branches: ain]` instead of `branches: [main]`
-- Upon deeper byte-level inspection, file was actually correct ([main]) — initial shell display was truncated
-- Root cause: GitHub Actions workflow wasn't triggering deploys (possibly secrets misconfigured or workflow silently failing)
-- Pushed empty commit to re-trigger deployment
-- Monitored deployment: site returned 502 during build (PM2 restart), then 200 after
-- Verified new JS chunks appeared on live site (different hashes from before)
-- Confirmed `flex flex-col overflow-hidden` present in production build chunk 75ed98401967f862
-- Verified locally with agent-browser: dialog has proper flex-col layout, body is scrollable (scrollHeight > height), dropdowns render at z-index 10002 above dialog
-
-Stage Summary:
-- Deployment is now live with the dialog scrolling fix
-- All dialogs across the app now support sticky header/footer scroll pattern
-- Production chunk confirmed: `max-h-[85vh] flex flex-col overflow-hidden gap-4 rounded-lg border p-6`
+- All 6 API routes now support `page` (default 1), `limit` (default 50, max 200) params
+- All return `totalCount`, `page`, `totalPages` in response alongside existing data
+- Team Performance API uses separate aggregate query for stats (computed from ALL matching records, not just current page)
+- Call Lists API no longer loads all candidates per list (performance fix)
 
 ---
 Task ID: 3
-Agent: Main Agent
-Task: Fix organization dialog not scrolling — replace ScrollArea with native overflow
+Agent: Full Stack Developer Subagent (3 parallel subagents)
+Task: Update 7 data-heavy components with pagination UI
 
 Work Log:
-- User reported issue still not resolved even in incognito mode
-- Analyzed screenshot with VLM: dialog content clipped at bottom, Plan Assignment section partially visible
-- Checked live JS chunks: confirmed base dialog has flex flex-col overflow-hidden (deployed)
-- Found that organization-management.tsx uses Radix ScrollArea inside flex dialog
-- Root cause: Radix ScrollArea's Viewport uses size-full (h-full) which doesn't properly inherit flex-computed height from parent with flex-1 min-h-0
-- Replaced ScrollArea with native overflow-y-auto div (proven pattern from team-management dialogs)
-- Committed as b5dcda6, pushed, deployed
-- Verified on live: chunk hash changed from 75ed98401967f862 → 0c24ff90d6a4f7d9
-- Production code confirmed: "flex-1 min-h-0 overflow-y-auto -mx-6 px-6" in organization dialog
+- Updated `admin-pipeline.tsx` — Sends page/limit params, PaginationControls, InfiniteScrollLoader, IntersectionObserver, filter reset on page 1
+- Updated `team-performance.tsx` — Server-side pagination, aggregateStats from API, removed client-side pagination/slicing
+- Updated `user-management.tsx` — Moved search to server-side (debounced 300ms), pagination controls
+- Updated `call-history.tsx` — Moved search AND disposition filter to server-side, pagination controls
+- Updated `candidate-pipeline.tsx` — Server-side pagination, scroll container observer for nested scroll
+- Updated `call-list-management.tsx` — Paginated list of lists, separate candidate fetch on expand
+- Updated `calling-list-view.tsx` — Paginated list of lists, cached candidate details per list
 
 Stage Summary:
-- Radix ScrollArea doesn't work reliably inside flex containers with flex-1 min-h-0
-- Native overflow-y-auto div is the correct approach for scrollable dialog bodies
-- All other dialogs already use native overflow (team-management, plan-management, etc.)
-- Only organization-management had ScrollArea → now fixed
+- All 7 components now show "Showing X of Y" + Per Page selector + Load More button
+- All support infinite scroll via IntersectionObserver
+- All reset to page 1 when filters/search change
+- Exports still export ALL data (not just current page)
+- All existing business logic preserved (CRUD, inline editing, stage moves, bulk actions, etc.)
 
 ---
 Task ID: 4
 Agent: Main Agent
-Task: Add Pipeline Management feature for admin dashboard
+Task: Lint, dev server verification, browser testing
 
 Work Log:
-- Analyzed existing schema: Candidate, CallRecord, CallListAssignment, User, Organization models
-- Identified existing recruiter CandidatePipeline component and /api/pipeline route
-- Added PipelineNote model to schema for notes audit trail
-- Added remarks field to Candidate model
-- Added pipelineNotes relations to User and Organization models
-- Pushed schema to DB via bun run db:push
-- Created /api/admin/pipeline/route.ts (588 lines) with GET (pagination, filters, export) and PATCH (update)
-- Created /api/admin/pipeline/notes/route.ts (139 lines) with GET (history) and POST (add note)
-- Created /components/admin/admin-pipeline.tsx (1307 lines) with full pipeline management UI
-- Added 'pipeline' route to AdminPage and SuperAdminPage types in app-router.tsx
-- Added 'pipeline' case to both Super Admin and Admin page renderers
-- Added Pipeline nav item (GitBranch icon) to super-admin-layout.tsx and admin-layout.tsx
-- Committed as 524eb96, pushed to main
-- Verified deployment: Pipeline Management text found in production chunk 56601247c21715fd
-- Verified API: /api/admin/pipeline returns 401 (unauthorized - expected, route exists)
+- ESLint: 0 errors, 0 warnings
+- Dev server: Compiles cleanly, all API calls return 200
+- Browser verification: Login → Admin Panel → Pipeline page renders correctly with all filters, stage tabs, empty state
+- Verified Pipeline submenu under Team Performance navigation
 
 Stage Summary:
-- New feature fully implemented: Pipeline nav + API + UI page + notes + export
-- Safe implementation: no changes to existing recruiter workflow, call records, or permissions
-- SUPER_ADMIN: full access across all organizations
-- ORG_ADMIN: restricted to own organization
-- 7 files changed, 2064 insertions, 6 deletions
-
----
-Task ID: 1
-Agent: Main Agent
-Task: Fix Pipeline page error at /pipeline
-
-Work Log:
-- Investigated pipeline error: user reported "Something went wrong" (global-error.tsx) on /pipeline route
-- Found root cause #1: API returned `stageCounts` but frontend expected `counts` — stage counts never displayed in tabs
-- Found root cause #2: Catch-all route `[...slug]/page.tsx` lacked `AppErrorBoundary` wrapper — any render error goes straight to global-error
-- Found root cause #3: Search debounce had circular dependency — `useMemo(() => searchQuery)` + `useCallback(fetchCandidates, [debouncedSearch])` + `useEffect([debouncedSearch, fetchCandidates])` created infinite re-render loop
-- Found root cause #4: Notes API field mismatch — frontend sent `text` but API expected `note`; frontend interface had `text` but API returned `note`
-- Fixed API route to return `counts` instead of `stageCounts`
-- Rewrote catch-all route with proper `AppErrorBoundary` + `OfflineOverlay` wrapper
-- Replaced search debounce with proper `useState`-based approach (no more circular dependency)
-- Split fetchCandidates useEffect into two separate effects: one for filter changes, one for debounced search
-- Fixed PipelineNote interface and POST body to use `note` instead of `text`
-- Ran lint — 0 errors, 0 warnings
-- Committed and pushed to GitHub to trigger production deployment
-- Verified production returns 200 on /pipeline with correct SPA rendering
-
-Stage Summary:
-- 4 bugs fixed in admin-pipeline.tsx and 1 in api/admin/pipeline/route.ts
-- 1 bug fixed in [...slug]/page.tsx (missing error boundary)
-- Changes deployed to production via GitHub Actions
-- Production verified: https://app.akolta.com/pipeline returns 200 with correct SPA content
-
----
-Task ID: 1
-Agent: Main Agent
-Task: Move Pipeline under Team Performance navigation (navigation restructuring only)
-
-Work Log:
-- Read app-router.tsx to understand SPA routing: currentPath → switch → page component rendering
-- Read admin-layout.tsx, super-admin-layout.tsx, recruiter-layout.tsx for navigation menu structure
-- Read team-performance.tsx (507 lines) and admin-pipeline.tsx (1307 lines) for page components
-- Removed 'pipeline' from AdminPage and SuperAdminPage type unions in app-router.tsx
-- Added sub-path parsing: basePath splits on '/', isPipelineSubPage checks for 'team-performance/pipeline'
-- Added useEffect redirect: admin/superadmin visiting /pipeline auto-redirects to /team-performance/pipeline
-- Added null return in render functions for old /pipeline path (prevents flash)
-- Changed activePage prop to pass full currentPath instead of base page (enables sidebar sub-item highlighting)
-- Updated admin-layout.tsx: removed standalone Pipeline menu item, added collapsible Team Performance group with children (Call Reports, Pipeline)
-- Added ChevronRight icon import, tpSectionOpen state, isTpActive helper
-- Created flatMenuItems for mobile bottom nav (team-performance children expanded individually)
-- Updated super-admin-layout.tsx: same collapsible group pattern for Team Performance
-- Added GitBranch import back (was accidentally removed)
-- Added sub-navigation tabs to team-performance.tsx (Call Reports | Pipeline switching)
-- Added sub-navigation tabs to admin-pipeline.tsx (Call Reports | Pipeline switching)
-- Added navigateTo import, cn import, BarChart3 icon to both pages
-- Recruiter pipeline at /pipeline is UNCHANGED (recruiters don't have Team Performance)
-- Ran ESLint: 0 errors, 0 warnings
-- Committed as 8b59bf0, pushed to main
-- Verified deployment: all 3 URLs return 200 (team-performance, team-performance/pipeline, pipeline)
-
-Stage Summary:
-- Navigation restructuring only — no data, API, or database changes
-- Admin/SuperAdmin: Team Performance sidebar → collapsible group with "Call Reports" + "Pipeline"
-- URL: /team-performance → Call Reports, /team-performance/pipeline → Pipeline
-- Old /pipeline URL auto-redirects to /team-performance/pipeline for admin/superadmin
-- Both pages have tab navigation bar for easy switching
-- Recruiter pipeline unchanged at /pipeline
-- 5 files changed: app-router.tsx, admin-layout.tsx, super-admin-layout.tsx, team-performance.tsx, admin-pipeline.tsx
+- All pages rendering correctly
+- API routes returning paginated data with page/limit params
+- No runtime errors in dev log

@@ -9,25 +9,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const callLists = await db.callList.findMany({
-      where: !requireOrgAdmin(auth) ? {
-        assignments: {
-          some: {
-            recruiterId: auth.userId,
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+
+    const where: Record<string, unknown> = {};
+
+    // Non-admin users only see their assigned call lists
+    if (!requireOrgAdmin(auth)) {
+      where.assignments = {
+        some: {
+          recruiterId: auth.userId,
+        },
+      };
+    }
+
+    // Search filter across name and description
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
+
+    const [callLists, totalCount] = await Promise.all([
+      db.callList.findMany({
+        where,
+        include: {
+          candidates: { select: { id: true } },
+          assignments: {
+            include: {
+              recruiter: { select: { id: true, name: true, email: true } },
+            },
           },
         },
-      } : undefined,
-      include: {
-        candidates: true,
-        assignments: {
-          include: {
-            recruiter: { select: { id: true, name: true, email: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.callList.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      callLists,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
     });
-    return NextResponse.json({ callLists });
   } catch (error) {
     console.error('Call lists error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { PageHeader } from '@/components/shared/page-header'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,6 +37,15 @@ interface Recruiter {
   email: string
 }
 
+interface AggregateStats {
+  totalCalls: number
+  avgTalkTime: number
+  totalTalkTime: number
+  activeHours: number
+  shortlisted: number
+  notConnected: number
+}
+
 function formatCallDuration(seconds: number): string {
   if (seconds <= 0) return '0s'
   const duration = intervalToDuration({ start: 0, end: seconds * 1000 })
@@ -66,6 +76,15 @@ function getDispositionBadge(type: string | undefined | null): string {
   }
 }
 
+const defaultAggregateStats: AggregateStats = {
+  totalCalls: 0,
+  avgTalkTime: 0,
+  totalTalkTime: 0,
+  activeHours: 0,
+  shortlisted: 0,
+  notConnected: 0,
+}
+
 export function TeamPerformance() {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [recruiters, setRecruiters] = useState<Recruiter[]>([])
@@ -74,14 +93,31 @@ export function TeamPerformance() {
   const [dateTo, setDateTo] = useState<string>(today)
   const [callRecords, setCallRecords] = useState<CallRecord[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [exporting, setExporting] = useState(false)
-  const [page, setPage] = useState(1)
-  const pageSize = 20
 
-  const fetchData = async () => {
-    setLoading(true)
+  // Server-side pagination state
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [aggregateStats, setAggregateStats] = useState<AggregateStats>(defaultAggregateStats)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const fetchData = async (pageParam?: number, limitParam?: number, append = false) => {
+    const page = pageParam ?? currentPage
+    const limit = limitParam ?? pageSize
+
+    if (append) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+    }
+
     try {
       const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(limit))
       if (selectedRecruiter !== 'all') params.set('recruiterId', selectedRecruiter)
       if (dateFrom) params.set('dateFrom', dateFrom)
       if (dateTo) params.set('dateTo', dateTo)
@@ -92,22 +128,35 @@ export function TeamPerformance() {
         return
       }
       const json = await res.json()
-      setCallRecords(json.callRecords || [])
       setRecruiters(json.recruiters || [])
+      if (append) {
+        setCallRecords(prev => [...prev, ...(json.callRecords || [])])
+      } else {
+        setCallRecords(json.callRecords || [])
+      }
+      setTotalCount(json.totalCount || 0)
+      setCurrentPage(json.page || page)
+      setTotalPages(json.totalPages || 1)
+      if (json.aggregateStats) {
+        setAggregateStats(json.aggregateStats)
+      }
     } catch {
       toast.error('Failed to fetch team performance data')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }
 
   useEffect(() => {
-    fetchData()
+    fetchData(1, pageSize)
   }, [])
 
   const handleApplyFilter = () => {
-    setPage(1)
-    fetchData()
+    setCurrentPage(1)
+    setCallRecords([])
+    setAggregateStats(defaultAggregateStats)
+    fetchData(1, pageSize)
   }
 
   const handleToday = () => {
@@ -115,7 +164,6 @@ export function TeamPerformance() {
     setDateFrom(todayStr)
     setDateTo(todayStr)
     setSelectedRecruiter('all')
-    setPage(1)
   }
 
   const handleLast7Days = () => {
@@ -123,47 +171,60 @@ export function TeamPerformance() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
     setDateFrom(format(sevenDaysAgo, 'yyyy-MM-dd'))
     setDateTo(format(new Date(), 'yyyy-MM-dd'))
-    setPage(1)
   }
 
   const handleRefresh = () => {
-    setPage(1)
-    fetchData()
+    setCurrentPage(1)
+    setCallRecords([])
+    setAggregateStats(defaultAggregateStats)
+    fetchData(1, pageSize)
   }
 
-  // ─── Stats (matching Admin Dashboard) ───
-  const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered']
-  const stats = useMemo(() => {
-    const totalCalls = callRecords.length
-    const totalDuration = callRecords.reduce((sum, r) => sum + r.callDuration, 0)
-    const avgTalkTime = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0
-    const notConnected = callRecords.filter(r => {
-      if (!r.disposition) return false
-      const heading = r.disposition.heading.toLowerCase()
-      return NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw))
-    }).length
-    const shortlisted = callRecords.filter(r => r.disposition?.type === 'SHORTLISTED').length
-    // Active Hours — time between first and last call (same logic as Admin Dashboard)
-    let activeMinutes = 0
-    if (callRecords.length > 1) {
-      const times = callRecords.map(r => new Date(r.calledAt).getTime()).sort()
-      activeMinutes = Math.round((times[times.length - 1] - times[0]) / 60000)
-    } else if (callRecords.length === 1) {
-      activeMinutes = 5
-    }
-    return { totalCalls, avgTalkTime, totalDuration, activeMinutes, shortlisted, notConnected }
-  }, [callRecords])
+  // ─── Stats from aggregate API response ───
+  const stats = useMemo(() => ({
+    totalCalls: aggregateStats.totalCalls,
+    avgTalkTime: aggregateStats.avgTalkTime,
+    totalDuration: aggregateStats.totalTalkTime,
+    activeMinutes: Math.round(aggregateStats.activeHours * 60),
+    shortlisted: aggregateStats.shortlisted,
+    notConnected: aggregateStats.notConnected,
+  }), [aggregateStats])
 
-  // ─── Pagination ───
-  const totalPages = Math.ceil(callRecords.length / pageSize)
-  const paginatedRecords = useMemo(
-    () => callRecords.slice((page - 1) * pageSize, page * pageSize),
-    [callRecords, page]
-  )
-  const paginationStart = (page - 1) * pageSize + 1
-  const paginationEnd = Math.min(page * pageSize, callRecords.length)
+  // ─── Infinite Scroll ───
+  const hasMore = currentPage < totalPages && callRecords.length < totalCount
 
-  // ─── Export ───
+  const loadMoreFn = () => {
+    if (loadingMore || !hasMore) return
+    fetchData(currentPage + 1, pageSize, true)
+  }
+
+  const loadMoreRef = useRef(loadMoreFn)
+  loadMoreRef.current = loadMoreFn
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(1)
+    setCallRecords([])
+    setAggregateStats(defaultAggregateStats)
+    fetchData(1, newSize)
+  }
+
+  // ─── Export (works on loaded records) ───
   const handleExport = () => {
     if (callRecords.length === 0) {
       toast.error('No data to export')
@@ -413,10 +474,10 @@ export function TeamPerformance() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedRecords.map((record, idx) => (
+                  {callRecords.map((record, idx) => (
                     <TableRow key={record.id}>
                       <TableCell className="text-center text-muted-foreground">
-                        {paginationStart + idx}
+                        {idx + 1}
                       </TableCell>
                       <TableCell className="font-medium">{record.candidate.name}</TableCell>
                       <TableCell>{record.candidate.phone}</TableCell>
@@ -454,12 +515,12 @@ export function TeamPerformance() {
 
             {/* Mobile Cards */}
             <div className="md:hidden p-3 space-y-3">
-              {paginatedRecords.map((record, idx) => (
+              {callRecords.map((record, idx) => (
                 <div key={record.id} className="rounded-lg border p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground font-medium">
-                        #{paginationStart + idx}
+                        #{idx + 1}
                       </span>
                       <span className="font-semibold text-sm">{record.candidate.name}</span>
                     </div>
@@ -496,35 +557,26 @@ export function TeamPerformance() {
               ))}
             </div>
 
-            {/* ─── Pagination ─── */}
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <p className="text-sm text-muted-foreground">
-                Showing <span className="font-medium">{paginationStart}</span> to{' '}
-                <span className="font-medium">{paginationEnd}</span> of{' '}
-                <span className="font-medium">{callRecords.length}</span> results
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-muted-foreground px-2">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            {/* ─── Infinite Scroll Sentinel ─── */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {/* ─── Infinite Scroll Loader ─── */}
+            <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && callRecords.length > 0} />
+
+            {/* ─── Pagination Controls ─── */}
+            <PaginationControls
+              totalCount={totalCount}
+              displayedCount={callRecords.length}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={[50, 100]}
+              onPageSizeChange={handlePageSizeChange}
+              onLoadMore={loadMoreFn}
+              loadingMore={loadingMore}
+              loading={loading}
+              hasMore={hasMore}
+            />
           </>
         )}
       </div>

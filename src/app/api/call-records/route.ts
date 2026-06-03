@@ -22,6 +22,10 @@ export async function GET(request: NextRequest) {
     const dispositionType = searchParams.get('dispositionType');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
+    const search = searchParams.get('search');
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
 
     const where: Record<string, unknown> = {};
 
@@ -50,20 +54,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Search filter across candidate and disposition fields
+    if (search) {
+      where.OR = [
+        { candidate: { name: { contains: search } } },
+        { candidate: { phone: { contains: search } } },
+        { candidate: { email: { contains: search } } },
+        { disposition: { heading: { contains: search } } },
+      ];
+    }
+
     console.log('[CallRecords GET] Query where:', JSON.stringify(where));
 
-    const callRecords = await db.callRecord.findMany({
-      where,
-      include: {
-        candidate: { select: { id: true, name: true, phone: true, role: true, location: true } },
-        recruiter: { select: { id: true, name: true, email: true } },
-        disposition: { select: { id: true, heading: true, type: true } },
-        client: { select: { id: true, name: true } },
-      },
-      orderBy: { calledAt: 'desc' },
-    });
+    const [callRecords, totalCount] = await Promise.all([
+      db.callRecord.findMany({
+        where,
+        include: {
+          candidate: { select: { id: true, name: true, phone: true, role: true, location: true } },
+          recruiter: { select: { id: true, name: true, email: true } },
+          disposition: { select: { id: true, heading: true, type: true } },
+          client: { select: { id: true, name: true } },
+        },
+        orderBy: { calledAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.callRecord.count({ where }),
+    ]);
 
-    return NextResponse.json({ callRecords });
+    return NextResponse.json({
+      callRecords,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+    });
   } catch (error) {
     console.error('[CallRecords GET] Error:', error);
     if (error instanceof Error) {

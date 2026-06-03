@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { PageHeader } from '@/components/shared/page-header'
 import { EmptyState } from '@/components/shared/empty-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,10 +16,12 @@ import {
 } from '@/components/ui/dialog'
 import {
   PhoneCall, Users, Search, ChevronDown, ChevronUp, Eye, Clock, Play,
+  Loader2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { format } from 'date-fns'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 
 interface CallingList {
   id: string
@@ -27,7 +29,7 @@ interface CallingList {
   description: string | null
   source: string
   createdAt: string
-  candidates: Candidate[]
+  candidates: Array<{ id: string }>
 }
 
 interface Candidate {
@@ -61,37 +63,130 @@ export function CallingListView({ userId, onNavigate }: Props) {
   const [search, setSearch] = useState('')
   const [expandedListId, setExpandedListId] = useState<string | null>(null)
 
+  // Server-side pagination state
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
   // View candidates dialog
   const [candidatesOpen, setCandidatesOpen] = useState(false)
   const [selectedList, setSelectedList] = useState<CallingList | null>(null)
   const [candidateSearch, setCandidateSearch] = useState('')
 
-  const fetchCallingLists = useCallback(async () => {
-    setLoading(true)
+  // Fetched candidate details (per list)
+  const [listCandidatesMap, setListCandidatesMap] = useState<Record<string, Candidate[]>>({})
+  const [listCandidatesLoading, setListCandidatesLoading] = useState<Record<string, boolean>>({})
+
+  // ─── Debounced Search ──────────────────────────────────────────────────────
+
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // ─── Fetch Calling Lists ─────────────────────────────────────────────────────
+
+  const fetchCallingLists = useCallback(async (page = 1, limit = 50, searchVal = '', append = false) => {
     try {
-      const res = await authFetch('/api/call-lists')
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(limit))
+      if (searchVal) params.set('search', searchVal)
+
+      const res = await authFetch(`/api/call-lists?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch calling lists')
       const json = await res.json()
-      // Filter to only lists assigned to this recruiter
+      // Filter to only lists that have candidates assigned
       const assigned = (json.callLists || []).filter(
-        (l: CallingList) =>
-          l.candidates && l.candidates.length > 0
+        (l: CallingList) => l.candidates && l.candidates.length > 0
       ) as CallingList[]
-      setCallingLists(assigned)
+
+      if (append) {
+        setCallingLists(prev => [...prev, ...assigned])
+      } else {
+        setCallingLists(assigned)
+      }
+      setTotalCount(json.totalCount || 0)
+      setCurrentPage(json.page || page)
+      setTotalPages(json.totalPages || 1)
     } catch {
       toast.error('Failed to load calling lists')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [])
 
-  useEffect(() => { fetchCallingLists() }, [fetchCallingLists])
+  // Initial load + refetch when search or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+    setCallingLists([])
+    fetchCallingLists(1, pageSize, debouncedSearch)
+  }, [debouncedSearch, pageSize])
 
-  // Filter candidates across all lists based on search
+  // ─── Infinite Scroll ──────────────────────────────────────────────────────
+
+  const hasMore = currentPage < totalPages && callingLists.length < totalCount
+
+  const loadMoreFn = () => {
+    if (loadingMore || !hasMore) return
+    fetchCallingLists(currentPage + 1, pageSize, debouncedSearch, true)
+  }
+
+  const loadMoreRef = useRef(loadMoreFn)
+  loadMoreRef.current = loadMoreFn
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // ─── Fetch Candidate Details for a List ─────────────────────────────────────
+
+  const fetchListCandidates = useCallback(async (listId: string) => {
+    if (listCandidatesMap[listId]) return // already fetched
+    setListCandidatesLoading(prev => ({ ...prev, [listId]: true }))
+    try {
+      const res = await authFetch(`/api/call-lists/${listId}/candidates`)
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      setListCandidatesMap(prev => ({ ...prev, [listId]: json.candidates || [] }))
+    } catch {
+      toast.error('Failed to load candidates')
+    } finally {
+      setListCandidatesLoading(prev => ({ ...prev, [listId]: false }))
+    }
+  }, [listCandidatesMap])
+
+  // ─── Filter candidates across a single list based on search ─────────────────
+
   const getFilteredCandidates = useCallback((list: CallingList) => {
+    const candidates = listCandidatesMap[list.id] || []
     const q = candidateSearch.toLowerCase().trim()
-    if (!q) return list.candidates
-    return list.candidates.filter(
+    if (!q) return candidates
+    return candidates.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.phone.includes(q) ||
@@ -100,56 +195,58 @@ export function CallingListView({ userId, onNavigate }: Props) {
         (c.location && c.location.toLowerCase().includes(q)) ||
         (c.company && c.company.toLowerCase().includes(q))
     )
-  }, [candidateSearch])
+  }, [listCandidatesMap, candidateSearch])
 
-  // Global search filters which lists are shown
+  // Global search filters which lists are shown (by list name/description only)
   const filteredLists = callingLists.filter((list) => {
     const q = search.toLowerCase().trim()
     if (!q) return true
     return (
       list.name.toLowerCase().includes(q) ||
-      (list.description && list.description.toLowerCase().includes(q)) ||
-      list.candidates.some(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.phone.includes(q) ||
-          (c.role && c.role.toLowerCase().includes(q)) ||
-          (c.location && c.location.toLowerCase().includes(q))
-      )
+      (list.description && list.description.toLowerCase().includes(q))
     )
   })
 
   const handleExpand = (listId: string) => {
+    const isExpanding = expandedListId !== listId
     setExpandedListId((prev) => (prev === listId ? null : listId))
+    if (isExpanding) {
+      fetchListCandidates(listId)
+    }
   }
 
   const handleViewCandidates = (list: CallingList) => {
     setSelectedList(list)
     setCandidateSearch('')
+    fetchListCandidates(list.id)
     setCandidatesOpen(true)
   }
 
-  // Find the first list with pending candidates and start dialing
+  // Find the first list with candidates and start dialing
   const handleStartDialing = () => {
-    const listWithPending = callingLists.find(
-      (l) => l.candidates.some((c) => c.status === 'PENDING' || c.status === 'SCHEDULED')
+    const listWithCandidates = callingLists.find(
+      (l) => l.candidates.length > 0
     )
-    if (!listWithPending) {
+    if (!listWithCandidates) {
       toast.info('No pending calling lists available. All candidates have been called.', { duration: 4000 })
       return
     }
     // Store the list ID in sessionStorage for AutoDialer to pick up
     try {
-      sessionStorage.setItem('auto_select_list_id', listWithPending.id)
+      sessionStorage.setItem('auto_select_list_id', listWithCandidates.id)
     } catch { /* ignore */ }
     onNavigate('pending')
   }
 
   const getListStats = (list: CallingList) => {
-    const total = list.candidates.length
-    const pending = list.candidates.filter((c) => c.status === 'PENDING').length
-    const done = list.candidates.filter((c) => c.status === 'DONE').length
-    const scheduled = list.candidates.filter((c) => c.status === 'SCHEDULED').length
+    const candidates = listCandidatesMap[list.id]
+    if (!candidates || candidates.length === 0) {
+      return { total: list.candidates?.length || 0, pending: 0, done: 0, scheduled: 0 }
+    }
+    const total = candidates.length
+    const pending = candidates.filter((c) => c.status === 'PENDING').length
+    const done = candidates.filter((c) => c.status === 'DONE').length
+    const scheduled = candidates.filter((c) => c.status === 'SCHEDULED').length
     return { total, pending, done, scheduled }
   }
 
@@ -190,7 +287,7 @@ export function CallingListView({ userId, onNavigate }: Props) {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search lists or candidates..."
+          placeholder="Search lists..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
@@ -212,6 +309,8 @@ export function CallingListView({ userId, onNavigate }: Props) {
           {filteredLists.map((list) => {
             const stats = getListStats(list)
             const isExpanded = expandedListId === list.id
+            const candidatesForList = listCandidatesMap[list.id]
+            const isLoadingCandidates = listCandidatesLoading[list.id]
 
             return (
               <Card key={list.id} className="overflow-hidden">
@@ -304,63 +403,94 @@ export function CallingListView({ userId, onNavigate }: Props) {
                         />
                       </div>
 
-                      <div className="rounded-md border overflow-auto max-h-96">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-xs w-8">#</TableHead>
-                              <TableHead className="text-xs">Name</TableHead>
-                              <TableHead className="text-xs">Phone</TableHead>
-                              <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
-                              <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
-                              <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
-                              <TableHead className="text-xs">Status</TableHead>
-                              <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
-                              <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {getFilteredCandidates(list).length === 0 ? (
+                      {isLoadingCandidates ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <div className="rounded-md border overflow-auto max-h-96">
+                          <Table>
+                            <TableHeader>
                               <TableRow>
-                                <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-6">
-                                  {candidateSearch ? 'No candidates match your filter' : 'No candidates in this list'}
-                                </TableCell>
+                                <TableHead className="text-xs w-8">#</TableHead>
+                                <TableHead className="text-xs">Name</TableHead>
+                                <TableHead className="text-xs">Phone</TableHead>
+                                <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
+                                <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
+                                <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
+                                <TableHead className="text-xs">Status</TableHead>
+                                <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
+                                <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
                               </TableRow>
-                            ) : (
-                              getFilteredCandidates(list).map((candidate, idx) => (
-                                <TableRow key={candidate.id}>
-                                  <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
-                                  <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
-                                  <TableCell className="text-xs">{candidate.phone}</TableCell>
-                                  <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
-                                  <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
-                                  <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${statusColors[candidate.status] || ''}`}
-                                    >
-                                      {candidate.status}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
-                                    {candidate.notes || '—'}
-                                  </TableCell>
-                                  <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
-                                    {candidate.lastDisposition || '—'}
+                            </TableHeader>
+                            <TableBody>
+                              {getFilteredCandidates(list).length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-6">
+                                    {candidateSearch ? 'No candidates match your filter' : 'No candidates in this list'}
                                   </TableCell>
                                 </TableRow>
-                              ))
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
+                              ) : (
+                                getFilteredCandidates(list).map((candidate, idx) => (
+                                  <TableRow key={candidate.id}>
+                                    <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                                    <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
+                                    <TableCell className="text-xs">{candidate.phone}</TableCell>
+                                    <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
+                                    <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
+                                    <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
+                                    <TableCell>
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-xs ${statusColors[candidate.status] || ''}`}
+                                      >
+                                        {candidate.status}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
+                                      {candidate.notes || '—'}
+                                    </TableCell>
+                                    <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
+                                      {candidate.lastDisposition || '—'}
+                                    </TableCell>
+                                  </TableRow>
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 )}
               </Card>
             )
           })}
+
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {/* Infinite scroll loader */}
+          <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && callingLists.length > 0} />
+
+          {/* Pagination controls */}
+          <PaginationControls
+            totalCount={totalCount}
+            displayedCount={callingLists.length}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={[50, 100]}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize)
+              setCurrentPage(1)
+              setCallingLists([])
+            }}
+            onLoadMore={loadMoreFn}
+            loadingMore={loadingMore}
+            loading={loading}
+            hasMore={hasMore}
+          />
         </div>
       )}
 
@@ -401,71 +531,79 @@ export function CallingListView({ userId, onNavigate }: Props) {
               </div>
 
               {/* Candidate table */}
-              <div className="rounded-md border overflow-auto max-h-[60vh]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs w-8">#</TableHead>
-                      <TableHead className="text-xs">Name</TableHead>
-                      <TableHead className="text-xs">Phone</TableHead>
-                      <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
-                      <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                      <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
-                      <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getFilteredCandidates(selectedList).length === 0 ? (
+              {listCandidatesLoading[selectedList.id] ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-auto max-h-[60vh]">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
-                          {candidateSearch ? 'No candidates match your search' : 'No candidates in this list'}
-                        </TableCell>
+                        <TableHead className="text-xs w-8">#</TableHead>
+                        <TableHead className="text-xs">Name</TableHead>
+                        <TableHead className="text-xs">Phone</TableHead>
+                        <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
+                        <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
+                        <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
+                        <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
+                        <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
                       </TableRow>
-                    ) : (
-                      getFilteredCandidates(selectedList).map((candidate, idx) => (
-                        <TableRow key={candidate.id}>
-                          <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
-                          <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
-                          <TableCell className="text-xs">
-                            <a
-                              href={`tel:${candidate.phone.replace(/[^0-9]/g, '')}`}
-                              className="text-emerald-600 hover:underline"
-                              style={{ touchAction: 'manipulation' }}
-                            >
-                              {candidate.phone}
-                            </a>
-                          </TableCell>
-                          <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
-                          <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
-                          <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${statusColors[candidate.status] || ''}`}
-                            >
-                              {candidate.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.notes || ''}>
-                            {candidate.notes || '—'}
-                          </TableCell>
-                          <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.lastDisposition || ''}>
-                            {candidate.lastDisposition || '—'}
+                    </TableHeader>
+                    <TableBody>
+                      {getFilteredCandidates(selectedList).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
+                            {candidateSearch ? 'No candidates match your search' : 'No candidates in this list'}
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                      ) : (
+                        getFilteredCandidates(selectedList).map((candidate, idx) => (
+                          <TableRow key={candidate.id}>
+                            <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
+                            <TableCell className="text-xs">
+                              <a
+                                href={`tel:${candidate.phone.replace(/[^0-9]/g, '')}`}
+                                className="text-emerald-600 hover:underline"
+                                style={{ touchAction: 'manipulation' }}
+                              >
+                                {candidate.phone}
+                              </a>
+                            </TableCell>
+                            <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
+                            <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
+                            <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${statusColors[candidate.status] || ''}`}
+                              >
+                                {candidate.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.notes || ''}>
+                              {candidate.notes || '—'}
+                            </TableCell>
+                            <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.lastDisposition || ''}>
+                              {candidate.lastDisposition || '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
 
               {/* Result count */}
-              <p className="text-xs text-muted-foreground text-right">
-                Showing {getFilteredCandidates(selectedList).length} of {selectedList.candidates.length} candidates
-                {candidateSearch && ' (filtered)'}
-              </p>
+              {!listCandidatesLoading[selectedList.id] && (
+                <p className="text-xs text-muted-foreground text-right">
+                  Showing {getFilteredCandidates(selectedList).length} of {listCandidatesMap[selectedList.id]?.length || selectedList.candidates.length} candidates
+                  {candidateSearch && ' (filtered)'}
+                </p>
+              )}
             </div>
           )}
         </DialogContent>

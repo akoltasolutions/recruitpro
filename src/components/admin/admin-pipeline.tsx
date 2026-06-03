@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 import { authFetch } from '@/stores/auth-store'
 import { useAuthStore, type UserRole } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,9 @@ interface AdminCandidate {
 interface AdminPipelineResponse {
   candidates: AdminCandidate[]
   counts: Record<string, number>
+  totalCount: number
+  page: number
+  totalPages: number
 }
 
 interface RecruiterOption {
@@ -182,6 +186,14 @@ export function AdminPipeline() {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
 
+  // ── Pagination State ──
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
   // ── Filter State ──
   const [activeStage, setActiveStage] = useState<PipelineStage>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -224,6 +236,7 @@ export function AdminPipeline() {
     if (searchTimer.current) clearTimeout(searchTimer.current)
     searchTimer.current = setTimeout(() => {
       setDebouncedSearch(searchQuery)
+      setCurrentPage(1)
     }, 300)
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -273,6 +286,7 @@ export function AdminPipeline() {
   // ── Fetch candidates ──
   const fetchCandidates = useCallback(async () => {
     setLoading(true)
+    setCurrentPage(1)
     try {
       const params = new URLSearchParams()
 
@@ -310,11 +324,18 @@ export function AdminPipeline() {
         params.set('organizationId', organization.id)
       }
 
+      // Pagination params
+      params.set('page', '1')
+      params.set('limit', String(pageSize))
+
       const res = await authFetch(`/api/admin/pipeline?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch pipeline data')
       const data: AdminPipelineResponse = await res.json()
       setCandidates(data.candidates || [])
       setCounts(data.counts || {})
+      setTotalCount(data.totalCount || 0)
+      setCurrentPage(data.page || 1)
+      setTotalPages(data.totalPages || 0)
     } catch {
       toast.error('Failed to load pipeline data')
       setCandidates([])
@@ -322,17 +343,98 @@ export function AdminPipeline() {
     } finally {
       setLoading(false)
     }
-  }, [activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization])
+  }, [activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization, pageSize])
 
   // Fetch candidates when filters change
   useEffect(() => {
     fetchCandidates()
-  }, [activeStage, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization?.id])
+  }, [activeStage, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization?.id, pageSize])
 
   // Fetch candidates when debounced search changes
   useEffect(() => {
     fetchCandidates()
   }, [debouncedSearch])
+
+  // ── Load More ──
+  const loadMore = useCallback(async () => {
+    if (loadingMore || currentPage >= totalPages) return
+    setLoadingMore(true)
+    try {
+      const nextPage = currentPage + 1
+      const params = new URLSearchParams()
+
+      if (activeStage !== 'ALL') {
+        params.set('stage', activeStage)
+      }
+
+      if (debouncedSearch.trim()) {
+        params.set('search', debouncedSearch.trim())
+      }
+
+      // Date range
+      const { from, to } = getDateRange(dateFilter)
+      if (dateFilter === 'custom' && customDateFrom) {
+        params.set('from', new Date(customDateFrom).toISOString())
+        if (customDateTo) {
+          params.set('to', new Date(customDateTo + 'T23:59:59').toISOString())
+        }
+      } else if (from && to) {
+        params.set('from', from)
+        params.set('to', to)
+      }
+
+      // Recruiter filter
+      if (recruiterFilter && recruiterFilter !== 'all') {
+        params.set('recruiterId', recruiterFilter)
+      }
+
+      // Organization filter
+      if (isSuperAdmin) {
+        if (organizationFilter && organizationFilter !== 'all') {
+          params.set('organizationId', organizationFilter)
+        }
+      } else if (organization?.id) {
+        params.set('organizationId', organization.id)
+      }
+
+      params.set('page', String(nextPage))
+      params.set('limit', String(pageSize))
+
+      const res = await authFetch(`/api/admin/pipeline?${params.toString()}`)
+      if (!res.ok) throw new Error('Failed')
+      const data = await res.json()
+      setCandidates(prev => [...prev, ...(data.candidates || [])])
+      setCurrentPage(data.page)
+      setTotalCount(data.totalCount)
+      setTotalPages(data.totalPages)
+    } catch {
+      toast.error('Failed to load more records')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, currentPage, totalPages, activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization, pageSize])
+
+  // ── Page Size Change ──
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(1)
+  }
+
+  // ── Infinite Scroll Observer ──
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || currentPage >= totalPages || loadingMore) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && currentPage < totalPages && !loadingMore) {
+          loadMore()
+        }
+      },
+      { rootMargin: '200px', threshold: 0 }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [currentPage, totalPages, loadingMore, loadMore])
 
   // ── Export ──
   const handleExport = async (format: 'csv' | 'xlsx') => {
@@ -495,14 +597,37 @@ export function AdminPipeline() {
   }
 
   // ── Computed values ──
-  const totalCount = useMemo(() => {
+  const allStagesCount = useMemo(() => {
     return Object.values(counts).reduce((sum, c) => sum + c, 0)
   }, [counts])
 
   const activeCount = useMemo(() => {
-    if (activeStage === 'ALL') return totalCount
+    if (activeStage === 'ALL') return allStagesCount
     return counts[activeStage] || 0
-  }, [activeStage, counts, totalCount])
+  }, [activeStage, counts, allStagesCount])
+
+  // ─── Render: Pagination Section ──────────────────────────────────────────
+
+  const renderPaginationSection = () => (
+    <>
+      <PaginationControls
+        totalCount={totalCount}
+        displayedCount={candidates.length}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageSizeChange={handlePageSizeChange}
+        onLoadMore={loadMore}
+        loadingMore={loadingMore}
+        loading={loading}
+        hasMore={currentPage < totalPages}
+      />
+      <InfiniteScrollLoader
+        loadingMore={loadingMore}
+        isEnd={currentPage >= totalPages && totalCount > 0}
+      />
+    </>
+  )
 
   // ─── Render: Filters Section ─────────────────────────────────────────────
 
@@ -518,6 +643,7 @@ export function AdminPipeline() {
               type="button"
               onClick={() => {
                 setDateFilter(d.value)
+                setCurrentPage(1)
                 if (d.value !== 'custom') {
                   setCustomDateFrom('')
                   setCustomDateTo('')
@@ -587,7 +713,7 @@ export function AdminPipeline() {
         </div>
 
         {/* Recruiter filter */}
-        <Select value={recruiterFilter} onValueChange={setRecruiterFilter}>
+        <Select value={recruiterFilter} onValueChange={(v) => { setRecruiterFilter(v); setCurrentPage(1) }}>
           <SelectTrigger className="h-9 text-sm w-full sm:w-[180px]">
             <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
             <SelectValue placeholder="All Recruiters" />
@@ -604,7 +730,7 @@ export function AdminPipeline() {
 
         {/* Organization filter — only for SUPER_ADMIN */}
         {isSuperAdmin && (
-          <Select value={organizationFilter} onValueChange={setOrganizationFilter}>
+          <Select value={organizationFilter} onValueChange={(v) => { setOrganizationFilter(v); setCurrentPage(1) }}>
             <SelectTrigger className="h-9 text-sm w-full sm:w-[180px]">
               <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue placeholder="All Organizations" />
@@ -844,11 +970,11 @@ export function AdminPipeline() {
   // ─── Render: Stage Tabs ──────────────────────────────────────────────────
 
   const renderStageTabs = () => {
-    const allCount = totalCount
+    const allCount = allStagesCount
     return (
       <Tabs
         value={activeStage}
-        onValueChange={(v) => setActiveStage(v as PipelineStage)}
+        onValueChange={(v) => { setActiveStage(v as PipelineStage); setCurrentPage(1) }}
       >
         <TabsList className="w-full overflow-x-auto flex-nowrap scrollbar-none h-10">
           <TabsTrigger
@@ -912,6 +1038,7 @@ export function AdminPipeline() {
               <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto">
                 <DesktopTable />
               </div>
+              {candidates.length > 0 && renderPaginationSection()}
             </>
           )}
         </TabsContent>
@@ -937,6 +1064,7 @@ export function AdminPipeline() {
                 <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto">
                   <DesktopTable />
                 </div>
+                {candidates.length > 0 && renderPaginationSection()}
               </>
             )}
           </TabsContent>
@@ -1326,6 +1454,9 @@ export function AdminPipeline() {
 
       {/* Stage Tabs */}
       {renderStageTabs()}
+
+      {/* Infinite scroll sentinel */}
+      <div ref={sentinelRef} className="h-1" />
 
       {/* Edit Dialog */}
       {renderEditDialog()}

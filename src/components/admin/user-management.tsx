@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { 
@@ -32,6 +32,7 @@ import {
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,8 +93,17 @@ function generateRandomPassword(): string {
 export function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Server-side pagination state
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   // Dialog states
   const [formOpen, setFormOpen] = useState(false)
@@ -108,33 +118,88 @@ export function UserManagement() {
   const [toggleConfirm, setToggleConfirm] = useState<User | null>(null)
   const [resetConfirm, setResetConfirm] = useState<User | null>(null)
 
+  // ─── Debounced Search ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   // ─── Fetch Users ─────────────────────────────────────────────────────────
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (page = 1, limit = 50, search = '', append = false) => {
     try {
-      setLoading(true)
-      const res = await authFetch('/api/users')
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(limit))
+      if (search) params.set('search', search)
+
+      const res = await authFetch(`/api/users?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch users')
       const data = await res.json()
-      setUsers(data.users || [])
+      if (append) {
+        setUsers(prev => [...prev, ...(data.users || [])])
+      } else {
+        setUsers(data.users || [])
+      }
+      setTotalCount(data.totalCount || 0)
+      setCurrentPage(data.page || page)
+      setTotalPages(data.totalPages || 1)
     } catch {
       toast.error('Failed to load users')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [])
 
+  // Initial load + refetch when search or page size changes
   useEffect(() => {
-    fetchUsers()
-  }, [fetchUsers])
+    setCurrentPage(1)
+    setUsers([])
+    fetchUsers(1, pageSize, debouncedSearch)
+  }, [debouncedSearch, pageSize])
 
-  // ─── Filtered Users ──────────────────────────────────────────────────────
+  // ─── Infinite Scroll ────────────────────────────────────────────────────
 
-  const filteredUsers = users.filter((u) => {
-    const q = search.toLowerCase().trim()
-    if (!q) return true
-    return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-  })
+  const hasMore = currentPage < totalPages && users.length < totalCount
+
+  const loadMoreFn = () => {
+    if (loadingMore || !hasMore) return
+    fetchUsers(currentPage + 1, pageSize, debouncedSearch, true)
+  }
+
+  const loadMoreRef = useRef(loadMoreFn)
+  loadMoreRef.current = loadMoreFn
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(1)
+    setUsers([])
+    fetchUsers(1, newSize, debouncedSearch)
+  }
 
   // ─── Form Handlers ───────────────────────────────────────────────────────
 
@@ -255,7 +320,7 @@ export function UserManagement() {
         toast.success(`User "${formData.name}" created successfully`)
       }
       setFormOpen(false)
-      fetchUsers()
+      fetchUsers(1, pageSize, debouncedSearch)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Operation failed')
     } finally {
@@ -273,7 +338,7 @@ export function UserManagement() {
         throw new Error(err.message || 'Delete failed')
       }
       toast.success(`User "${user.name}" deleted successfully`)
-      fetchUsers()
+      fetchUsers(1, pageSize, debouncedSearch)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete user')
     }
@@ -291,7 +356,7 @@ export function UserManagement() {
         throw new Error(err.message || 'Toggle failed')
       }
       toast.success(`User "${user.name}" ${user.isActive ? 'deactivated' : 'activated'}`)
-      fetchUsers()
+      fetchUsers(1, pageSize, debouncedSearch)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to toggle user status')
     }
@@ -361,8 +426,8 @@ export function UserManagement() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
           placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9"
         />
       </div>
@@ -373,17 +438,17 @@ export function UserManagement() {
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
           <span className="ml-2 text-muted-foreground">Loading users...</span>
         </div>
-      ) : filteredUsers.length === 0 ? (
+      ) : users.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={search ? 'No users found' : 'No recruiters yet'}
+          title={searchQuery ? 'No users found' : 'No recruiters yet'}
           description={
-            search
+            searchQuery
               ? 'Try adjusting your search terms'
               : 'Add your first recruiter to get started'
           }
-          actionLabel={!search ? 'Add Recruiter' : undefined}
-          onAction={!search ? openCreate : undefined}
+          actionLabel={!searchQuery ? 'Add Recruiter' : undefined}
+          onAction={!searchQuery ? openCreate : undefined}
         />
       ) : (
         <>
@@ -404,7 +469,7 @@ export function UserManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
+                {users.map((user) => (
                   <TableRow key={user.id} className={!user.isActive ? 'opacity-60' : ''}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>
@@ -482,11 +547,32 @@ export function UserManagement() {
                 ))}
               </TableBody>
             </Table>
+
+            {/* Infinite Scroll Sentinel */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {/* Infinite Scroll Loader */}
+            <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && users.length > 0} />
+
+            {/* Pagination Controls */}
+            <PaginationControls
+              totalCount={totalCount}
+              displayedCount={users.length}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={[50, 100]}
+              onPageSizeChange={handlePageSizeChange}
+              onLoadMore={loadMoreFn}
+              loadingMore={loadingMore}
+              loading={loading}
+              hasMore={hasMore}
+            />
           </div>
 
           {/* Mobile Card View */}
           <div className="md:hidden space-y-3">
-            {filteredUsers.map((user) => (
+            {users.map((user) => (
               <div
                 key={user.id}
                 className={`rounded-lg border p-4 space-y-3 ${!user.isActive ? 'opacity-60' : ''}`}
@@ -531,6 +617,27 @@ export function UserManagement() {
                 </div>
               </div>
             ))}
+
+            {/* Infinite Scroll Sentinel */}
+            <div ref={sentinelRef} className="h-1" />
+
+            {/* Infinite Scroll Loader */}
+            <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && users.length > 0} />
+
+            {/* Pagination Controls */}
+            <PaginationControls
+              totalCount={totalCount}
+              displayedCount={users.length}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={[50, 100]}
+              onPageSizeChange={handlePageSizeChange}
+              onLoadMore={loadMoreFn}
+              loadingMore={loadingMore}
+              loading={loading}
+              hasMore={hasMore}
+            />
           </div>
         </>
       )}

@@ -76,8 +76,10 @@ export async function GET(request: NextRequest) {
     const userId = searchParams.get('userId');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
-    let limit = parseInt(searchParams.get('limit') || '200', 10);
-    if (isNaN(limit) || limit < 1 || limit > 1000) limit = 200;
+    let limit = parseInt(searchParams.get('limit') || '50', 10);
+    if (isNaN(limit) || limit < 1 || limit > 200) limit = 50;
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
 
     const where: Record<string, unknown> = {};
     if (!requireOrgAdmin(auth)) {
@@ -91,14 +93,18 @@ export async function GET(request: NextRequest) {
       if (dateTo) (where.createdAt as Record<string, unknown>).lte = new Date(dateTo);
     }
 
-    const logs = await db.activityLog.findMany({
-      where,
-      include: {
-        user: { select: { id: true, name: true, email: true, phone: true, role: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+    const [logs, totalCount] = await Promise.all([
+      db.activityLog.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.activityLog.count({ where }),
+    ]);
 
     // Get latest status per user for live status view (admin only)
     let liveStatuses: { userId: string; name: string; status: string; lastActivity: string; totalHoursToday: number }[] = [];
@@ -156,7 +162,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ logs, liveStatuses });
+    return NextResponse.json({
+      logs,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+      liveStatuses,
+    });
   } catch (error) {
     console.error('Activity log fetch error:', error);
     return NextResponse.json({ error: 'Failed to fetch activity logs' }, { status: 500 });

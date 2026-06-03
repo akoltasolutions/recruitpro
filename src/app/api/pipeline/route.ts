@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const stage = searchParams.get('stage'); // SHORTLISTED, FOLLOW_UP, INTERVIEWED, JOINED, BACKOUT
     const search = searchParams.get('search');
 
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+
     const where: Record<string, unknown> = {
       // Only show candidates that have been dispositioned (not NEW/PENDING)
       pipelineStage: { not: 'NEW' },
@@ -28,20 +31,25 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const candidates = await db.candidate.findMany({
-      where,
-      include: {
-        callRecords: {
-          orderBy: { calledAt: 'desc' },
-          take: 1,
-          include: {
-            disposition: { select: { heading: true, type: true } },
-            client: { select: { name: true } },
+    const [candidates, totalCount] = await Promise.all([
+      db.candidate.findMany({
+        where,
+        include: {
+          callRecords: {
+            orderBy: { calledAt: 'desc' },
+            take: 1,
+            include: {
+              disposition: { select: { heading: true, type: true } },
+              client: { select: { name: true } },
+            },
           },
         },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.candidate.count({ where }),
+    ]);
 
     // Transform to flat shape matching frontend PipelineCandidate interface
     const flatCandidates = candidates.map((c) => {
@@ -92,6 +100,9 @@ export async function GET(request: NextRequest) {
       candidates: stage ? (grouped[stage] || []) : flatCandidates,
       grouped,
       counts,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
     });
   } catch (error) {
     console.error('Pipeline fetch error:', error);

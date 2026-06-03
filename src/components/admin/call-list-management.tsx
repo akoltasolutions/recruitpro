@@ -37,6 +37,7 @@ import * as XLSX from 'xlsx'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { format, formatDistanceToNow } from 'date-fns'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 
 interface CallList {
   id: string
@@ -49,7 +50,7 @@ interface CallList {
   googleSheetGid: string | null
   syncInterval: number
   lastSyncedAt: string | null
-  candidates: Candidate[]
+  candidates: Array<{ id: string }>
   assignments: Array<{ recruiter: { id: string; name: string; email: string } }>
 }
 
@@ -191,6 +192,22 @@ export function CallListManagement({ userId }: { userId: string }) {
   const [deleteFilteredConfirm, setDeleteFilteredConfirm] = useState(false)
   const [deleteFilteredSaving, setDeleteFilteredSaving] = useState(false)
 
+  // ─── Server-side pagination state ───
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  // ─── List-level search ───
+  const [listSearchQuery, setListSearchQuery] = useState('')
+  const [debouncedListSearch, setDebouncedListSearch] = useState('')
+
+  // ─── Fetched candidate details (for candidates dialog) ───
+  const [candidateDetails, setCandidateDetails] = useState<Candidate[]>([])
+  const [candidateDetailsLoading, setCandidateDetailsLoading] = useState(false)
+
   // Deduplicate state
   const [dedupOpen, setDedupOpen] = useState(false)
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([])
@@ -203,15 +220,31 @@ export function CallListManagement({ userId }: { userId: string }) {
   const [importMoreColumnMapping, setImportMoreColumnMapping] = useState<Record<string, string>>({})
   const importMoreFileRef = useRef<HTMLInputElement>(null)
 
-  const fetchCallLists = useCallback(async () => {
-    setLoading(true)
+  const fetchCallLists = useCallback(async (page = 1, limit = 50, searchVal = '', append = false) => {
     try {
-      const res = await authFetch('/api/call-lists')
+      if (append) {
+        setLoadingMore(true)
+      } else {
+        setLoading(true)
+      }
+      const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(limit))
+      if (searchVal) params.set('search', searchVal)
+
+      const res = await authFetch(`/api/call-lists?${params.toString()}`)
       if (!res.ok) throw new Error()
       const json = await res.json()
-      setCallLists(json.callLists || [])
+      if (append) {
+        setCallLists(prev => [...prev, ...(json.callLists || [])])
+      } else {
+        setCallLists(json.callLists || [])
+      }
+      setTotalCount(json.totalCount || 0)
+      setCurrentPage(json.page || page)
+      setTotalPages(json.totalPages || 1)
     } catch { toast.error('Failed to load calling lists') }
-    finally { setLoading(false) }
+    finally { setLoading(false); setLoadingMore(false) }
   }, [])
 
   const fetchRecruiters = useCallback(async () => {
@@ -223,7 +256,63 @@ export function CallListManagement({ userId }: { userId: string }) {
     } catch { /* ignore */ }
   }, [])
 
-  useEffect(() => { fetchCallLists(); fetchRecruiters() }, [fetchCallLists, fetchRecruiters])
+  // ─── Debounced list search ───
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedListSearch(listSearchQuery.trim())
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [listSearchQuery])
+
+  // Initial load + refetch when search or page size changes
+  useEffect(() => {
+    setCurrentPage(1)
+    setCallLists([])
+    fetchCallLists(1, pageSize, debouncedListSearch)
+    fetchRecruiters()
+  }, [debouncedListSearch, pageSize, fetchCallLists, fetchRecruiters])
+
+  // ─── Infinite Scroll ───
+  const hasMore = currentPage < totalPages && callLists.length < totalCount
+
+  const loadMoreFn = () => {
+    if (loadingMore || !hasMore) return
+    fetchCallLists(currentPage + 1, pageSize, debouncedListSearch, true)
+  }
+
+  const loadMoreRef = useRef(loadMoreFn)
+  loadMoreRef.current = loadMoreFn
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // ─── Fetch full candidate details for a list (for candidates dialog) ───
+  const fetchListCandidates = useCallback(async (listId: string) => {
+    setCandidateDetailsLoading(true)
+    try {
+      const res = await authFetch(`/api/call-lists/${listId}/candidates`)
+      if (!res.ok) throw new Error()
+      const json = await res.json()
+      setCandidateDetails(json.candidates || [])
+    } catch {
+      toast.error('Failed to load candidates')
+      setCandidateDetails([])
+    } finally {
+      setCandidateDetailsLoading(false)
+    }
+  }, [])
 
   // ─── Google Sheets auto-sync useEffect ───
   useEffect(() => {
@@ -240,12 +329,12 @@ export function CallListManagement({ userId }: { userId: string }) {
           await authFetch(`/api/call-lists/${list.id}/sync`, { method: 'POST' })
         } catch { /* silent */ }
       }
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     }
 
     const timer = setInterval(syncAll, intervalMs)
     return () => clearInterval(timer)
-  }, [callLists, fetchCallLists])
+  }, [callLists, fetchCallLists, pageSize, debouncedListSearch])
 
   // ─── Manual Entry helpers ───
   const updateManualEntry = (index: number, field: keyof ManualEntry, value: string) => {
@@ -290,7 +379,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       toast.success(`Calling list created with ${candidates.length} candidates`)
       setCreateOpen(false)
       resetCreateForm()
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setSaving(false) }
   }
@@ -361,7 +450,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       toast.success(`Calling list created with ${candidates.length} candidates${dupes > 0 ? ` (${dupes} duplicates removed)` : ''}`)
       setCreateOpen(false)
       resetCreateForm()
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setSaving(false) }
   }
@@ -395,7 +484,7 @@ export function CallListManagement({ userId }: { userId: string }) {
         return
       }
       toast.success(`"${listName}" deleted successfully`)
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch {
       toast.error('Something went wrong while deleting')
     }
@@ -503,7 +592,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       setParsedData([])
       setCsvColumns([])
       setColumnMapping({})
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setSaving(false) }
   }
@@ -600,7 +689,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
       toast.success(`Imported ${candidates.length} candidates from Google Sheets (${gsRows.length - uniqueData.length} duplicates removed)`)
       handleGsClose()
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setSaving(false) }
   }
@@ -615,7 +704,7 @@ export function CallListManagement({ userId }: { userId: string }) {
         return
       }
       toast.success(`Sync complete: ${json.created} created, ${json.updated} updated (${json.total} total)`)
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch {
       toast.error('Failed to sync')
     } finally {
@@ -644,7 +733,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       const result = await res.json()
       toast.success(`Merge complete: ${result.added} added, ${result.skipped} skipped, ${result.replaced} replaced (${result.total} total)`)
       setMergeOpen(false)
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setMerging(false) }
   }
@@ -691,7 +780,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       setAddNumbersOpen(false)
       setAddNumbersPasteText('')
       setAddNumbersPasteParsed([])
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setAddNumbersSaving(false) }
   }
@@ -744,7 +833,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       toast.success(`${json.count} candidates added`)
       setAddNumbersOpen(false)
       setAddNumbersEntries([emptyManualEntry()])
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setAddNumbersSaving(false) }
   }
@@ -753,7 +842,7 @@ export function CallListManagement({ userId }: { userId: string }) {
   const getFilteredCandidates = () => {
     if (!selectedList) return []
     const query = searchQuery.trim().toLowerCase()
-    return selectedList.candidates.filter(c => {
+    return candidateDetails.filter(c => {
       if (filterRole && (c.role || '').toLowerCase() !== filterRole.toLowerCase()) return false
       if (filterLocation && (c.location || '').toLowerCase() !== filterLocation.toLowerCase()) return false
       if (filterStatus && c.status !== filterStatus) return false
@@ -767,7 +856,7 @@ export function CallListManagement({ userId }: { userId: string }) {
 
   const getUniqueValues = (field: 'role' | 'location' | 'status') => {
     if (!selectedList) return []
-    const values = new Set(selectedList.candidates.map(c => c[field]).filter(Boolean) as string[])
+    const values = new Set(candidateDetails.map(c => c[field]).filter(Boolean) as string[])
     return Array.from(values).sort()
   }
 
@@ -798,7 +887,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       setDeleteFilteredConfirm(false)
       setSelectedCandidateIds([])
       clearFilters()
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setDeleteFilteredSaving(false) }
   }
@@ -816,7 +905,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       const json = await res.json()
       toast.success(`${json.count} candidates removed`)
       setSelectedCandidateIds([])
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
   }
 
@@ -842,7 +931,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       toast.success(`${json.count} candidates updated to ${newStatus}`)
       setUpdateStatusOpen(false)
       setSelectedCandidateIds([])
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setUpdateStatusSaving(false) }
   }
@@ -879,7 +968,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       toast.success(`${json.removed} duplicate candidates removed`)
       setDedupOpen(false)
       setDuplicates([])
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
   }
 
@@ -958,7 +1047,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       setImportMoreParsedData([])
       setImportMoreCsvColumns([])
       setImportMoreColumnMapping({})
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setAddNumbersSaving(false) }
   }
@@ -981,7 +1070,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       if (!res.ok) { toast.error('Failed to assign'); return }
       toast.success('Recruiters assigned')
       setAssignOpen(false)
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
   }
 
@@ -1011,7 +1100,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       if (!res.ok) { toast.error('Failed to update calling list'); return }
       toast.success('Calling list updated')
       setEditOpen(false)
-      fetchCallLists()
+      fetchCallLists(1, pageSize, debouncedListSearch)
     } catch { toast.error('Something went wrong') }
     finally { setEditSaving(false) }
   }
@@ -1055,6 +1144,17 @@ export function CallListManagement({ userId }: { userId: string }) {
         </Button>
       </PageHeader>
 
+      {/* Search bar */}
+      <div className="relative max-w-sm mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search calling lists..."
+          value={listSearchQuery}
+          onChange={(e) => setListSearchQuery(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : callLists.length === 0 ? (
@@ -1062,10 +1162,7 @@ export function CallListManagement({ userId }: { userId: string }) {
       ) : (
         <div className="space-y-3">
           {callLists.map(list => {
-            const pending = list.candidates.filter(c => c.status === 'PENDING').length
-            const done = list.candidates.filter(c => c.status === 'DONE').length
-            const scheduled = list.candidates.filter(c => c.status === 'SCHEDULED').length
-            const total = list.candidates.length
+            const total = list.candidates?.length || 0
             return (
               <div key={list.id} className="rounded-lg border p-4 hover:shadow-sm transition-shadow">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1082,9 +1179,6 @@ export function CallListManagement({ userId }: { userId: string }) {
                     {list.description && <p className="text-sm text-muted-foreground truncate">{list.description}</p>}
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {total} candidates</span>
-                      <span className="text-emerald-600 font-medium">{pending} pending</span>
-                      <span className="text-blue-600 font-medium">{done} done</span>
-                      {scheduled > 0 && <span className="text-amber-600 font-medium">{scheduled} scheduled</span>}
                       <span>Created {format(new Date(list.createdAt), 'MMM dd, yyyy')}</span>
                       {list.source === 'GOOGLE_SHEETS' && list.lastSyncedAt && (
                         <span className="text-blue-500">Last synced: {formatDistanceToNow(new Date(list.lastSyncedAt), { addSuffix: true })}</span>
@@ -1100,7 +1194,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="sm" onClick={() => { setSelectedList(list); setCandidatesOpen(true) }}>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedList(list); fetchListCandidates(list.id); setCandidatesOpen(true) }}>
                       <Eye className="h-4 w-4 mr-1" /> View
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => openEditDialog(list)}>
@@ -1131,6 +1225,31 @@ export function CallListManagement({ userId }: { userId: string }) {
               </div>
             )
           })}
+
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {/* Infinite scroll loader */}
+          <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && callLists.length > 0} />
+
+          {/* Pagination controls */}
+          <PaginationControls
+            totalCount={totalCount}
+            displayedCount={callLists.length}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            pageSizeOptions={[50, 100]}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize)
+              setCurrentPage(1)
+              setCallLists([])
+            }}
+            onLoadMore={loadMoreFn}
+            loadingMore={loadingMore}
+            loading={loading}
+            hasMore={hasMore}
+          />
         </div>
       )}
 
@@ -1565,10 +1684,10 @@ export function CallListManagement({ userId }: { userId: string }) {
       </Dialog>
 
       {/* ═══════════ Candidates Dialog ═══════════ */}
-      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) { setSelectedCandidateIds([]); clearFilters() } }}>
+      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) { setSelectedCandidateIds([]); clearFilters(); setCandidateDetails([]) } }}>
         <DialogContent className="sm:max-w-5xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>{selectedList?.name} - Candidates ({selectedList?.candidates.length || 0})</DialogTitle>
+            <DialogTitle>{selectedList?.name} - Candidates ({candidateDetailsLoading ? '...' : candidateDetails.length || selectedList?.candidates?.length || 0})</DialogTitle>
             <DialogDescription>View and manage candidates in this calling list</DialogDescription>
           </DialogHeader>
 
@@ -1674,7 +1793,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             </select>
             {hasActiveFilters && (
               <Badge variant="secondary" className="text-xs">
-                Showing {getFilteredCandidates().length} of {selectedList?.candidates.length || 0}
+                Showing {getFilteredCandidates().length} of {candidateDetails.length || 0}
               </Badge>
             )}
           </div>
@@ -1685,10 +1804,10 @@ export function CallListManagement({ userId }: { userId: string }) {
                 <TableRow>
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={selectedList?.candidates.length ? selectedCandidateIds.length === selectedList.candidates.length : false}
+                      checked={candidateDetails.length ? selectedCandidateIds.length === candidateDetails.length : false}
                       onCheckedChange={(checked) => {
                         if (!selectedList) return
-                        setSelectedCandidateIds(checked ? selectedList.candidates.map(c => c.id) : [])
+                        setSelectedCandidateIds(checked ? candidateDetails.map(c => c.id) : [])
                       }}
                     />
                   </TableHead>
@@ -1701,7 +1820,19 @@ export function CallListManagement({ userId }: { userId: string }) {
               </TableHeader>
               <TableBody>
                 {selectedList && (() => {
-                  const displayCandidates = hasActiveFilters ? getFilteredCandidates() : selectedList.candidates
+                  if (candidateDetailsLoading) {
+                    return (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">Loading candidates...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  }
+                  const displayCandidates = hasActiveFilters ? getFilteredCandidates() : candidateDetails
                   return displayCandidates.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">

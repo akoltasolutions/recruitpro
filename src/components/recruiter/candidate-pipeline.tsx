@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   Phone,
@@ -33,6 +33,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { EmptyState } from '@/components/shared/empty-state'
+import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 import { cn, formatPhoneForWhatsApp } from '@/lib/utils'
@@ -68,6 +69,9 @@ interface PipelineResponse {
   candidates: PipelineCandidate[]
   grouped: Record<PipelineStage, PipelineCandidate[]>
   counts: Record<PipelineStage, number>
+  totalCount?: number
+  page?: number
+  totalPages?: number
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -158,6 +162,14 @@ export function CandidatePipeline() {
     BACKOUT: 0,
   })
 
+  // Pagination state
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
   // Inline edit state — keyed by candidateId
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editNotes, setEditNotes] = useState('')
@@ -167,12 +179,15 @@ export function CandidatePipeline() {
   const [editBackoutReason, setEditBackoutReason] = useState('')
   const [editStage, setEditStage] = useState<PipelineStage>('SHORTLISTED')
 
-  // ── Fetch candidates ──
+  // ── Fetch candidates (initial load — page 1, replaces data) ──
 
   const fetchCandidates = useCallback(async () => {
     setLoading(true)
+    setCurrentPage(1)
     try {
       const params = new URLSearchParams({ stage: activeStage })
+      params.set('page', '1')
+      params.set('limit', String(pageSize))
       if (searchQuery.trim()) params.set('search', searchQuery.trim())
       const res = await authFetch(`/api/pipeline?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch pipeline data')
@@ -185,19 +200,77 @@ export function CandidatePipeline() {
         JOINED: 0,
         BACKOUT: 0,
       })
+      setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 1)
     } catch {
       toast.error('Failed to load pipeline data')
       setCandidates([])
     } finally {
       setLoading(false)
     }
-  }, [activeStage, searchQuery])
+  }, [activeStage, searchQuery, pageSize])
 
   useEffect(() => {
     // Debounce search
     const timer = setTimeout(fetchCandidates, 300)
     return () => clearTimeout(timer)
   }, [fetchCandidates])
+
+  // ── Load more — fetches next page, appends data ──
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || currentPage >= totalPages) return
+    setLoadingMore(true)
+    const nextPage = currentPage + 1
+    try {
+      const params = new URLSearchParams({ stage: activeStage })
+      params.set('page', String(nextPage))
+      params.set('limit', String(pageSize))
+      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+      const res = await authFetch(`/api/pipeline?${params.toString()}`)
+      if (!res.ok) throw new Error('Failed to fetch more pipeline data')
+      const data: PipelineResponse = await res.json()
+      setCandidates(prev => [...prev, ...(data.candidates || [])])
+      setCurrentPage(nextPage)
+      setTotalCount(data.totalCount || 0)
+      setTotalPages(data.totalPages || 1)
+    } catch {
+      toast.error('Failed to load more candidates')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, currentPage, totalPages, activeStage, searchQuery, pageSize])
+
+  // ── IntersectionObserver for infinite scroll ──
+
+  const loadMoreRef = useRef(loadMore)
+  loadMoreRef.current = loadMore
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreRef.current()
+        }
+      },
+      { rootMargin: '300px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // ── Scroll handler for nested scroll containers ──
+
+  const handleContainerScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      if (!loadingMore && currentPage < totalPages) {
+        loadMoreRef.current()
+      }
+    }
+  }, [loadingMore, currentPage, totalPages])
 
   // ── Inline edit helpers ──
 
@@ -300,6 +373,10 @@ export function CandidatePipeline() {
   }, [candidates, searchQuery])
 
   const isEditing = (id: string) => editingId === id
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size)
+  }
 
   // ─── Render helpers ───────────────────────────────────────────────────────
 
@@ -944,7 +1021,7 @@ export function CandidatePipeline() {
             ) : (
               <>
                 {/* Mobile Card View */}
-                <div className="md:hidden space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto">
+                <div className="md:hidden space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto" onScroll={handleContainerScroll}>
                   {filteredCandidates.length === 0 ? (
                     <EmptyState
                       icon={STAGE_META[stage].icon}
@@ -960,12 +1037,39 @@ export function CandidatePipeline() {
                       <MobileCard key={c.id} c={c} />
                     ))
                   )}
+
+                  {/* Infinite scroll sentinel inside mobile container */}
+                  <div ref={sentinelRef} className="h-1" />
                 </div>
 
                 {/* Desktop Table View */}
-                <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto">
+                <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto" onScroll={handleContainerScroll}>
                   <DesktopTable />
+
+                  {/* Infinite scroll sentinel inside desktop container */}
+                  <div ref={sentinelRef} className="h-1" />
                 </div>
+
+                {/* Loading indicator for infinite scroll */}
+                <InfiniteScrollLoader
+                  loadingMore={loadingMore}
+                  isEnd={currentPage >= totalPages && candidates.length > 0}
+                />
+
+                {/* Pagination controls */}
+                <PaginationControls
+                  totalCount={totalCount}
+                  displayedCount={candidates.length}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  pageSizeOptions={[50, 100]}
+                  onPageSizeChange={handlePageSizeChange}
+                  onLoadMore={loadMore}
+                  loadingMore={loadingMore}
+                  loading={loading}
+                  hasMore={currentPage < totalPages}
+                />
               </>
             )}
           </TabsContent>

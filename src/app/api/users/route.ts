@@ -10,16 +10,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const users = await db.user.findMany({
-      where: { role: 'RECRUITER' },
-      select: {
-        id: true, email: true, name: true, phone: true, role: true,
-        isActive: true, avatarUrl: true, callModeOn: true,
-        whatsappAccess: true, uploadPermission: true, createListPermission: true, createdAt: true, updatedAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+    const roleParam = searchParams.get('role');
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
+
+    const where: Record<string, unknown> = {};
+
+    // Default to RECRUITER role, but allow overriding via role param
+    if (roleParam) {
+      where.role = roleParam;
+    } else {
+      where.role = 'RECRUITER';
+    }
+
+    // Search filter across name, email, phone
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+      ];
+    }
+
+    const [users, totalCount] = await Promise.all([
+      db.user.findMany({
+        where,
+        select: {
+          id: true, email: true, name: true, phone: true, role: true,
+          isActive: true, avatarUrl: true, callModeOn: true,
+          whatsappAccess: true, uploadPermission: true, createListPermission: true, createdAt: true, updatedAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.user.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      users,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
     });
-    return NextResponse.json({ users });
   } catch (error) {
     console.error('Users list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

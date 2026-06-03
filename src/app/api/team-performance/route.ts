@@ -30,10 +30,15 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
 
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
+
     console.log('[TeamPerformance] Fetching with params:', {
       recruiterId,
       dateFrom,
       dateTo,
+      page,
+      limit,
       adminOrgId: auth.organizationId,
       adminRole: auth.role,
     })
@@ -70,45 +75,58 @@ export async function GET(request: NextRequest) {
 
     console.log('[TeamPerformance] Query where clause:', JSON.stringify(where))
 
-    // Fetch all call records matching the filter (unpaginated)
-    const callRecords = await db.callRecord.findMany({
-      where,
-      include: {
-        candidate: {
-          select: {
-            name: true,
-            phone: true,
-            role: true,
-            location: true,
+    // Fetch paginated call records, total count, and aggregate stats (from ALL matching records) in parallel
+    const [callRecords, totalCount, aggregateStats] = await Promise.all([
+      db.callRecord.findMany({
+        where,
+        include: {
+          candidate: {
+            select: {
+              name: true,
+              phone: true,
+              role: true,
+              location: true,
+            },
+          },
+          recruiter: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          disposition: {
+            select: {
+              id: true,
+              heading: true,
+              type: true,
+            },
+          },
+          client: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        recruiter: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+        orderBy: {
+          calledAt: 'desc',
         },
-        disposition: {
-          select: {
-            id: true,
-            heading: true,
-            type: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        calledAt: 'desc',
-      },
-    })
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.callRecord.count({ where }),
+      // Aggregate stats computed from ALL matching records (not just current page)
+      db.callRecord.aggregate({
+        where,
+        _count: true,
+        _avg: { callDuration: true },
+        _max: { calledAt: true },
+        _min: { calledAt: true },
+      }),
+    ])
 
-    console.log('[TeamPerformance] Found', callRecords.length, 'call records')
+    console.log('[TeamPerformance] Found', totalCount, 'total call records, returning', callRecords.length, 'for page', page)
 
     // Fetch all active recruiters for the dropdown
     // Include both USER and RECRUITER roles (system may use either)
@@ -129,6 +147,15 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       callRecords,
+      totalCount,
+      page,
+      totalPages: Math.ceil(totalCount / limit),
+      aggregateStats: {
+        totalCalls: aggregateStats._count,
+        avgTalkTime: aggregateStats._avg.callDuration ?? 0,
+        latestCallAt: aggregateStats._max.calledAt?.toISOString() ?? null,
+        earliestCallAt: aggregateStats._min.calledAt?.toISOString() ?? null,
+      },
       recruiters,
     })
   } catch (error) {
