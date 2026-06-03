@@ -79,6 +79,7 @@ model Organization {
   customDesignations    CustomDesignation[]
   invitations           Invitation[]
   shiftAssignments      ShiftAssignment[]
+  pipelineNotes          PipelineNote[]
 }
 
 model Department {
@@ -234,6 +235,7 @@ model User {
   whatsappMessages    WhatsAppMessage[]
   activityLogs        ActivityLog[]
   shiftAssignment     ShiftAssignment?
+  pipelineNotes        PipelineNote[]
 }
 
 model Client {
@@ -302,14 +304,16 @@ model Candidate {
   interviewDate  DateTime?
   joinedDate     DateTime?
   backoutReason  String?
+  remarks        String?
   // Dynamic custom field data stored as JSON
   dynamicData    String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  callList       CallList      @relation(fields: [callListId], references: [id], onDelete: Cascade)
-  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  callList       CallList        @relation(fields: [callListId], references: [id], onDelete: Cascade)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
+  pipelineNotes  PipelineNote[]
 }
 
 model CallListAssignment {
@@ -401,4 +405,19 @@ model ActivityLog {
 
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ==================== PIPELINE NOTES (AUDIT TRAIL) ====================
+
+model PipelineNote {
+  id             String   @id @default(cuid())
+  candidateId    String
+  authorId       String   // admin/recruiter who wrote the note
+  note           String
+  organizationId String?
+  createdAt      DateTime @default(now())
+
+  candidate      Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

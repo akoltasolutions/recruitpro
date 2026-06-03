@@ -21,7 +21,7 @@ import {
   Menu, Shield, LogOut, MoreHorizontal,
   BarChart3, Activity, Tag, PhoneCall, MessageSquare,
   Users, UserCheck, Megaphone, Settings2, Palette, DatabaseBackup,
-  ChevronRight, Clock, Bell,
+  ChevronRight, Clock, Bell, GitBranch,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -57,6 +57,7 @@ const companyMenuItems: MenuItem[] = [
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette, section: 'company' },
   { key: 'admin-settings', label: 'Settings', icon: Settings, section: 'company' },
   { key: 'organization-settings', label: 'Organization Settings', icon: Building2, section: 'company' },
+  { key: 'pipeline', label: 'Pipeline', icon: GitBranch, section: 'company' },
 ]
 
 const allMenuItems = [...companyMenuItems, ...platformMenuItems]

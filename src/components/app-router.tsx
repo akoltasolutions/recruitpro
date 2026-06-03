@@ -29,6 +29,7 @@ import { OrganizationManagement } from '@/components/super-admin/organization-ma
 import { PlanManagement } from '@/components/super-admin/plan-management'
 import { PlatformSettingsPage } from '@/components/super-admin/platform-settings'
 import { BackupRestorePage } from '@/components/admin/backup-restore'
+import { AdminPipeline } from '@/components/admin/admin-pipeline'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { AutoDialer } from '@/components/recruiter/auto-dialer'
@@ -45,8 +46,8 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
 const AUTH_ROUTES = ['login', 'signup', 'register', 'forgot-password'] as const
 type AuthView = typeof AUTH_ROUTES[number]
 
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder' | 'pipeline'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder' | 'pipeline'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 /**
@@ -273,6 +274,7 @@ export function AppContent() {
         case 'disposition-builder': return <DispositionBuilder />
         case 'admin-settings': return <AdminSettings userId={user.id} />
         case 'organization-settings': return <OrganizationSettings />
+        case 'pipeline': return <AdminPipeline />
         default: return <PlatformDashboard />
       }
     }
@@ -304,6 +306,7 @@ export function AppContent() {
         case 'organization-settings': return <OrganizationSettings />
         case 'field-builder': return <DynamicFieldBuilder />
         case 'disposition-builder': return <DispositionBuilder />
+        case 'pipeline': return <AdminPipeline />
         default: return <AdminDashboard />
       }
     }

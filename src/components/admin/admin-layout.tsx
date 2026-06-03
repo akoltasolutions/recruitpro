@@ -18,7 +18,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Tag, PhoneCall, MessageSquare, Building2, Users, LogOut,
   Menu, Headphones, BarChart3, UserCheck, Activity, Settings, Megaphone, MoreHorizontal,
-  Settings2, Palette, Clock, Bell,
+  Settings2, Palette, Clock, Bell, GitBranch,
 } from 'lucide-react'
 
 const menuItems = [
@@ -38,6 +38,7 @@ const menuItems = [
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette },
   { key: 'settings', label: 'Settings', icon: Settings },
   { key: 'organization-settings', label: 'Organization Settings', icon: Building2 },
+  { key: 'pipeline', label: 'Pipeline', icon: GitBranch },
 ]
 
 // First 5 items shown directly in bottom nav
