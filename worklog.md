@@ -434,3 +434,31 @@ Stage Summary:
 - Two-layer DialogContent: outer (flex centering, pointer-events:none) + inner (visual box)
 - Inner scroll wrappers for form-heavy dialogs (flex-1 overflow-y-auto)
 - 5 files changed: dialog.tsx, select.tsx, dropdown-menu.tsx, team-management-enhanced.tsx, useDialogContainer.tsx (new)
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement permanent global modal/dialog scrolling fix for RecruitPro
+
+Work Log:
+- Analyzed current dialog.tsx two-layer architecture (outer: fixed flex centering, inner: visual dialog box)
+- Identified that base inner div lacked flex-col and overflow handling
+- Analyzed select.tsx and dropdown-menu.tsx container-based portaling (useDialogContainer hook)
+- Identified conflict: overflow-hidden on dialog clips container-based dropdowns
+- Decided to remove container approach — dropdowns now portal to body with z-[10002] (above dialog z-[10001])
+- Added flex flex-col overflow-hidden to base DialogContent inner div
+- Removed useDialogContainer from select.tsx and dropdown-menu.tsx
+- Removed explicit container={dialogRef.current} from plan-management.tsx
+- Cleaned up redundant overflow-hidden/flex/flex-col from 6 dialog classNames
+- Converted 12 dialogs from whole-dialog scroll (overflow-y-auto on DialogContent) to body-scroll pattern (flex-1 min-h-0 overflow-y-auto on body div)
+- Fixed organization-management, plan-management, team-management, shift-management, call-list-management, dynamic-field-builder, user-management, backup-restore, auto-dialer
+- All changes pass ESLint with zero errors
+- Committed as 2409454, pushed to main, GitHub Actions deploying
+
+Stage Summary:
+- Key decision: Body-level portaling for dropdowns + overflow-hidden on dialog = clean separation
+- z-index hierarchy: overlay [10000] < dialog [10001] < select/dropdown [10002]
+- usePortalOverlayFix hook prevents inert issues on body-level portals
+- Dialogs now have sticky header/footer scroll pattern by default
+- Short dialogs unaffected (content fits within max-h)
+- 12 files changed, 98 insertions, 80 deletions
