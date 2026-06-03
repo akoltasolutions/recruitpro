@@ -403,3 +403,34 @@ Stage Summary:
 - All URL references use `team-management` (no `team-enhanced` in codebase)
 - 3 deploys triggered total (#73, #74, #75) — all succeeded
 - Live site verified working at app.akolta.com/team-management
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Permanent global dropdown-in-dialog fix — Team Management View/Edit Profile
+
+Work Log:
+- Analyzed screenshot via VLM: dropdown options clipped/overflowing in View/Edit Profile dialog
+- Audited entire codebase: 21 files with DialogContent, 9 files with SelectContent
+- Identified 3 root causes:
+  1. DialogContent used CSS transform for centering (translate -50%,-50%), creating a stacking
+     context that breaks position:fixed on portaled Select/Dropdown elements
+  2. overflow-y-auto on DialogContent created a scroll container that drifted popper positioning
+  3. No automatic connection between Dialog and Select/Dropdown portal containers
+- Implemented comprehensive 5-file global fix:
+  1. Created hooks/useDialogContainer.tsx — React context for dialog element ref
+  2. Restructured dialog.tsx — Two-layer architecture (outer flex centering + inner visual box)
+  3. Updated select.tsx — Auto-detect dialog container via useDialogContainer()
+  4. Updated dropdown-menu.tsx — Same auto-detection
+  5. Updated team-management-enhanced.tsx — flex layout + inner scroll wrappers
+- Removed overflow-y-auto from DialogContent base class
+- ESLint passes clean, dev server compiles without errors
+- Committed as e106ea1, deployed via GitHub Actions (Run #76, success)
+- Verified live site: app.akolta.com/team-management returns 200, no errors
+
+Stage Summary:
+- Permanent global fix: ALL Select/Dropdown inside ANY Dialog auto-detect container
+- No manual container props needed anywhere in the codebase
+- Two-layer DialogContent: outer (flex centering, pointer-events:none) + inner (visual box)
+- Inner scroll wrappers for form-heavy dialogs (flex-1 overflow-y-auto)
+- 5 files changed: dialog.tsx, select.tsx, dropdown-menu.tsx, team-management-enhanced.tsx, useDialogContainer.tsx (new)
