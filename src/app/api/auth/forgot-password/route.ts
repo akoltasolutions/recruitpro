@@ -13,13 +13,18 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
     return false;
   }
 
+  console.log('[ForgotPassword] RESEND_API_KEY is set (length:', apiKey.length, 'starts re_:', apiKey.startsWith('re_'));
+
   try {
     const { Resend } = await import('resend');
+    console.log('[ForgotPassword] resend module loaded successfully');
+
     const resend = new Resend(apiKey);
 
     const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@akolta.com>';
+    console.log('[ForgotPassword] Sending email from:', fromAddress, 'to:', to);
 
-    await resend.emails.send({
+    const { data, error: resendError } = await resend.emails.send({
       from: fromAddress,
       to,
       subject: 'RecruitPro — Password Reset Code',
@@ -53,10 +58,15 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
       `,
     });
 
-    console.log('[ForgotPassword] Reset email sent to:', to);
+    if (resendError) {
+      console.error('[ForgotPassword] Resend returned error:', JSON.stringify(resendError));
+      return false;
+    }
+
+    console.log('[ForgotPassword] Reset email sent successfully to:', to, 'Resend ID:', data?.id);
     return true;
   } catch (error) {
-    console.error('[ForgotPassword] Failed to send email via Resend:', error);
+    console.error('[ForgotPassword] Exception sending email via Resend:', error);
     return false;
   }
 }
@@ -124,6 +134,7 @@ export async function POST(request: NextRequest) {
         message: emailSent
           ? 'A password reset code has been sent to your email.'
           : 'If an account exists, a reset code has been sent.',
+        emailSent,
       };
 
       // In non-production, include the code for testing
