@@ -485,3 +485,25 @@ Stage Summary:
 - Deployment is now live with the dialog scrolling fix
 - All dialogs across the app now support sticky header/footer scroll pattern
 - Production chunk confirmed: `max-h-[85vh] flex flex-col overflow-hidden gap-4 rounded-lg border p-6`
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix organization dialog not scrolling — replace ScrollArea with native overflow
+
+Work Log:
+- User reported issue still not resolved even in incognito mode
+- Analyzed screenshot with VLM: dialog content clipped at bottom, Plan Assignment section partially visible
+- Checked live JS chunks: confirmed base dialog has flex flex-col overflow-hidden (deployed)
+- Found that organization-management.tsx uses Radix ScrollArea inside flex dialog
+- Root cause: Radix ScrollArea's Viewport uses size-full (h-full) which doesn't properly inherit flex-computed height from parent with flex-1 min-h-0
+- Replaced ScrollArea with native overflow-y-auto div (proven pattern from team-management dialogs)
+- Committed as b5dcda6, pushed, deployed
+- Verified on live: chunk hash changed from 75ed98401967f862 → 0c24ff90d6a4f7d9
+- Production code confirmed: "flex-1 min-h-0 overflow-y-auto -mx-6 px-6" in organization dialog
+
+Stage Summary:
+- Radix ScrollArea doesn't work reliably inside flex containers with flex-1 min-h-0
+- Native overflow-y-auto div is the correct approach for scrollable dialog bodies
+- All other dialogs already use native overflow (team-management, plan-management, etc.)
+- Only organization-management had ScrollArea → now fixed
