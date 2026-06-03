@@ -507,3 +507,32 @@ Stage Summary:
 - Native overflow-y-auto div is the correct approach for scrollable dialog bodies
 - All other dialogs already use native overflow (team-management, plan-management, etc.)
 - Only organization-management had ScrollArea → now fixed
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Add Pipeline Management feature for admin dashboard
+
+Work Log:
+- Analyzed existing schema: Candidate, CallRecord, CallListAssignment, User, Organization models
+- Identified existing recruiter CandidatePipeline component and /api/pipeline route
+- Added PipelineNote model to schema for notes audit trail
+- Added remarks field to Candidate model
+- Added pipelineNotes relations to User and Organization models
+- Pushed schema to DB via bun run db:push
+- Created /api/admin/pipeline/route.ts (588 lines) with GET (pagination, filters, export) and PATCH (update)
+- Created /api/admin/pipeline/notes/route.ts (139 lines) with GET (history) and POST (add note)
+- Created /components/admin/admin-pipeline.tsx (1307 lines) with full pipeline management UI
+- Added 'pipeline' route to AdminPage and SuperAdminPage types in app-router.tsx
+- Added 'pipeline' case to both Super Admin and Admin page renderers
+- Added Pipeline nav item (GitBranch icon) to super-admin-layout.tsx and admin-layout.tsx
+- Committed as 524eb96, pushed to main
+- Verified deployment: Pipeline Management text found in production chunk 56601247c21715fd
+- Verified API: /api/admin/pipeline returns 401 (unauthorized - expected, route exists)
+
+Stage Summary:
+- New feature fully implemented: Pipeline nav + API + UI page + notes + export
+- Safe implementation: no changes to existing recruiter workflow, call records, or permissions
+- SUPER_ADMIN: full access across all organizations
+- ORG_ADMIN: restricted to own organization
+- 7 files changed, 2064 insertions, 6 deletions
