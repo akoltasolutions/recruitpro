@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import {
   Users, UserPlus, Search, Pencil, Trash2, Mail, Phone, MailCheck,
   Loader2, UserCheck, UserX, Briefcase, Building, MoreHorizontal,
-  Send, XCircle, Clock, BadgeCheck, Plus,
+  Send, XCircle, Clock, BadgeCheck, Plus, Power, Shield, Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +36,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Card, CardContent } from '@/components/ui/card'
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
@@ -146,8 +154,6 @@ export function TeamManagementEnhanced() {
   const [revokeConfirm, setRevokeConfirm] = useState<PendingInvitation | null>(null)
 
   // ─── Members (placeholder state) ──────────────────────────────────────────
-
-  const [members] = useState<TeamMember[]>(mockMembers)
   const [invitations, setInvitations] = useState<PendingInvitation[]>(mockInvitations)
   const [designations, setDesignations] = useState<Designation[]>(mockDesignations)
   const [departments, setDepartments] = useState<Department[]>(mockDepartments)
@@ -311,6 +317,65 @@ export function TeamManagementEnhanced() {
     setDeptDeleteConfirm(null)
   }
 
+  // ─── Member Actions ────────────────────────────────────────────────────────
+
+  const [members, setMembers] = useState<TeamMember[]>(mockMembers)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
+
+  function openEditMemberDialog(member: TeamMember) {
+    setEditingMember(member)
+    setMemberForm({
+      name: member.name,
+      email: member.email,
+      phone: member.phone || '',
+      designation: member.designation,
+      department: member.department,
+      role: member.role,
+    })
+    setMemberDialogOpen(true)
+  }
+
+  async function handleSaveMember() {
+    if (!memberForm.name.trim() || !memberForm.email.trim()) {
+      toast.error('Name and email are required')
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === editingMember?.id
+          ? { ...m, ...memberForm, phone: memberForm.phone || null }
+          : m,
+      ),
+    )
+    toast.success(`Member "${memberForm.name.trim()}" updated`)
+    setMemberDialogOpen(false)
+    setEditingMember(null)
+  }
+
+  function handleToggleMemberStatus(member: TeamMember) {
+    const newStatus = member.status === 'active' ? 'inactive' : 'active'
+    setMembers((prev) =>
+      prev.map((m) => (m.id === member.id ? { ...m, status: newStatus } : m)),
+    )
+    toast.success(`${member.name} is now ${newStatus}`)
+  }
+
+  function handleRemoveMember(member: TeamMember) {
+    setMembers((prev) => prev.filter((m) => m.id !== member.id))
+    toast.success(`${member.name} has been removed`)
+  }
+
+  function handleToggleMemberRole(member: TeamMember) {
+    const newRole = member.role === 'ORG_ADMIN' ? 'USER' : 'ORG_ADMIN'
+    setMembers((prev) =>
+      prev.map((m) => (m.id === member.id ? { ...m, role: newRole } : m)),
+    )
+    toast.success(`${member.name} is now ${newRole === 'ORG_ADMIN' ? 'Admin' : 'Member'}`)
+  }
+
   // ─── Badge Helpers ────────────────────────────────────────────────────────
 
   function StatusBadge({ status }: { status: 'active' | 'inactive' }) {
@@ -346,6 +411,52 @@ export function TeamManagementEnhanced() {
       <Badge className="bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
         <XCircle className="size-3 mr-1" /> Expired
       </Badge>
+    )
+  }
+
+  // ─── Member Actions Dropdown ──────────────────────────────────────────────
+
+  function MemberActionsDropdown({ member }: { member: TeamMember }) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+          >
+            <MoreHorizontal className="size-3.5" />
+            <span className="sr-only">Actions for {member.name}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel className="text-xs font-medium">
+            {member.name}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => openEditMemberDialog(member)}>
+            <Eye className="size-3.5 mr-2" />
+            View / Edit Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleToggleMemberRole(member)}>
+            <Shield className="size-3.5 mr-2" />
+            {member.role === 'ORG_ADMIN' ? 'Remove Admin Role' : 'Make Admin'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleToggleMemberStatus(member)}>
+            <Power className="size-3.5 mr-2" />
+            {member.status === 'active' ? 'Deactivate Member' : 'Activate Member'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="text-red-600 focus:text-red-600"
+            onClick={() => handleRemoveMember(member)}
+          >
+            <Trash2 className="size-3.5 mr-2" />
+            Remove Member
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
   }
 
@@ -461,14 +572,7 @@ export function TeamManagementEnhanced() {
                             {new Date(member.joinedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8"
-                              title="View details"
-                            >
-                              <MoreHorizontal className="size-3.5" />
-                            </Button>
+                            <MemberActionsDropdown member={member} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -510,6 +614,7 @@ export function TeamManagementEnhanced() {
 
                       <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
                         <span>Joined {new Date(member.joinedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <MemberActionsDropdown member={member} />
                       </div>
                     </div>
                   ))}
@@ -845,7 +950,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="invite-role" className="w-full">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value="USER">Team Member</SelectItem>
                   <SelectItem value="ORG_ADMIN">Organization Admin</SelectItem>
                 </SelectContent>
@@ -862,7 +967,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="invite-designation" className="w-full">
                   <SelectValue placeholder="Select designation" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   {designations.filter((d) => d.isActive).map((d) => (
                     <SelectItem key={d.id} value={d.name}>
                       {d.name}
@@ -882,7 +987,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="invite-department" className="w-full">
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   {departments.map((d) => (
                     <SelectItem key={d.id} value={d.name}>
                       {d.name}
@@ -904,6 +1009,113 @@ export function TeamManagementEnhanced() {
                 <Send className="size-4 mr-2" />
               )}
               Send Invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════ Edit Member Dialog ═══════════ */}
+      <Dialog open={memberDialogOpen} onOpenChange={setMemberDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>
+              Update member details. Changes will take effect immediately.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="member-name">Name <span className="text-red-500">*</span></Label>
+              <Input
+                id="member-name"
+                value={memberForm.name}
+                onChange={(e) => setMemberForm((f) => ({ ...f, name: e.target.value }))}
+                autoFocus
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-email">Email <span className="text-red-500">*</span></Label>
+              <Input
+                id="member-email"
+                type="email"
+                value={memberForm.email}
+                onChange={(e) => setMemberForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-phone">Phone</Label>
+              <Input
+                id="member-phone"
+                value={memberForm.phone}
+                onChange={(e) => setMemberForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="+91 98765 43210"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-role">Role</Label>
+              <Select
+                value={memberForm.role}
+                onValueChange={(value) => setMemberForm((f) => ({ ...f, role: value }))}
+                modal={false}
+              >
+                <SelectTrigger id="member-role" className="w-full">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="USER">Team Member</SelectItem>
+                  <SelectItem value="ORG_ADMIN">Organization Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-designation">Designation</Label>
+              <Select
+                value={memberForm.designation}
+                onValueChange={(value) => setMemberForm((f) => ({ ...f, designation: value }))}
+                modal={false}
+              >
+                <SelectTrigger id="member-designation" className="w-full">
+                  <SelectValue placeholder="Select designation" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {designations.filter((d) => d.isActive).map((d) => (
+                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="member-department">Department</Label>
+              <Select
+                value={memberForm.department}
+                onValueChange={(value) => setMemberForm((f) => ({ ...f, department: value }))}
+                modal={false}
+              >
+                <SelectTrigger id="member-department" className="w-full">
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setMemberDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveMember}>
+              <Pencil className="size-4 mr-2" />
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1001,7 +1213,7 @@ export function TeamManagementEnhanced() {
                 <SelectTrigger id="dept-head" className="w-full min-w-0">
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" className="max-h-60">
                   {members.filter((m) => m.status === 'active').map((m) => (
                     <SelectItem key={m.id} value={m.name}>
                       {m.name} — {m.designation}

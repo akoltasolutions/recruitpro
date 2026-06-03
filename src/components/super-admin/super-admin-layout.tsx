@@ -52,7 +52,7 @@ const companyMenuItems: MenuItem[] = [
   { key: 'clients', label: 'Client Name', icon: Building2, section: 'company' },
   { key: 'announcements', label: 'Announcements', icon: Megaphone, section: 'company' },
   { key: 'users', label: 'User Management', icon: Users, section: 'company' },
-  { key: 'team-enhanced', label: 'Team Management', icon: Users, section: 'company' },
+  { key: 'team-management', label: 'Team Management', icon: Users, section: 'company' },
   { key: 'field-builder', label: 'Field Builder', icon: Settings2, section: 'company' },
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette, section: 'company' },
   { key: 'admin-settings', label: 'Settings', icon: Settings, section: 'company' },

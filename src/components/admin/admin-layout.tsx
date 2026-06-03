@@ -33,7 +33,7 @@ const menuItems = [
   { key: 'clients', label: 'Client Name', icon: Building2 },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
   { key: 'users', label: 'User Management', icon: Users },
-  { key: 'team-enhanced', label: 'Team Management', icon: Users },
+  { key: 'team-management', label: 'Team Management', icon: Users },
   { key: 'field-builder', label: 'Field Builder', icon: Settings2 },
   { key: 'disposition-builder', label: 'Custom Dispositions', icon: Palette },
   { key: 'settings', label: 'Settings', icon: Settings },

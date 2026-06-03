@@ -45,8 +45,8 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
 const AUTH_ROUTES = ['login', 'signup', 'register', 'forgot-password'] as const
 type AuthView = typeof AUTH_ROUTES[number]
 
-type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-enhanced' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 /**
@@ -267,7 +267,7 @@ export function AppContent() {
         case 'clients': return <ClientManagement />
         case 'announcements': return <AnnouncementsManagement />
         case 'users': return <UserManagement />
-        case 'team-enhanced': return <TeamManagementEnhanced />
+        case 'team-management': return <TeamManagementEnhanced />
         case 'approvals': return <ApprovalRequests />
         case 'field-builder': return <DynamicFieldBuilder />
         case 'disposition-builder': return <DispositionBuilder />
@@ -300,7 +300,7 @@ export function AppContent() {
         case 'approvals': return <ApprovalRequests />
         case 'settings': return <AdminSettings userId={user.id} />
         case 'announcements': return <AnnouncementsManagement />
-        case 'team-enhanced': return <TeamManagementEnhanced />
+        case 'team-management': return <TeamManagementEnhanced />
         case 'organization-settings': return <OrganizationSettings />
         case 'field-builder': return <DynamicFieldBuilder />
         case 'disposition-builder': return <DispositionBuilder />
