@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 import { execSync } from 'child_process';
+import { ZipArchive, TarArchive } from 'archiver';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { PassThrough } from 'stream';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 
-const EXCLUDE_DIRS = [
+/** Directories that should be excluded entirely (not recursed into). */
+const EXCLUDE_DIR_NAMES = new Set([
   'node_modules',
   '.next',
   '.git',
   'upload',
   'skills',
+  '.zscripts',
+  'backups',
+]);
+
+/** Files that should be excluded at the project root. */
+const EXCLUDE_FILE_NAMES = new Set([
   'dev.log',
   'worklog.md',
-  '.zscripts',
-];
+]);
 
 function getTimestamp(): string {
   return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15); // YYYYMMDDHHmmss
@@ -28,7 +36,6 @@ function getProjectRoot(): string {
 
 /**
  * Check whether a CLI tool is available on the system.
- * Uses `which` (Unix) to avoid actually running the tool.
  */
 function isCommandAvailable(cmd: string): boolean {
   try {
@@ -40,72 +47,70 @@ function isCommandAvailable(cmd: string): boolean {
 }
 
 /**
- * Build a tar exclude flag list.
+ * Determine if a path should be excluded from the archive.
  */
-function tarExcludes(): string {
-  return EXCLUDE_DIRS.map(d => `--exclude=${d}`).join(' ');
+function shouldExclude(relativePath: string): boolean {
+  const parts = relativePath.split(/[/\\]/);
+  for (const part of parts) {
+    if (EXCLUDE_DIR_NAMES.has(part)) return true;
+    if (EXCLUDE_FILE_NAMES.has(part) && parts.length === 1) return true;
+    // Exclude hidden directories (starting with .) except .env*, .prisma, .vscode
+    if (part.startsWith('.') && !part.startsWith('.env') && part !== '.prisma' && part !== '.vscode') return true;
+  }
+  return false;
 }
 
 /**
- * Build a zip exclude flag list.
- * Uses the `-x` pattern that works across common zip versions.
+ * Recursively collect all files to archive, respecting exclusions.
+ * Skips files larger than 50MB to avoid memory issues.
  */
-function zipExcludes(): string {
-  return EXCLUDE_DIRS.map(d => `"${d}"`).join(' ');
+function collectFiles(dir: string, baseDir: string): string[] {
+  const results: string[] = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    const relativePath = path.relative(baseDir, fullPath);
+
+    if (shouldExclude(relativePath)) continue;
+
+    if (entry.isDirectory()) {
+      results.push(...collectFiles(fullPath, baseDir));
+    } else if (entry.isFile()) {
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.size <= 50 * 1024 * 1024) {
+          results.push(relativePath);
+        }
+      } catch {
+        // skip files we can't stat
+      }
+    }
+  }
+
+  return results;
 }
 
-// ── Format configuration map ─────────────────────────────────────────────────
+// ── Format configuration ────────────────────────────────────────────────────
 
-interface FormatConfig {
+interface FormatInfo {
   ext: string;
   contentType: string;
-  buildCommand: (archivePath: string) => string;
 }
 
-function getFormatConfig(format: string): FormatConfig {
-  const projectRoot = getProjectRoot();
-  const ts = getTimestamp();
+const SUPPORTED_FORMATS: Record<string, FormatInfo> = {
+  zip: { ext: 'zip', contentType: 'application/zip' },
+  tar: { ext: 'tar', contentType: 'application/x-tar' },
+  'tar.gz': { ext: 'tar.gz', contentType: 'application/gzip' },
+  '7z': { ext: '7z', contentType: 'application/x-7z-compressed' },
+};
 
-  switch (format) {
-    case 'zip':
-      return {
-        ext: 'zip',
-        contentType: 'application/zip',
-        buildCommand: (ap) =>
-          `cd "${projectRoot}" && zip -r "${ap}" . -x ${zipExcludes()} 2>/dev/null`,
-      };
-
-    case 'tar':
-      return {
-        ext: 'tar',
-        contentType: 'application/x-tar',
-        buildCommand: (ap) =>
-          `cd "${projectRoot}" && tar -cf "${ap}" ${tarExcludes()} .`,
-      };
-
-    case '7z': {
-      // 7z uses different exclude syntax
-      const excludes = EXCLUDE_DIRS.map(d => `-xr!${d}`).join(' ');
-      return {
-        ext: '7z',
-        contentType: 'application/x-7z-compressed',
-        buildCommand: (ap) =>
-          `cd "${projectRoot}" && 7z a "${ap}" . ${excludes} -bso0 -bse0`,
-      };
-    }
-
-    case 'tar.gz':
-    default:
-      return {
-        ext: 'tar.gz',
-        contentType: 'application/gzip',
-        buildCommand: (ap) =>
-          `cd "${projectRoot}" && tar -czf "${ap}" ${tarExcludes()} .`,
-      };
-  }
-}
-
-// ── GET: Stream a code backup to the client ──────────────────────────────────
+// ── GET: Stream a code backup to the client using pure JS archiver ─────────
 
 export async function GET(request: NextRequest) {
   try {
@@ -123,7 +128,7 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get('format') || 'tar.gz';
 
     // ── Validate format ────────────────────────────────────────────────────
-    const validFormats = ['zip', 'tar', 'tar.gz', '7z'];
+    const validFormats = Object.keys(SUPPORTED_FORMATS);
     if (!validFormats.includes(format)) {
       return NextResponse.json(
         { error: `Invalid format "${format}". Supported: ${validFormats.join(', ')}` },
@@ -131,79 +136,86 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ── Check for required CLI tools ───────────────────────────────────────
-    const requiredCmd = format === 'tar.gz' ? 'tar'
-      : format === 'tar' ? 'tar'
-      : format === 'zip' ? 'zip'
-      : '7z';
+    const formatInfo = SUPPORTED_FORMATS[format];
+    const projectRoot = getProjectRoot();
+    const ts = getTimestamp();
+    const filename = `recruitpro-backup-${ts}.${formatInfo.ext}`;
 
-    if (!isCommandAvailable(requiredCmd)) {
-      return NextResponse.json(
-        {
-          error: `The "${requiredCmd}" command is not installed on the server. ` +
-            `Please install it or choose a different format (tar.gz is always available).`,
-        },
-        { status: 400 },
-      );
+    // ── 7z requires system tool ────────────────────────────────────────────
+    if (format === '7z') {
+      if (!isCommandAvailable('7z')) {
+        return NextResponse.json(
+          {
+            error: `The "7z" command is not installed on this server. ` +
+              `Please install p7zip-full (sudo apt install p7zip-full) or choose ZIP/TAR.GZ which work without any system tools.`,
+          },
+          { status: 400 },
+        );
+      }
+      return handle7zDownload(projectRoot, filename);
     }
 
-    // ── Build archive ──────────────────────────────────────────────────────
-    const config = getFormatConfig(format);
-    const tempDir = os.tmpdir();
-    const archivePath = path.join(tempDir, `recruitpro-backup-${getTimestamp()}.${config.ext}`);
+    // ── Collect files ──────────────────────────────────────────────────────
+    const files = collectFiles(projectRoot, projectRoot);
 
-    try {
-      execSync(config.buildCommand(archivePath), {
-        timeout: 120_000,
-        stdio: 'pipe',
-      });
-    } catch (execErr) {
-      // Clean up partial archive if any
-      try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
-      console.error(`[GET /api/admin/backup/code] Archive creation failed:`, execErr);
+    if (files.length === 0) {
       return NextResponse.json(
-        { error: 'Failed to create archive. The server command returned an error.' },
+        { error: 'No files found to archive.' },
         { status: 500 },
       );
     }
 
-    // ── Stream the file to avoid OOM on low-memory servers ─────────────────
-    const stat = fs.statSync(archivePath);
-    const filename = `recruitpro-backup-${getTimestamp()}.${config.ext}`;
+    // ── Create archive via PassThrough → stream to response ────────────────
+    const passthrough = new PassThrough();
 
-    // Create a ReadableStream that reads chunks from disk
-    const fileStream = fs.createReadStream(archivePath);
+    let archive: ZipArchive | TarArchive;
+    if (format === 'tar' || format === 'tar.gz') {
+      archive = new TarArchive({
+        gzip: format === 'tar.gz',
+        gzipOptions: { level: 6 },
+      });
+    } else {
+      archive = new ZipArchive({
+        zlib: { level: 6 },
+      });
+    }
 
-    const readableStream = new ReadableStream({
-      start(controller) {
-        fileStream.on('data', (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk));
-        });
-        fileStream.on('end', () => {
-          controller.close();
-          // Clean up temp file after streaming completes
-          try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
-        });
-        fileStream.on('error', (err) => {
-          console.error('[GET /api/admin/backup/code] Stream error:', err);
-          controller.error(err);
-          // Attempt cleanup
-          try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
-        });
-      },
-      cancel() {
-        fileStream.destroy();
-        try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
-      },
+    archive.pipe(passthrough);
+
+    // Track errors
+    let archiveError: Error | null = null;
+    archive.on('error', (err) => {
+      archiveError = err;
+      console.error('[GET /api/admin/backup/code] Archiver error:', err);
+      passthrough.destroy(err);
     });
 
-    return new NextResponse(readableStream, {
+    // ── Add files ─────────────────────────────────────────────────────────
+    for (const filePath of files) {
+      const fullPath = path.join(projectRoot, filePath);
+      try {
+        const stat = fs.statSync(fullPath);
+        archive.append(fs.createReadStream(fullPath), {
+          name: filePath.replace(/\\/g, '/'),
+          date: stat.mtime,
+          mode: stat.mode,
+        });
+      } catch (err) {
+        console.warn(`[backup/code] Skipping ${filePath}:`, err);
+      }
+    }
+
+    // Finalize
+    archive.finalize();
+
+    // ── Stream response ───────────────────────────────────────────────────
+    return new NextResponse(passthrough as any, {
       status: 200,
       headers: {
-        'Content-Type': config.contentType,
+        'Content-Type': formatInfo.contentType,
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': String(stat.size),
         'Cache-Control': 'no-store',
+        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error) {
@@ -215,7 +227,67 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ── POST: Pre-deploy backup (saves to server disk) ──────────────────────────
+/**
+ * Handle 7z format download using system command (with temp file).
+ */
+async function handle7zDownload(projectRoot: string, filename: string) {
+  const tempDir = os.tmpdir();
+  const archivePath = path.join(tempDir, filename);
+
+  const excludes = [
+    'node_modules', '.next', '.git', 'upload', 'skills',
+    'dev.log', 'worklog.md', '.zscripts', 'backups',
+  ].map(d => `-xr!${d}`).join(' ');
+
+  try {
+    execSync(`cd "${projectRoot}" && 7z a "${archivePath}" . ${excludes} -bso0 -bse0`, {
+      timeout: 120_000,
+      stdio: 'pipe',
+    });
+  } catch (execErr) {
+    console.error('[GET /api/admin/backup/code] 7z creation failed:', execErr);
+    return NextResponse.json(
+      { error: 'Failed to create 7z archive. The server 7z command returned an error.' },
+      { status: 500 },
+    );
+  }
+
+  // Stream the temp file
+  const stat = fs.statSync(archivePath);
+  const fileStream = fs.createReadStream(archivePath);
+
+  const readableStream = new ReadableStream({
+    start(controller) {
+      fileStream.on('data', (chunk: Buffer) => {
+        controller.enqueue(new Uint8Array(chunk));
+      });
+      fileStream.on('end', () => {
+        controller.close();
+        try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
+      });
+      fileStream.on('error', (err) => {
+        controller.error(err);
+        try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
+      });
+    },
+    cancel() {
+      fileStream.destroy();
+      try { fs.unlinkSync(archivePath); } catch { /* ignore */ }
+    },
+  });
+
+  return new NextResponse(readableStream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/x-7z-compressed',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(stat.size),
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+// ── POST: Pre-deploy backup (saves .tar.gz to server disk) ─────────────────
 
 export async function POST(request: NextRequest) {
   try {
@@ -229,7 +301,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Parse body ─────────────────────────────────────────────────────────
-    let body: { action?: string; format?: string } = {};
+    let body: { action?: string } = {};
     try {
       const raw = await request.text();
       if (raw) body = JSON.parse(raw);
@@ -242,14 +314,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Ensure tar is available (always should be on Ubuntu) ────────────────
-    if (!isCommandAvailable('tar')) {
-      return NextResponse.json(
-        { error: 'The "tar" command is not available on this server.' },
-        { status: 500 },
-      );
-    }
-
     // ── Ensure backups directory exists ────────────────────────────────────
     const projectRoot = getProjectRoot();
     const backupsDir = path.join(projectRoot, 'backups');
@@ -257,20 +321,71 @@ export async function POST(request: NextRequest) {
       fs.mkdirSync(backupsDir, { recursive: true });
     }
 
-    // ── Create tar.gz archive ───────────────────────────────────────────────
+    // ── Create .tar.gz using pure JS archiver (no system tar needed) ───────
     const ts = getTimestamp();
     const filename = `pre-deploy-${ts}.tar.gz`;
     const archivePath = path.join(backupsDir, filename);
 
-    try {
-      execSync(
-        `cd "${projectRoot}" && tar -czf "${archivePath}" ${tarExcludes()} .`,
-        { timeout: 120_000, stdio: 'pipe' },
-      );
-    } catch (execErr) {
-      console.error('[POST /api/admin/backup/code] Pre-deploy archive failed:', execErr);
+    const files = collectFiles(projectRoot, projectRoot);
+
+    if (files.length === 0) {
       return NextResponse.json(
-        { error: 'Failed to create pre-deploy archive.' },
+        { error: 'No files found to archive.' },
+        { status: 500 },
+      );
+    }
+
+    // Create write stream and archive
+    const output = fs.createWriteStream(archivePath);
+    const archive = new TarArchive({
+      gzip: true,
+      gzipOptions: { level: 6 },
+    });
+
+    archive.pipe(output);
+
+    // Track errors
+    let writeError: Error | null = null;
+    output.on('error', (err) => {
+      writeError = err;
+      console.error('[POST backup/code] Write stream error:', err);
+    });
+
+    // Add files
+    for (const filePath of files) {
+      const fullPath = path.join(projectRoot, filePath);
+      try {
+        const stat = fs.statSync(fullPath);
+        archive.append(fs.createReadStream(fullPath), {
+          name: filePath.replace(/\\/g, '/'),
+          date: stat.mtime,
+          mode: stat.mode,
+        });
+      } catch (err) {
+        console.warn(`[POST backup/code] Skipping file ${filePath}:`, err);
+      }
+    }
+
+    // Wait for completion
+    await new Promise<void>((resolve, reject) => {
+      archive.on('finish', () => resolve());
+      archive.on('error', (err) => reject(err));
+      output.on('error', (err) => reject(err));
+      archive.finalize();
+    });
+
+    // Check for errors
+    if (writeError) {
+      return NextResponse.json(
+        { error: 'Failed to write archive file.' },
+        { status: 500 },
+      );
+    }
+
+    // Verify the file was written
+    if (!fs.existsSync(archivePath)) {
+      return NextResponse.json(
+        { error: 'Archive file was not created.' },
         { status: 500 },
       );
     }
@@ -281,16 +396,15 @@ export async function POST(request: NextRequest) {
     const sizeMB = (stat.size / (1024 * 1024)).toFixed(2);
     const sizeDisplay = stat.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
 
-    // ── Keep only the last 5 pre-deploy backups ───────────────────────────
+    // ── Keep only the last 5 pre-deploy backups ─────────────────────────────
     try {
-      const files = fs.readdirSync(backupsDir)
+      const existingFiles = fs.readdirSync(backupsDir)
         .filter(f => f.startsWith('pre-deploy-') && f.endsWith('.tar.gz'))
         .sort()
         .reverse(); // newest first
 
-      // Remove oldest beyond the 5th
-      for (let i = 5; i < files.length; i++) {
-        try { fs.unlinkSync(path.join(backupsDir, files[i])); } catch { /* ignore */ }
+      for (let i = 5; i < existingFiles.length; i++) {
+        try { fs.unlinkSync(path.join(backupsDir, existingFiles[i])); } catch { /* ignore */ }
       }
     } catch { /* ignore cleanup errors */ }
 
@@ -306,7 +420,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[POST /api/admin/backup/code]', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to create pre-deploy archive. ' + (error instanceof Error ? error.message : 'Unknown error') },
       { status: 500 },
     );
   }

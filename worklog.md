@@ -314,3 +314,41 @@ Stage Summary:
 - GitHub Actions workflow already configured to pass RESEND_API_KEY to server
 - Deploy will now: install resend via bun install + inject RESEND_API_KEY from GitHub secrets
 - Forgot Password flow: Email method sends via Resend (6-char code, 15-min expiry)
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix Backup/Restore page — permanent fix for code backup downloads and pre-deploy backup
+
+Work Log:
+- Analyzed existing Backup/Restore implementation: 5-tab UI (Code, Database, Restore, Export, Import)
+- Identified ROOT CAUSE: Backend API `/api/admin/backup/code/route.ts` used `execSync` to call system commands (`zip`, `tar`, `7z`) which are NOT installed on the production server
+- ZIP download error: "zip command is not installed" — returned 400 error
+- Pre-deploy backup error: tar command failed — returned "Failed to create pre-deploy archive" 500 error
+- Solution: Replace ALL system command-based archiving with `archiver` v8 npm package (pure JavaScript, zero system dependencies)
+- Installed `archiver@8.0.0` + `@types/archiver@7.0.0`
+- Discovered archiver v8 uses class-based API: `new ZipArchive(options)` / `new TarArchive(options)` instead of old `archiver('zip', options)`
+- Rewrote `/api/admin/backup/code/route.ts`:
+  - GET endpoint: Uses `ZipArchive`/`TarArchive` with `PassThrough` stream → streams directly to HTTP response (no temp files)
+  - POST endpoint: Uses `TarArchive` with gzip → writes to `backups/` directory on server (no system tar needed)
+  - 7z format: Falls back to system command with clear error message if 7z not installed
+  - Smart file exclusion: Recursively collects files, excludes node_modules/.next/.git/upload/skills/backups/hidden dirs, skips files >50MB
+- Updated frontend `backup-restore.tsx`:
+  - Replaced dropdown+single-download-button with individual format cards in a grid layout
+  - Each format (.ZIP, .TAR, .TAR.GZ, .7Z) has its own card with icon, description, color coding, and download button
+  - TAR.GZ marked as "Recommended" with badge
+  - 7Z marked with "System" badge (requires p7zip-full)
+  - Separate Card for Pre-Deploy Backup with prominent "Create Pre-Deploy Backup (.tar.gz)" button
+  - Each download button has independent loading state
+  - Improved `downloadBlob()` helper with fallback filename parameter
+- Verified with integration test: 195 files archived to 15MB ZIP successfully
+- Verified pre-deploy tar.gz creation works
+- ESLint passes clean, dev server compiles successfully
+
+Stage Summary:
+- Files modified: src/app/api/admin/backup/code/route.ts, src/components/admin/backup-restore.tsx
+- Package added: archiver@8.0.0, @types/archiver@7.0.0
+- ZIP, TAR, TAR.GZ downloads now work WITHOUT any system tools (pure JavaScript)
+- Pre-deploy backup (.tar.gz) now works WITHOUT system tar (pure JavaScript)
+- 7Z still needs system tool but provides clear error message
+- No existing functionality broken — all other tabs (Database, Restore, Export, Import) unchanged

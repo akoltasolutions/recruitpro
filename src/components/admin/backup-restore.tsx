@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import {
   DatabaseBackup, Download, Upload, Users, FileSpreadsheet,
   Shield, AlertTriangle, Loader2, CheckCircle, HardDrive,
-  FileCode, UserPlus, TableProperties,
+  FileCode, UserPlus, TableProperties, Archive, Package, FileArchive, File, Layers,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -46,6 +46,54 @@ const TARGET_FIELDS = [
   { key: 'department', label: 'Department', required: false },
   { key: 'organization', label: 'Organization', required: false },
 ]
+
+// ── Code backup format definitions ─────────────────────────────────────────
+
+const CODE_FORMATS = [
+  {
+    key: 'zip',
+    label: '.ZIP',
+    description: 'Universal format — works on all platforms',
+    icon: Archive,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bgColor: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800',
+    badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+    needsSystem: false,
+  },
+  {
+    key: 'tar',
+    label: '.TAR',
+    description: 'Uncompressed archive — fast to create',
+    icon: Package,
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800',
+    badgeColor: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+    needsSystem: false,
+  },
+  {
+    key: 'tar.gz',
+    label: '.TAR.GZ',
+    description: 'Compressed tar — smallest file size',
+    icon: FileArchive,
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800',
+    badgeColor: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+    recommended: true,
+    needsSystem: false,
+  },
+  {
+    key: '7z',
+    label: '.7Z',
+    description: 'High compression — needs p7zip installed',
+    icon: File,
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800',
+    badgeColor: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+    needsSystem: true,
+  },
+] as const
+
+type CodeFormat = typeof CODE_FORMATS[number]['key']
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -95,14 +143,13 @@ export function BackupRestorePage() {
 // ── Section 1: Code Backup ──────────────────────────────────────────────────
 
 function CodeBackupSection() {
-  const [loading, setLoading] = useState(false)
+  const [loadingFormat, setLoadingFormat] = useState<string | null>(null)
   const [preDeployLoading, setPreDeployLoading] = useState(false)
   const [lastBackup, setLastBackup] = useState<string | null>(null)
   const [preDeployInfo, setPreDeployInfo] = useState<{ filename: string; size: string; time: string } | null>(null)
-  const [format, setFormat] = useState<'zip' | 'tar' | 'tar.gz' | '7z'>('tar.gz')
 
-  const handleCodeBackup = useCallback(async () => {
-    setLoading(true)
+  const handleCodeBackup = useCallback(async (format: CodeFormat) => {
+    setLoadingFormat(format)
     try {
       const res = await authFetch(`/api/admin/backup/code?format=${format}`)
       if (!res.ok) {
@@ -110,15 +157,15 @@ function CodeBackupSection() {
         throw new Error(data.error || 'Failed to create backup')
       }
       const blob = await res.blob()
-      downloadBlob(blob)
+      downloadBlob(blob, `recruitpro-backup.${format}`)
       setLastBackup(new Date().toLocaleString())
-      toast.success('Code backup downloaded successfully')
+      toast.success(`Code backup (.${format}) downloaded successfully`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create code backup')
     } finally {
-      setLoading(false)
+      setLoadingFormat(null)
     }
-  }, [format])
+  }, [])
 
   const handlePreDeployBackup = useCallback(async () => {
     setPreDeployLoading(true)
@@ -146,6 +193,7 @@ function CodeBackupSection() {
 
   return (
     <TabsContent value="code" className="space-y-4">
+      {/* ── Quick Download Buttons ──────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -157,32 +205,55 @@ function CodeBackupSection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <Select value={format} onValueChange={(v) => setFormat(v as 'zip' | 'tar' | 'tar.gz' | '7z')} modal={false}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tar.gz">TAR.GZ</SelectItem>
-                <SelectItem value="zip">ZIP</SelectItem>
-                <SelectItem value="tar">TAR</SelectItem>
-                <SelectItem value="7z">7Z</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button onClick={handleCodeBackup} disabled={loading} className="w-full sm:w-auto">
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Code Backup
-                </>
-              )}
-            </Button>
+          {/* Format Buttons Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {CODE_FORMATS.map((fmt) => {
+              const Icon = fmt.icon
+              const isLoading = loadingFormat === fmt.key
+              return (
+                <div
+                  key={fmt.key}
+                  className={`rounded-lg border p-3 ${fmt.bgColor} transition-all hover:shadow-sm`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-5 w-5 ${fmt.color}`} />
+                      <span className="font-semibold text-sm">{fmt.label}</span>
+                      {fmt.recommended && (
+                        <Badge className={`${fmt.badgeColor} text-[10px] px-1.5 py-0`}>
+                          Recommended
+                        </Badge>
+                      )}
+                    </div>
+                    {fmt.needsSystem && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        <Layers className="h-3 w-3 mr-0.5" />
+                        System
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2.5">{fmt.description}</p>
+                  <Button
+                    onClick={() => handleCodeBackup(fmt.key)}
+                    disabled={isLoading}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Download .{fmt.key}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )
+            })}
           </div>
 
           {lastBackup && (
@@ -191,56 +262,57 @@ function CodeBackupSection() {
               Last download: {lastBackup}
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <Separator className="my-3" />
+      {/* ── Pre-Deploy Backup ───────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <HardDrive className="h-5 w-5 text-orange-500" />
+            Pre-Deploy Backup
+          </CardTitle>
+          <CardDescription>
+            Creates a .tar.gz backup on the server filesystem before deploying updates. Automatically keeps the last 5 backups.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            onClick={handlePreDeployBackup}
+            disabled={preDeployLoading}
+            className="w-full sm:w-auto"
+          >
+            {preDeployLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating Pre-Deploy Backup...
+              </>
+            ) : (
+              <>
+                <Shield className="h-4 w-4 mr-2" />
+                Create Pre-Deploy Backup (.tar.gz)
+              </>
+            )}
+          </Button>
 
-          {/* Pre-Deploy Backup */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <HardDrive className="h-4 w-4 text-amber-500" />
-              <p className="text-sm font-medium">Pre-Deploy Backup</p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Creates a .tar.gz backup on the server filesystem (backups/ folder) before deploying updates. Keeps the last 5 backups automatically.
-            </p>
-            <Button
-              onClick={handlePreDeployBackup}
-              disabled={preDeployLoading}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              {preDeployLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Pre-Deploy Backup...
-                </>
-              ) : (
-                <>
-                  <Shield className="h-4 w-4 mr-2" />
-                  Create Pre-Deploy Backup (.tar.gz)
-                </>
-              )}
-            </Button>
-
-            {preDeployInfo && (
-              <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3">
-                <div className="flex items-start gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                  <div className="text-xs text-green-700 dark:text-green-400 space-y-0.5">
-                    <p className="font-semibold">Pre-deploy backup saved</p>
-                    <p>File: <span className="font-mono">{preDeployInfo.filename}</span></p>
-                    <p>Size: {preDeployInfo.size} &middot; Time: {preDeployInfo.time}</p>
-                  </div>
+          {preDeployInfo && (
+            <div className="rounded-lg border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-3">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-green-700 dark:text-green-400 space-y-0.5">
+                  <p className="font-semibold">Pre-deploy backup saved</p>
+                  <p>File: <span className="font-mono">{preDeployInfo.filename}</span></p>
+                  <p>Size: {preDeployInfo.size} &middot; Time: {preDeployInfo.time}</p>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           <Separator className="my-3" />
 
           <div className="rounded-lg border bg-muted/30 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Excluded:</strong> node_modules, .next, .git, upload/, skills/, dev.log, worklog.md, .zscripts/
+              <strong className="text-foreground">Excluded:</strong> node_modules, .next, .git, upload/, skills/, dev.log, worklog.md, .zscripts/, backups/
             </p>
           </div>
         </CardContent>
@@ -264,7 +336,7 @@ function DatabaseBackupSection() {
         throw new Error(data.error || 'Failed to create database backup')
       }
       const blob = await res.blob()
-      downloadBlob(blob)
+      downloadBlob(blob, 'recruitpro-db-backup.sql')
       setLastBackup(new Date().toLocaleString())
       toast.success('Database backup downloaded successfully')
     } catch (err) {
@@ -325,7 +397,7 @@ function DatabaseBackupSection() {
   )
 }
 
-// ── Section 3: Database Restore ───────────────────────────────────────────
+// ── Section 3: Database Restore ───────────────────────────────────────────────
 
 function DatabaseRestoreSection() {
   const [loading, setLoading] = useState(false)
@@ -463,7 +535,7 @@ function DatabaseRestoreSection() {
   )
 }
 
-// ── Section 4: Export Data ─────────────────────────────────────────────────
+// ── Section 4: Export Data ──────────────────────────────────────────────────
 
 function ExportSection() {
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -486,7 +558,8 @@ function ExportSection() {
       }
 
       const blob = await res.blob()
-      downloadBlob(blob)
+      const ext = format === 'excel' ? '.xlsx' : '.csv'
+      downloadBlob(blob, `${type}-export${ext}`)
       toast.success(`${type === 'users' ? 'Users' : 'Candidates'} exported successfully`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Export failed')
@@ -585,7 +658,7 @@ function ExportSection() {
   )
 }
 
-// ── Section 5: Import Users ────────────────────────────────────────────────
+// ── Section 5: Import Users ──────────────────────────────────────────────────
 
 function ImportSection() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -945,19 +1018,13 @@ function ImportSection() {
 
 // ── Shared Helpers ─────────────────────────────────────────────────────────
 
-function downloadBlob(blob: Blob) {
+function downloadBlob(blob: Blob, fallbackName?: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = getFilenameFromHeaders(blob) || 'download'
+  a.download = fallbackName || 'download'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
-}
-
-function getFilenameFromHeaders(blob: Blob): string | null {
-  // Fallback: use content-disposition from response isn't available in blob
-  // We'll just return null and rely on the browser's default handling
-  return null
 }
