@@ -164,8 +164,8 @@ export function TeamManagementEnhanced() {
   // ─── Member state (declared before filteredMembers to avoid TDZ) ──────────
   const [teamList, setTeamList] = useState<TeamMember[]>(mockMembers)
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
-  const [mmemberDialogOpen, setMemberDialogOpen = useState(false)
-  const [mmemberForm, setMemberForm = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
 
   // ─── Filtered Members ────────────────────────────────────────────────────
 
