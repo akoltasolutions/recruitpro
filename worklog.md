@@ -241,3 +241,22 @@ Stage Summary:
 - Fixed login activity logging for RECRUITER role
 - ESLint: 0 errors, 0 warnings
 - All changes are backward-compatible and non-destructive
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix "Cannot read properties of null (reading 'role')" crash on login page
+
+Work Log:
+- Analyzed screenshot showing "Something went wrong" / "Cannot read properties of null (reading 'role')" error on login page
+- Identified root cause in `src/components/app-router.tsx` line 225: `useEffect` that redirects authenticated users away from auth routes accesses `user.role` without null-checking `user`
+- This useEffect runs on ALL renders (not just authenticated ones), causing crash when visiting /login with user=null
+- Fixed by adding `if (!user || !isAuthenticated) return` guard before accessing `user.role`
+- Also added `isAuthenticated` to the useEffect dependency array
+- Verified: ESLint clean, dev server compiles, browser shows login page correctly with zero console errors
+- Pushed commit b065741 to origin/main for CI/CD deployment
+
+Stage Summary:
+- 1 file changed: `src/components/app-router.tsx` (2 insertions, 1 deletion)
+- Login page now renders correctly without crashing
+- Scanned entire codebase — no other unsafe `user.role` accesses found (other occurrences are after null guards)
