@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         role: 'RECRUITER',
         isActive: false, // Pending admin approval
+        approvalStatus: 'PENDING',
       },
     });
 

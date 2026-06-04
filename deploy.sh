@@ -145,6 +145,15 @@ log "Step 3: Syncing database schema..."
 bunx prisma db push
 log "Database synced."
 
+# Step 3d: Migrate existing pending users to PENDING approvalStatus
+log "Step 3d: Migrating approval status data..."
+if [ -f prisma/migrate-approval-status.ts ]; then
+    bun run prisma/migrate-approval-status.ts
+    log "Approval status migration complete."
+else
+    log "No approval status migration script found, skipping."
+fi
+
 # Step 3c: Ensure platform-settings.json exists
 log "Step 3c: Ensuring platform-settings.json exists..."
 if [ ! -f db/platform-settings.json ]; then

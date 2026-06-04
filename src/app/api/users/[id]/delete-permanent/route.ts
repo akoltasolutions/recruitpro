@@ -16,25 +16,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     if (user.approvalStatus === 'DELETED') {
-      return NextResponse.json({ error: 'User has been permanently deleted' }, { status: 400 });
+      return NextResponse.json({ error: 'User is already permanently deleted' }, { status: 400 });
     }
 
-    if (user.approvalStatus === 'APPROVED' && user.isActive) {
-      return NextResponse.json({ error: 'User is already active' }, { status: 400 });
-    }
-
-    const updated = await db.user.update({
+    // Mark as permanently deleted — removed from all views
+    await db.user.update({
       where: { id },
       data: {
-        isActive: true,
-        approvalStatus: 'APPROVED',
+        isActive: false,
+        approvalStatus: 'DELETED',
       },
     });
 
-    const { password: _, ...safeUser } = updated;
-    return NextResponse.json({ user: safeUser, message: `User "${user.name}" has been approved` });
+    return NextResponse.json({ message: `"${user.name}" has been permanently deleted.` });
   } catch (error) {
-    console.error('Approve user error:', error);
+    console.error('Delete user error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

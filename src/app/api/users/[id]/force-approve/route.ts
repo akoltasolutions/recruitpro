@@ -19,11 +19,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'User has been permanently deleted' }, { status: 400 });
     }
 
-    if (user.approvalStatus === 'APPROVED' && user.isActive) {
-      return NextResponse.json({ error: 'User is already active' }, { status: 400 });
-    }
-
-    const updated = await db.user.update({
+    // Force approve works even on rejected users
+    await db.user.update({
       where: { id },
       data: {
         isActive: true,
@@ -31,10 +28,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
     });
 
-    const { password: _, ...safeUser } = updated;
-    return NextResponse.json({ user: safeUser, message: `User "${user.name}" has been approved` });
+    return NextResponse.json({
+      message: `Registration for "${user.name}" has been force approved. The account is now active.`,
+    });
   } catch (error) {
-    console.error('Approve user error:', error);
+    console.error('Force approve user error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

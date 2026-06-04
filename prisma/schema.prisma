@@ -209,6 +209,7 @@ model User {
   phone               String?
   role                String   @default("USER") // SUPER_ADMIN, ORG_ADMIN, USER
   isActive            Boolean  @default(true)
+  approvalStatus      String   @default("APPROVED") // PENDING, APPROVED, REJECTED, DELETED
   avatarUrl           String?
   // Organization membership
   organizationId      String?

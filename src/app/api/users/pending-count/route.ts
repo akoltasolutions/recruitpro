@@ -10,18 +10,28 @@ export async function GET(request: NextRequest) {
     }
 
     // Build the where clause — org-scoped for ORG_ADMIN, global for SUPER_ADMIN
-    const where: Record<string, unknown> = {
+    // Only count truly PENDING requests (not REJECTED, APPROVED, or DELETED)
+    // Backward compat: also count isActive:false + approvalStatus:'APPROVED' for users
+    // that existed before the approvalStatus migration
+    const baseFilter: Record<string, unknown> = {
       role: 'RECRUITER',
-      isActive: false,
     };
 
     if (auth.role !== 'SUPER_ADMIN' && auth.organizationId) {
-      (where as Record<string, string>).organizationId = auth.organizationId;
+      (baseFilter as Record<string, string>).organizationId = auth.organizationId;
     }
 
-    const count = await db.user.count({ where });
+    // Count PENDING users (new model) + legacy pending (isActive:false, approvalStatus: APPROVED)
+    const [pendingCount, legacyPendingCount] = await Promise.all([
+      db.user.count({
+        where: { ...baseFilter, approvalStatus: 'PENDING' },
+      }),
+      db.user.count({
+        where: { ...baseFilter, isActive: false, approvalStatus: 'APPROVED' },
+      }),
+    ]);
 
-    return NextResponse.json({ count });
+    return NextResponse.json({ count: pendingCount + legacyPendingCount });
   } catch (error) {
     console.error('Pending approval count error:', error);
     return NextResponse.json({ count: 0 });
