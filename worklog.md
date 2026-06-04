@@ -284,3 +284,26 @@ Stage Summary:
 - 2 files changed: auth-store.ts (34 insertions, 8 deletions), app-router.tsx
 - Login grace period prevents race-condition false-positive logouts
 - Token validation is now resilient: only 401 causes logout, not network errors or transient server issues
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Fix "Internal server error" on admin password change and profile update
+
+Work Log:
+- Analyzed screenshot: Admin settings page showing "Internal server error" when changing password
+- Root cause: Security hardening commit (f8e78b5) added code referencing database fields and models that were NEVER added to the Prisma schema
+- Missing User fields: mfaSecret, mfaEnabled, mfaVerified, mfaBackupCodes, failedLoginAttempts, lockedUntil, tokenVersion, passwordChangedAt, lastLoginAt, lastLoginIp
+- Missing models: PasswordHistory, SecurityAuditLog, Session
+- These caused Prisma query errors in: change-password, MFA routes, auth/me, session-manager, security-audit, account-lockout
+- Added all 10 missing fields to User model in prisma/schema.prisma
+- Added 3 new models: PasswordHistory (password reuse tracking), SecurityAuditLog (audit trail), Session (device management)
+- Added proper relations: User → PasswordHistory, User → Session, indexes for all new tables
+- Ran db:push successfully (24ms sync, Prisma Client regenerated)
+- Verified: ESLint clean, dev server compiles, browser zero errors, Prisma query fields work
+
+Stage Summary:
+- 1 file changed: `prisma/schema.prisma` (65 insertions)
+- All security hardening features now have their database backing
+- Fixes: password change, MFA setup/verify, account lockout, session management, security audit logging
+- Deploy script already runs `bunx prisma db push` on production — schema auto-syncs on deploy
