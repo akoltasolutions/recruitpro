@@ -260,3 +260,27 @@ Stage Summary:
 - 1 file changed: `src/components/app-router.tsx` (2 insertions, 1 deletion)
 - Login page now renders correctly without crashing
 - Scanned entire codebase — no other unsafe `user.role` accesses found (other occurrences are after null guards)
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix auto-logout race condition after successful login
+
+Work Log:
+- Analyzed screenshot: "Welcome back, Admin!" toast appeared on login page — login succeeded but user was immediately logged out
+- Traced the full auth flow: login() → Zustand update → re-render → token validation useEffect → /api/auth/me → dashboard mount → authFetch API calls
+- Identified root cause: Token validation effect fires immediately after login, and any non-200 response OR network error triggered instant logout+redirect
+- Also: authFetch auto-logout on any 401 during the same race window
+
+Fix (3 parts, 2 files):
+1. `src/stores/auth-store.ts`: Added `markLoginTime()` + `isWithinLoginGrace()` (10s grace period). `login()` now calls `markLoginTime()`. `authFetch` skips auto-logout during grace window.
+2. `src/components/app-router.tsx`: Token validation effect skips during grace period (login already validated credentials). Only logs out on explicit 401 — NOT on network errors or 5xx server errors.
+
+- ESLint: 0 errors, 0 warnings
+- Dev server: compiles cleanly, zero console errors
+- Pushed commit 5134f17 to origin/main for CI/CD deployment
+
+Stage Summary:
+- 2 files changed: auth-store.ts (34 insertions, 8 deletions), app-router.tsx
+- Login grace period prevents race-condition false-positive logouts
+- Token validation is now resilient: only 401 causes logout, not network errors or transient server issues
