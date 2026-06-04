@@ -223,6 +223,7 @@ export function AppContent() {
 
   // Redirect authenticated users away from auth routes via useEffect (not during render)
   useEffect(() => {
+    if (!user || !isAuthenticated) return
     if (AUTH_ROUTES.includes(currentPath as AuthView)) {
       if (user.role === 'SUPER_ADMIN') {
         navigateTo('platform-dashboard')
@@ -232,7 +233,7 @@ export function AppContent() {
         navigateTo('home')
       }
     }
-  }, [currentPath, user?.role])
+  }, [currentPath, user?.role, isAuthenticated])
 
   // Loading screen
   if (!mounted) {
