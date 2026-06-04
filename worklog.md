@@ -331,3 +331,39 @@ Stage Summary:
 - 5 files changed, 174 insertions, 82 deletions
 - All auth routes degrade gracefully instead of crashing with 500
 - Password change, profile update, MFA all work regardless of schema sync status
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Fix Approval Requests - Reject/ForceApprove/Delete logic + notification count fix
+
+Work Log:
+- Root cause: No explicit rejection status — rejected users had isActive:false (same as pending), so rejected users still counted in pending
+- Added `approvalStatus String @default("APPROVED")` to User model in Prisma schema (values: PENDING, APPROVED, REJECTED, DELETED)
+- Updated signup API: new recruiters get approvalStatus:'PENDING'
+- Updated reject API: sets approvalStatus:'REJECTED' (was just isActive:false before)
+- Updated approve API: sets approvalStatus:'APPROVED' + isActive:true
+- Created Force Approve API: POST /api/users/[id]/force-approve — overrides rejected→approved
+- Created Delete Permanent API: POST /api/users/[id]/delete-permanent — sets approvalStatus:'DELETED'
+- Fixed pending-count API: counts only approvalStatus:'PENDING' (with legacy backward compat)
+- Updated users list API: includes approvalStatus in select fields
+- Rewrote frontend approval-requests.tsx:
+  - Added tabs: Pending | Rejected
+  - Tab badges show real-time counts
+  - Pending tab: View, Approve, Reject, Delete buttons
+  - Rejected tab: View, Force Approve, Delete buttons
+  - All actions use ConfirmDialog
+  - Badge updates instantly via invalidateApprovalBadgeCount()
+- Backward compat: handles legacy users (isActive:false + approvalStatus:'APPROVED')
+- Created migration script: prisma/migrate-approval-status.ts
+- Added migration step to deploy.sh (runs after prisma db push)
+- Committed as 92a601a, pushed to origin/main
+
+Stage Summary:
+- 13 files changed, 561 insertions, 154 deletions
+- Reject now properly removes from pending count (notification badge)
+- Force Approve allows overriding rejected requests
+- Permanent Delete removes from all views
+- Notification badge only shows PENDING count
+- Backward compatible with existing data
+- Deployed to production via GitHub Actions CI/CD
