@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function isValidTime(value: string): boolean {
-  return TIME_REGEX.test(value);
-}
+import { isValidTime } from '@/lib/time-utils';
 
 // ── GET /api/shifts — List all shifts (admin only) ──────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireOrgAdmin(auth)) {
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 401 });
+    }
+    if (!requireOrgAdmin(auth)) {
+      return NextResponse.json({ error: 'Access denied. Admin access required.' }, { status: 403 });
     }
 
     // Organization scoping: ORG_ADMIN sees only their org; SUPER_ADMIN sees all
@@ -50,8 +46,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireOrgAdmin(auth)) {
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 401 });
+    }
+    if (!requireOrgAdmin(auth)) {
+      return NextResponse.json({ error: 'Access denied. Admin access required.' }, { status: 403 });
     }
 
     const body = await request.json();

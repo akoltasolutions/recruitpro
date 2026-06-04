@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 /**
  * GET /api/dashboard
@@ -15,8 +15,11 @@ import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!requireOrgAdmin(auth)) {
+      return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -179,21 +182,42 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Daily call trend — scoped to selected period range
+    // Daily call trend — scoped to selected period range (single query + in-memory grouping)
     let dailyData: { date: string; calls: number }[] = [];
     const totalDays = Math.max(1, Math.round((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24)));
     const chartDays = Math.min(totalDays, 30);
 
+    // Fetch all calls in the date range with just the calledAt field, then count in JS
+    // This replaces N separate db.callRecord.count() queries with 1 query
+    const recentCalls = await db.callRecord.findMany({
+      where: { calledAt: { gte: dateFrom, lte: dateTo }, ...orgWhere },
+      select: { calledAt: true },
+      take: 10000, // safety limit
+    });
+
+    // Pre-fill all days with zero counts
+    const callsByDay = new Map<string, number>();
     for (let i = chartDays - 1; i >= 0; i--) {
       const day = new Date(dateTo.getTime() - i * 24 * 60 * 60 * 1000);
-      const dayStart = startOfDay(day);
-      const dayEnd = endOfDay(day);
-      const count = await db.callRecord.count({
-        where: { calledAt: { gte: dayStart, lte: dayEnd }, ...orgWhere },
-      });
+      const dayKey = format(day, 'yyyy-MM-dd');
+      callsByDay.set(dayKey, 0);
+    }
+
+    // Group actual calls by day
+    for (const call of recentCalls) {
+      const dayKey = format(new Date(call.calledAt), 'yyyy-MM-dd');
+      if (callsByDay.has(dayKey)) {
+        callsByDay.set(dayKey, (callsByDay.get(dayKey) || 0) + 1);
+      }
+    }
+
+    // Build the daily data array in chronological order
+    for (let i = chartDays - 1; i >= 0; i--) {
+      const day = new Date(dateTo.getTime() - i * 24 * 60 * 60 * 1000);
+      const dayKey = format(day, 'yyyy-MM-dd');
       dailyData.push({
         date: format(day, 'MMM dd'),
-        calls: count,
+        calls: callsByDay.get(dayKey) || 0,
       });
     }
 

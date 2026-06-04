@@ -176,6 +176,8 @@ model Invitation {
   updatedAt      DateTime @updatedAt
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
 }
 
 // ==================== SHIFT MANAGEMENT ====================
@@ -236,6 +238,9 @@ model User {
   activityLogs        ActivityLog[]
   shiftAssignment     ShiftAssignment?
   pipelineNotes        PipelineNote[]
+
+  @@index([organizationId, role])
+  @@index([organizationId, isActive])
 }
 
 model Client {
@@ -285,6 +290,9 @@ model CallList {
   project          CallingProject?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   candidates       Candidate[]
   assignments       CallListAssignment[]
+
+  @@index([organizationId])
+  @@index([projectId])
 }
 
 model Candidate {
@@ -314,6 +322,9 @@ model Candidate {
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
   pipelineNotes  PipelineNote[]
+
+  @@index([callListId, createdAt])
+  @@index([organizationId, pipelineStage])
 }
 
 model CallListAssignment {
@@ -326,6 +337,9 @@ model CallListAssignment {
   callList       CallList     @relation(fields: [callListId], references: [id], onDelete: Cascade)
   recruiter      User         @relation(fields: [recruiterId], references: [id], onDelete: Cascade)
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([recruiterId])
+  @@index([callListId])
 }
 
 model CallRecord {
@@ -350,6 +364,10 @@ model CallRecord {
   disposition    Disposition? @relation(fields: [dispositionId], references: [id])
   client         Client?      @relation(fields: [clientId], references: [id])
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, calledAt])
+  @@index([recruiterId, calledAt])
+  @@index([candidateId])
 }
 
 model MessageTemplate {
@@ -377,6 +395,9 @@ model WhatsAppMessage {
 
   recruiter      User         @relation(fields: [recruiterId], references: [id])
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([recruiterId])
+  @@index([organizationId])
 }
 
 model Announcement {
@@ -405,6 +426,9 @@ model ActivityLog {
 
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 // ==================== PIPELINE NOTES (AUDIT TRAIL) ====================
@@ -420,4 +444,7 @@ model PipelineNote {
   candidate      Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   author         User         @relation(fields: [authorId], references: [id])
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([organizationId])
 }

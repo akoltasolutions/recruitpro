@@ -183,7 +183,7 @@ export function AppContent() {
     }
   }, [])
 
-  // Validate stored token on mount
+  // Validate stored token on mount and when auth state changes
   useEffect(() => {
     if (isAuthenticated && user) {
       fetch('/api/auth/me', {
@@ -198,7 +198,7 @@ export function AppContent() {
         navigateTo('login')
       })
     }
-  }, [])
+  }, [isAuthenticated, user?.id])
 
   // Auto-navigate to 'pending' page if there's a pending disposition
   useEffect(() => {
@@ -220,6 +220,19 @@ export function AppContent() {
     window.addEventListener('show-disposition-from-dialer', handler)
     return () => window.removeEventListener('show-disposition-from-dialer', handler)
   }, [mounted, isAuthenticated, user?.role])
+
+  // Redirect authenticated users away from auth routes via useEffect (not during render)
+  useEffect(() => {
+    if (AUTH_ROUTES.includes(currentPath as AuthView)) {
+      if (user.role === 'SUPER_ADMIN') {
+        navigateTo('platform-dashboard')
+      } else if (user.role === 'ORG_ADMIN' || user.role === 'ADMIN') {
+        navigateTo('dashboard')
+      } else {
+        navigateTo('home')
+      }
+    }
+  }, [currentPath, user?.role])
 
   // Loading screen
   if (!mounted) {
@@ -255,15 +268,9 @@ export function AppContent() {
     )
   }
 
-  // Authenticated user on an auth route — redirect to appropriate dashboard
+  // Authenticated user on an auth route — will redirect via useEffect above
   if (AUTH_ROUTES.includes(currentPath as AuthView)) {
-    if (user.role === 'SUPER_ADMIN') {
-      navigateTo('platform-dashboard')
-    } else if (user.role === 'ORG_ADMIN' || user.role === 'ADMIN') {
-      navigateTo('dashboard')
-    } else {
-      navigateTo('home')
-    }
+    return null
   }
 
   // Super Admin Panel

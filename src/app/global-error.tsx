@@ -1,11 +1,17 @@
 'use client'
 
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  // Show error.digest in production, full message in dev
+  const message = process.env.NODE_ENV === 'development'
+    ? error.message
+    : error.digest || 'An unexpected error occurred'
+
   return (
     <html lang="en">
       <body
@@ -48,8 +54,7 @@ export default function GlobalError({
               marginBottom: '1.5rem',
             }}
           >
-            An unexpected error occurred. Please try refreshing the page or
-            contact support if the problem persists.
+            {message}
           </p>
           <button
             onClick={reset}

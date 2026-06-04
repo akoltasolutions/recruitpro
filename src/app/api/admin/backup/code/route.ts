@@ -54,8 +54,8 @@ function shouldExclude(relativePath: string): boolean {
   for (const part of parts) {
     if (EXCLUDE_DIR_NAMES.has(part)) return true;
     if (EXCLUDE_FILE_NAMES.has(part) && parts.length === 1) return true;
-    // Exclude hidden directories (starting with .) except .env*, .prisma, .vscode
-    if (part.startsWith('.') && !part.startsWith('.env') && part !== '.prisma' && part !== '.vscode') return true;
+    // Exclude ALL dot-files/dot-dirs (including .env*) except .prisma and .vscode
+    if (part.startsWith('.') && part !== '.prisma' && part !== '.vscode') return true;
   }
   return false;
 }

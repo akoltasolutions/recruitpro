@@ -5,6 +5,11 @@ import { authenticateRequest } from '@/lib/auth-middleware';
 
 export async function POST(request: NextRequest) {
   try {
+    // Block seed in production environments
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Seed is disabled in production' }, { status: 403 });
+    }
+
     // Gate seed behind admin auth or ALLOW_SEED env flag
     const allowSeed = process.env.ALLOW_SEED === 'true';
     if (!allowSeed) {

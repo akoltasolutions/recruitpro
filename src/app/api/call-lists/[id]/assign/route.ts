@@ -16,18 +16,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'recruiterIds array is required' }, { status: 400 });
     }
 
-    // Delete existing assignments for this call list
-    await db.callListAssignment.deleteMany({ where: { callListId: id } });
+    // Atomically replace all assignments in a single transaction to prevent race conditions
+    const assignments = await db.$transaction([
+      db.callListAssignment.deleteMany({ where: { callListId: id } }),
+      db.callListAssignment.createMany({
+        data: recruiterIds.map((recruiterId: string) => ({
+          callListId: id,
+          recruiterId,
+        })),
+      }),
+    ]);
 
-    // Create new assignments
-    const assignments = await db.callListAssignment.createMany({
-      data: recruiterIds.map((recruiterId: string) => ({
-        callListId: id,
-        recruiterId,
-      })),
-    });
-
-    return NextResponse.json({ count: assignments.count }, { status: 201 });
+    return NextResponse.json({ count: assignments[1].count }, { status: 201 });
   } catch (error) {
     console.error('Assign call list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

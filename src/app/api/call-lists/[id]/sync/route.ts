@@ -1,115 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
-
-/**
- * Extract the Google Spreadsheet ID from various URL formats.
- */
-function extractSpreadsheetId(input: string): string | null {
-  const trimmed = input.trim();
-  const urlMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  if (urlMatch) return urlMatch[1];
-  if (/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) return trimmed;
-  return null;
-}
+import { extractSpreadsheetId, parseCSVWithHeaders, splitCSVLine } from '@/lib/csv-parser';
 
 /**
  * Parse a CSV string into columns and rows.
  */
 function parseCSV(csv: string): { columns: string[]; rows: Record<string, string>[] } {
-  const lines: string[] = [];
-  let current = '';
-
-  for (let i = 0; i < csv.length; i++) {
-    const char = csv[i];
-    if (char === '"') {
-      let field = '';
-      i++;
-      while (i < csv.length) {
-        if (csv[i] === '"') {
-          if (i + 1 < csv.length && csv[i + 1] === '"') {
-            field += '"';
-            i += 2;
-          } else {
-            i++;
-            break;
-          }
-        } else {
-          field += csv[i];
-          i++;
-        }
-      }
-      current += field;
-      while (i < csv.length && csv[i] !== ',' && csv[i] !== '\n' && csv[i] !== '\r') {
-        i++;
-      }
-      i--;
-    } else if (char === '\n' || (char === '\r' && csv[i + 1] === '\n')) {
-      lines.push(current);
-      current = '';
-      if (char === '\r') i++;
-    } else {
-      current += char;
-    }
-  }
-  if (current.trim()) {
-    lines.push(current);
-  }
-
-  if (lines.length < 2) {
-    return { columns: [], rows: [] };
-  }
-
-  const columns = splitCSVLine(lines[0]);
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const values = splitCSVLine(line);
-    const row: Record<string, string> = {};
-    for (let j = 0; j < columns.length; j++) {
-      row[columns[j]] = (values[j] || '').trim();
-    }
-    rows.push(row);
-  }
-
-  return { columns, rows };
-}
-
-/**
- * Split a single CSV line by commas, respecting quoted fields.
- */
-function splitCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (inQuotes) {
-      if (char === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += char;
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true;
-      } else if (char === ',') {
-        result.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-  }
-  result.push(current);
-  return result;
+  return parseCSVWithHeaders(csv);
 }
 
 /**
@@ -250,7 +148,19 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     let created = 0;
     let updated = 0;
 
-    // Process each row
+    // Build list of operations, then batch them in groups of 500 to avoid transaction limits
+    interface CandidateOp {
+      type: 'update' | 'create';
+      existingId?: string;
+      name: string;
+      phone: string;
+      email: string | null;
+      role: string | null;
+      location: string | null;
+      company: string | null;
+    }
+
+    const operations: CandidateOp[] = [];
     for (const row of rows) {
       const rawPhone = String(row[mapping.phone!] || '').trim();
       if (!rawPhone) continue;
@@ -267,33 +177,45 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       const existingId = existingByPhone.get(normalizedPhone);
 
       if (existingId) {
-        // Update existing candidate
-        await db.candidate.update({
-          where: { id: existingId },
-          data: {
-            ...(candidateName && { name: candidateName }),
-            ...(candidateEmail !== null && { email: candidateEmail }),
-            ...(candidateRole !== null && { role: candidateRole }),
-            ...(candidateLocation !== null && { location: candidateLocation }),
-            ...(candidateCompany !== null && { company: candidateCompany }),
-          },
-        });
-        updated++;
+        operations.push({ type: 'update', existingId, name: candidateName, phone: rawPhone, email: candidateEmail, role: candidateRole, location: candidateLocation, company: candidateCompany });
       } else {
-        // Create new candidate
-        await db.candidate.create({
+        operations.push({ type: 'create', name: candidateName || 'Unknown', phone: rawPhone, email: candidateEmail, role: candidateRole, location: candidateLocation, company: candidateCompany });
+      }
+    }
+
+    // Process in batches of 500 to avoid SQLite transaction limits
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < operations.length; i += BATCH_SIZE) {
+      const batch = operations.slice(i, i + BATCH_SIZE);
+      const txOps = batch.map(op => {
+        if (op.type === 'update') {
+          return db.candidate.update({
+            where: { id: op.existingId! },
+            data: {
+              ...(op.name && { name: op.name }),
+              ...(op.email !== null && { email: op.email }),
+              ...(op.role !== null && { role: op.role }),
+              ...(op.location !== null && { location: op.location }),
+              ...(op.company !== null && { company: op.company }),
+            },
+          });
+        }
+        return db.candidate.create({
           data: {
             callListId: id,
-            name: candidateName || 'Unknown',
-            phone: rawPhone,
-            email: candidateEmail,
-            role: candidateRole,
-            location: candidateLocation,
-            company: candidateCompany,
+            name: op.name,
+            phone: op.phone,
+            email: op.email,
+            role: op.role,
+            location: op.location,
+            company: op.company,
           },
         });
-        created++;
-      }
+      });
+
+      const results = await db.$transaction(txOps, { timeout: 60000 });
+      created += results.filter((_, idx) => batch[idx].type === 'create').length;
+      updated += results.filter((_, idx) => batch[idx].type === 'update').length;
     }
 
     // Update lastSyncedAt

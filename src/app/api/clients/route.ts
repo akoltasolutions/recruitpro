@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const clients = await db.client.findMany({
+      where: { organizationId: auth.organizationId },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ clients });
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       const client = await db.client.create({
         data: {
           name: trimmed,
-          ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
+          organizationId: auth.organizationId,
         },
       });
       return NextResponse.json({ client }, { status: 201 });

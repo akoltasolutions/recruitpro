@@ -87,3 +87,157 @@ Stage Summary:
 - All pagination architecture code deployed to production server (13.235.221.20)
 - Live site confirmed operational at https://app.akolta.com
 - All 6 API routes (pipeline, call-records, users, team-performance, call-lists, activity) active and responding
+
+---
+Task ID: 2-b
+Agent: Database Schema Agent
+Task: Add performance indexes to Prisma schema
+
+Work Log:
+- Added @@index to CallRecord (3 indexes): [organizationId, calledAt], [recruiterId, calledAt], [candidateId]
+- Added @@index to Candidate (2 indexes): [callListId, createdAt], [organizationId, pipelineStage]
+- Added @@index to User (2 indexes): [organizationId, role], [organizationId, isActive]
+- Added @@index to ActivityLog (2 indexes): [userId, createdAt], [organizationId, createdAt]
+- Added @@index to CallList (2 indexes): [organizationId], [projectId]
+- Added @@index to CallListAssignment (2 indexes): [recruiterId], [callListId]
+- Added @@index to WhatsAppMessage (2 indexes): [recruiterId], [organizationId]
+- Added @@index to PipelineNote (2 indexes): [candidateId], [organizationId]
+- Added @@index to Invitation (1 index): [organizationId, status]
+- Ran db:push successfully — database in sync in 17ms, Prisma Client regenerated
+
+Stage Summary:
+- Added 18 database indexes across 9 models
+- Zero data changes — read-only performance improvement
+
+---
+Task ID: 2-a
+Agent: Security Fix Agent
+Task: Fix all critical security vulnerabilities
+
+Work Log:
+- FIX 1: Removed hardcoded JWT fallback secret `recruitpro-hmac-secret-key-2024-stable-v1` from auth-middleware.ts; added CRITICAL startup warning when TOKEN_SECRET env var is missing
+- FIX 2: Replaced `!==` string comparison with `crypto.timingSafeEqual` for HMAC signature verification to prevent timing attacks
+- FIX 3: Added error logging to the catch block in `authenticateRequest` — previously silently swallowed errors
+- FIX 4: Removed `password` from non-admin allowedFields in PUT /api/users/[id]; password changes now only via /api/auth/change-password which requires current password
+- FIX 5: Added self-delete protection in DELETE /api/users/[id] — prevents admin from deleting their own account (returns 403)
+- FIX 6: Fixed backup code archive to exclude ALL dot-files (including .env, .env.local, .env.production); only .prisma and .vscode are excepted
+- FIX 7: Added GitHub webhook secret verification (x-hub-signature-256 + timingSafeEqual) to /api/deploy; returns 503 if GITHUB_WEBHOOK_SECRET not set, 401 if signature missing/invalid
+- FIX 8: Added SUPER_ADMIN authentication check to /api/debug/resend-test endpoint; was previously unauthenticated
+- FIX 9: Added production environment guard to /api/seed — returns 403 when NODE_ENV === 'production'
+- FIX 10: Added role parameter whitelist validation in GET /api/users — only USER, RECRUITER, ORG_ADMIN, SUPER_ADMIN accepted
+- FIX 11: Added organization status check in POST /api/auth/login — blocks login for users belonging to suspended/inactive organizations
+
+Stage Summary:
+- Applied 11 backward-compatible, non-destructive security fixes across 8 files
+- All fixes are additive (new checks, new guards, removal of hardcoded secrets) with no breaking changes
+- Pre-existing lint error in app-router.tsx (unrelated) — no new lint issues introduced
+- Dev server compiles cleanly with all changes
+
+---
+Task ID: 2-c
+Agent: API Fixes Agent
+Task: Fix organization scoping, race conditions, auth status codes
+
+Work Log:
+- FIX 1: Added organizationId scoping to 7 unscoped API endpoints:
+  - `/api/announcements` — GET filters by orgId, POST sets orgId on create
+  - `/api/clients` — GET filters by orgId, POST sets orgId on create (removed conditional fallback)
+  - `/api/dispositions` — GET filters by orgId, POST sets orgId on create
+  - `/api/message-templates` — GET filters by orgId, POST sets orgId on create
+  - `/api/message-templates/[id]` — PUT/DELETE fetch template first, verify orgId matches, return 403 if not
+  - `/api/user-status/team` — GET filters users by orgId to prevent cross-tenant data leak
+  - `/api/pipeline` — Changed `RECRUITER` role check to also include `USER` role (both query and stageCountWhere)
+- FIX 2: Wrapped call-list assign delete+create in `db.$transaction()` to prevent race condition; fixed return to use `assignments[1].count`
+- FIX 3: Split combined auth+role checks in `/api/users` and `/api/shifts` — missing/invalid auth returns 401, insufficient permissions returns 403
+- FIX 4: Replaced deprecated `requireAdmin(auth.role)` with `requireOrgAdmin(auth)` in 3 files:
+  - `/api/dashboard/route.ts`
+  - `/api/reports/export/route.ts`
+  - `/api/user-status/team/route.ts`
+- FIX 5: Updated auth middleware catch block error message from `[Auth] Authentication error` to `[Auth] Token verification error` (security agent had already added catch variable)
+
+Stage Summary:
+- 12 files modified across 5 fix categories
+- All multi-tenant data leaks eliminated: announcements, clients, dispositions, message-templates, team status now scoped by organization
+- Race condition in call-list assignment fixed with database transaction
+- Proper HTTP status codes: 401 for missing auth, 403 for permission denied
+- Deprecated requireAdmin fully removed from API routes (0 remaining usages)
+- ESLint: 0 errors, 0 warnings
+- Dev server: compiles cleanly, all routes responding normally
+
+---
+Task ID: 2-d
+Agent: Frontend Fix Agent
+Task: Fix all frontend bugs - double fetch, render side-effects, types, dead code
+
+Work Log:
+- FIX 1: Removed duplicate pageSize useEffect in use-infinite-scroll.ts (lines 162-166) — first useEffect already handles pageSize via dependency array
+- FIX 2: Moved navigation redirect for auth routes from render to useEffect in app-router.tsx — added `return null` guard, useEffect placed before conditional renders to satisfy rules-of-hooks
+- FIX 3: Changed token validation useEffect deps from `[]` to `[isAuthenticated, user?.id]` in app-router.tsx — now re-validates when auth state changes
+- FIX 4: Added `ADMIN` and `RECRUITER` to `UserRole` type in auth-store.ts — matches runtime values used throughout the app
+- FIX 5: Added deduplication guard to 401 auto-logout in authFetch — checks `!token` before calling logout() to prevent double-fire
+- FIX 6: Added `didAutoIdleRef` to use-activity-tracker.ts — prevents double auto-idle trigger across app-inactivity check, delayed re-check timeout, and call-inactivity check
+- FIX 7: Stabilized IntersectionObserver dependencies in use-infinite-scroll.ts — added `loadMoreRef` to avoid recreating observer on every `loadMore` change, reduced deps to `[hasMore, loadingMore]`
+- FIX 8: Added AbortController to useApprovalPendingCount.ts — aborts previous fetch on new request, cleans up on unmount
+- FIX 9: Changed `invalidateApprovalBadgeCount` to dispatch `approval-count-invalidated` custom event for immediate refetch — added event listener in hook
+- FIX 10: Deleted dead code `src/hooks/use-hash-router.ts` — verified never imported anywhere in codebase
+- FIX 11: Deleted dead code `src/hooks/use-path-router.ts` — verified only self-referenced, app-router.tsx has its own path tracking
+- FIX 12: Fixed global-error.tsx to use `error` parameter — shows `error.message` in dev, `error.digest` in production
+- FIX 13: Verified `[...slug]/page.tsx` is needed for catch-all routing — both `page.tsx` (root `/`) and `[...slug]/page.tsx` (all other routes) are distinct and required by Next.js
+
+Stage Summary:
+- Applied 13 backward-compatible, non-destructive fixes across 7 files
+- Removed 2 dead files (use-hash-router.ts, use-path-router.ts)
+- ESLint passes with 0 errors, 0 warnings
+- Dev server compiles cleanly with all changes
+
+---
+Task ID: 3-b
+Agent: Code Cleanup Agent
+Task: Remove unused files, clean imports, remove diagnostic endpoint
+
+Work Log:
+- FIX 1: Replaced `/api/clients/diagnostics` GET handler with safe stub — removed raw SQL queries, test record creation/deletion, and database schema introspection; now returns deprecation message with org-admin auth check only
+- FIX 2: Removed unused `React` default import from `src/components/recruiter/recruiter-dashboard.tsx` — Next.js auto-imports React; verified all other imports (lucide icons, shadcn/ui, hooks) are actively used
+- FIX 3: Removed 8 stale files from project root and download directory:
+  - `pipeline-page.png`, `pipeline-page-2.png`, `live-site.png` — screenshot artifacts
+  - `--timeout` — garbage file created by CLI parsing error
+  - `recruitpro-source-code.zip`, `recruitpro-mumbai-migration-kit.zip` — source code archives (should not be in repo)
+  - `download/recruitpro-source-code.zip`, `download/recruitpro-mumbai-migration-kit.zip` — duplicate archives in download dir
+- FIX 4: Verified `GitBranch` import in `super-admin-layout.tsx` IS used (referenced in `teamPerformanceChildren` array for Pipeline submenu) — no change needed
+- FIX 5: Checked `/agent-ctx/` directory — contains 2 dev agent context markdown files, not imported by application, safe to leave
+
+Stage Summary:
+- 1 file modified (diagnostics route stubbed), 1 file modified (unused import removed), 8 files deleted
+- ESLint: 0 errors, 0 warnings
+- Dev server: compiles cleanly, no runtime errors
+- All changes are backward-compatible and non-destructive
+
+---
+Task ID: 3
+Agent: Performance Optimization Agent
+Task: Fix N+1 queries, deduplicate utilities, add safety limits
+
+Work Log:
+- FIX 1 (Shared utilities): Created 3 shared utility files to eliminate code duplication:
+  - `src/lib/formatters.ts` — formatDateTime, formatDate, formatDuration, getDayRange, formatDateTimeExport
+  - `src/lib/csv-parser.ts` — splitCSVLine, parseCSVWithHeaders, parseCSV, extractSpreadsheetId
+  - `src/lib/time-utils.ts` — TIME_REGEX, isValidTime, timeToMinutes, minutesToTime
+  - Updated 10 consumer files to import from shared utilities instead of defining local copies:
+    - export-calls, export-candidates, export-users, admin-pipeline route (formatDateTimeExport)
+    - google-sheets/fetch, call-lists/[id]/sync (extractSpreadsheetId, parseCSVWithHeaders, splitCSVLine)
+    - shifts/route, shifts/[id], shifts/bulk (isValidTime)
+- FIX 2 (Dashboard N+1): Replaced per-day `db.callRecord.count` loop (up to 30 queries) with single `db.callRecord.findMany({ select: { calledAt: true } })` + in-memory Map grouping — reduces dashboard API from 15-30 queries to 10 flat queries
+- FIX 3 (Call-list sync N+1): Replaced per-row `db.candidate.update/create` loop with batched `db.$transaction` (batch size 500, 60s timeout) — turns N individual DB round-trips into ceil(N/500) transactional batches
+- FIX 4 (Safety limits): Added `take` limits to 3 unbounded export endpoints:
+  - export-candidates: `take: 100000`
+  - export-users: `take: 50000`
+  - export-calls: `take: 100000`
+- FIX 5 (Login activity logging): Changed `user.role === 'USER'` to `user.role !== 'SUPER_ADMIN'` — now logs activity for USER, RECRUITER, ORG_ADMIN roles (previously only USER)
+
+Stage Summary:
+- Created 3 shared utility modules eliminating ~200 lines of duplicated code across 10 files
+- Eliminated 2 N+1 query patterns (dashboard per-day loop, sync per-row writes)
+- Added safety limits to 3 export endpoints to prevent unbounded memory usage
+- Fixed login activity logging for RECRUITER role
+- ESLint: 0 errors, 0 warnings
+- All changes are backward-compatible and non-destructive

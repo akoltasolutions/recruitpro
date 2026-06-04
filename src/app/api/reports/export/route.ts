@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 import ExcelJS from 'exceljs';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!requireAdmin(auth.role)) {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 });
     }
 

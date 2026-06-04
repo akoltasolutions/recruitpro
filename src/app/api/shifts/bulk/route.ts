@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
-function isValidTime(value: string): boolean {
-  return TIME_REGEX.test(value);
-}
+import { isValidTime } from '@/lib/time-utils';
 
 // ── POST /api/shifts/bulk — Bulk assign shifts via upsert ──────────────────
 

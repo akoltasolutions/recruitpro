@@ -159,11 +159,11 @@ export function usePagination<T>(options: UsePaginationOptions<T>): UsePaginatio
     fetchPage(1, pageSize, false)
   }, [autoFetch, fetchPage, pageSize, ...deps])
 
-  // When pageSize changes manually, re-fetch
+  // Stabilize loadMore callback ref so IntersectionObserver doesn't recreate on every loadMore change
+  const loadMoreRef = useRef(loadMore)
   useEffect(() => {
-    if (!autoFetch) return
-    fetchPage(1, pageSize, false)
-  }, [pageSize])
+    loadMoreRef.current = loadMore
+  }, [loadMore])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -174,7 +174,7 @@ export function usePagination<T>(options: UsePaginationOptions<T>): UsePaginatio
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMore()
+          loadMoreRef.current()
         }
       },
       {
@@ -186,7 +186,7 @@ export function usePagination<T>(options: UsePaginationOptions<T>): UsePaginatio
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loadingMore, loadMore])
+  }, [hasMore, loadingMore])
 
   // Cleanup
   useEffect(() => {

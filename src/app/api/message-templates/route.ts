@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const auth = await authenticateRequest(request);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const templates = await db.messageTemplate.findMany({
+      where: { organizationId: auth.organizationId },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ templates });
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid template type' }, { status: 400 });
     }
 
-    const template = await db.messageTemplate.create({ data: { name, type, content } });
+    const template = await db.messageTemplate.create({ data: { name, type, content, organizationId: auth.organizationId } });
     return NextResponse.json({ template }, { status: 201 });
   } catch (error) {
     console.error('Create message template error:', error);

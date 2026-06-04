@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 
 // Helper: Get today's start (midnight) in local time
 function getTodayStart(): Date {
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!requireAdmin(auth.role)) {
+    if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
 
     // Get all active users (recruiters + admins)
     const users = await db.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: auth.organizationId },
       select: {
         id: true,
         name: true,

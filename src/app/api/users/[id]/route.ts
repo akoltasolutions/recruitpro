@@ -44,7 +44,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const data = await request.json();
 
     // Whitelist safe fields for non-admin users
-    const allowedFields = ['name', 'email', 'phone', 'password'];
+    const allowedFields = ['name', 'email', 'phone'];
     for (const key of Object.keys(data)) {
       if (!allowedFields.includes(key) && !requireOrgAdmin(auth)) {
         delete data[key];
@@ -107,6 +107,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     }
     if (!requireOrgAdmin(auth)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+    if (auth.userId === id) {
+      return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 403 });
     }
     await db.user.delete({ where: { id } });
     return NextResponse.json({ success: true });

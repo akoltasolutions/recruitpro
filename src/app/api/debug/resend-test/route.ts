@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 
 /**
  * Diagnostic endpoint to test Resend email connectivity from production.
@@ -13,9 +14,15 @@ import { join } from 'path';
  * 3. resend package availability
  * 4. Actual Resend API test (sends test email)
  *
- * SAFE to call on production — does not expose secrets.
+ * RESTRICTED: Requires SUPER_ADMIN authentication.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // ── Auth gate: SUPER_ADMIN only ──
+  const auth = await authenticateRequest(request);
+  if (!auth || !requireSuperAdmin(auth)) {
+    return NextResponse.json({ error: 'Unauthorized. Super Admin access required.' }, { status: 401 });
+  }
+
   const diagnostics: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     nodeEnv: process.env.NODE_ENV,

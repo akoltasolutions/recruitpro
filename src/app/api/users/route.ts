@@ -6,13 +6,22 @@ import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireOrgAdmin(auth)) {
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!requireOrgAdmin(auth)) {
+      return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const roleParam = searchParams.get('role');
+
+    // Whitelist role parameter to prevent arbitrary values
+    const VALID_ROLES = ['USER', 'RECRUITER', 'ORG_ADMIN', 'SUPER_ADMIN'];
+    if (roleParam && !VALID_ROLES.includes(roleParam)) {
+      return NextResponse.json({ error: 'Invalid role parameter' }, { status: 400 });
+    }
 
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
@@ -65,8 +74,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireOrgAdmin(auth)) {
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!requireOrgAdmin(auth)) {
+      return NextResponse.json({ error: 'Access denied. Admin only.' }, { status: 403 });
     }
 
     const { name, email, phone, password, callModeOn, whatsappAccess, uploadPermission, createListPermission } = await request.json();

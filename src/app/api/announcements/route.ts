@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     }
 
     const announcements = await db.announcement.findMany({
-      where: { isActive: true },
+      where: { isActive: true, organizationId: auth.organizationId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         title: title.trim(),
         content: content.trim(),
         createdBy: auth.userId,
+        organizationId: auth.organizationId,
       },
     });
 

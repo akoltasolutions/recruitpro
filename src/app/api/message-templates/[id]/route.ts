@@ -10,6 +10,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     const { id } = await params;
+
+    // Verify ownership: template must belong to the same organization
+    const existing = await db.messageTemplate.findUnique({ where: { id }, select: { organizationId: true } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+    }
+    if (existing.organizationId !== auth.organizationId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     const { name, type, content, isActive } = await request.json();
 
     // Validate template type
@@ -40,6 +50,16 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
     const { id } = await params;
+
+    // Verify ownership: template must belong to the same organization
+    const existing = await db.messageTemplate.findUnique({ where: { id }, select: { organizationId: true } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+    }
+    if (existing.organizationId !== auth.organizationId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     await db.messageTemplate.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

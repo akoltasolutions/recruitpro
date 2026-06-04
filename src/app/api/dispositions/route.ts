@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const auth = await authenticateRequest(request);
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const dispositions = await db.disposition.findMany({
+      where: { organizationId: auth.organizationId },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ dispositions });
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     const validTypes = ['SHORTLISTED', 'CONNECTED', 'NOT_CONNECTED', 'NOT_INTERESTED'];
     if (!validTypes.includes(type)) return NextResponse.json({ error: 'Invalid disposition type' }, { status: 400 });
 
-    const disposition = await db.disposition.create({ data: { heading, type } });
+    const disposition = await db.disposition.create({ data: { heading, type, organizationId: auth.organizationId } });
     return NextResponse.json({ disposition }, { status: 201 });
   } catch (error) {
     console.error('Create disposition error:', error);

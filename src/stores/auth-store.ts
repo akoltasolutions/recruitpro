@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'USER';
+export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'ADMIN' | 'USER' | 'RECRUITER';
 
 export interface Organization {
   id: string;
@@ -62,8 +62,9 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
   const res = await fetch(url, { ...options, headers });
 
-  // Auto-logout on 401: token is stale or user was deleted/invalidated
+  // Auto-logout on 401: token is stale or user was deleted/invalidated (deduplicated)
   if (res.status === 401 && useAuthStore.getState().isAuthenticated) {
+    if (!useAuthStore.getState().token) return res // already logged out
     useAuthStore.getState().logout();
   }
 

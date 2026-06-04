@@ -46,6 +46,7 @@ export function useActivityTracker({
   const logoutWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasLogoutWarnedRef = useRef(false)
   const idleWarningShownRef = useRef(false)
+  const didAutoIdleRef = useRef(false)
 
   // ---- Record activity helper (called by all event sources) ---------------
   const recordActivity = useCallback(() => {
@@ -113,16 +114,24 @@ export function useActivityTracker({
       const now = Date.now()
       const inactiveMs = now - lastActivityRef.current
 
+      // Reset at start of each check cycle
+      if (inactiveMs < AUTO_LOGOUT_MS) {
+        didAutoIdleRef.current = false
+      }
+
       // ── AUTO-IDLE CHECK (15 min no app activity) ─────────────────────
       if (inactiveMs >= AUTO_LOGOUT_MS) {
-        if (logoutWarningTimerRef.current) clearTimeout(logoutWarningTimerRef.current)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[ActivityTracker] Auto-switching to Idle — 15 min inactivity')
+        if (!didAutoIdleRef.current) {
+          didAutoIdleRef.current = true
+          if (logoutWarningTimerRef.current) clearTimeout(logoutWarningTimerRef.current)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[ActivityTracker] Auto-switching to Idle — 15 min inactivity')
+          }
+          toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.', {
+            duration: 4000,
+          })
+          onAutoIdle()
         }
-        toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.', {
-          duration: 4000,
-        })
-        onAutoIdle()
         return
       }
 
@@ -143,11 +152,14 @@ export function useActivityTracker({
         logoutWarningTimerRef.current = setTimeout(() => {
           const recheck = Date.now() - lastActivityRef.current
           if (recheck >= AUTO_LOGOUT_MS) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[ActivityTracker] Auto-idle (delayed check)')
+            if (!didAutoIdleRef.current) {
+              didAutoIdleRef.current = true
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[ActivityTracker] Auto-idle (delayed check)')
+              }
+              toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.')
+              onAutoIdle()
             }
-            toast.error('Auto-switched to Idle — no activity detected in the last 15 minutes.')
-            onAutoIdle()
           } else {
             hasLogoutWarnedRef.current = false
           }
@@ -173,27 +185,30 @@ export function useActivityTracker({
         }
 
         if (callInactivityMs >= AUTO_IDLE_MS) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(
-              `[ActivityTracker] Auto-switching to IDLE (no calls for ${AUTO_IDLE_MINUTES} min)`
-            )
-          }
-          idleWarningShownRef.current = false
-          try {
-            const res = await authFetch('/api/user-status', {
-              method: 'POST',
-              body: JSON.stringify({ status: 'IDLE' }),
-            })
-            if (res.ok) {
-              try { localStorage.setItem('recruiter_current_status', 'IDLE') } catch { /* ignore */ }
-              toast.warning(
-                `Auto-switched to Idle — no calls made in the last ${AUTO_IDLE_MINUTES} minutes.`,
-                { duration: 6000 }
+          if (!didAutoIdleRef.current) {
+            didAutoIdleRef.current = true
+            if (process.env.NODE_ENV === 'development') {
+              console.log(
+                `[ActivityTracker] Auto-switching to IDLE (no calls for ${AUTO_IDLE_MINUTES} min)`
               )
-              onAutoIdle()
             }
-          } catch (err) {
-            console.error('[ActivityTracker] Failed to auto-idle:', err)
+            idleWarningShownRef.current = false
+            try {
+              const res = await authFetch('/api/user-status', {
+                method: 'POST',
+                body: JSON.stringify({ status: 'IDLE' }),
+              })
+              if (res.ok) {
+                try { localStorage.setItem('recruiter_current_status', 'IDLE') } catch { /* ignore */ }
+                toast.warning(
+                  `Auto-switched to Idle — no calls made in the last ${AUTO_IDLE_MINUTES} minutes.`,
+                  { duration: 6000 }
+                )
+                onAutoIdle()
+              }
+            } catch (err) {
+              console.error('[ActivityTracker] Failed to auto-idle:', err)
+            }
           }
         }
       } else {

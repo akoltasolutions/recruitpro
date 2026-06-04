@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
       pipelineStage: { not: 'NEW' },
     };
     if (stage) where.pipelineStage = stage;
-    if (auth.role === 'RECRUITER') {
-      // Recruiters see only from their assigned lists
+    if (auth.role === 'RECRUITER' || auth.role === 'USER') {
+      // Recruiters/USERs see only from their assigned lists
       where.callList = { assignments: { some: { recruiterId: auth.userId } } };
     }
     if (search) {
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     // Stage counts (all stages for tab badges) — scoped to recruiter's assigned lists
     const stageCountWhere: Record<string, unknown> = { pipelineStage: { not: 'NEW' } };
-    if (auth.role === 'RECRUITER') {
+    if (auth.role === 'RECRUITER' || auth.role === 'USER') {
       stageCountWhere.callList = { assignments: { some: { recruiterId: auth.userId } } };
     }
     const stageCounts = await db.candidate.groupBy({

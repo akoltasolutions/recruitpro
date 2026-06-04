@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
+import { formatDateTimeExport } from '@/lib/formatters';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 100000, // safety limit: cap at 100K records
     });
 
     // ── Build rows ────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ export async function GET(request: NextRequest) {
       Status: candidate.status || 'PENDING',
       'Call List': candidate.callList?.name || '',
       'Pipeline Stage': candidate.pipelineStage || 'NEW',
-      'Created Date': formatDateTime(candidate.createdAt),
+      'Created Date': formatDateTimeExport(candidate.createdAt),
       Notes: candidate.notes || '',
     }));
 
@@ -127,17 +129,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
 
-function formatDateTime(date: Date): string {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  let hours = d.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const seconds = String(d.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
-}

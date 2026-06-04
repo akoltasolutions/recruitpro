@@ -98,11 +98,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check organization status before issuing token
+    if (user.organizationId) {
+      const org = await db.organization.findUnique({ where: { id: user.organizationId } });
+      if (!org || !org.isActive) {
+        return NextResponse.json(
+          { error: 'Your organization is suspended. Contact your administrator.', code: 'ORG_SUSPENDED' },
+          { status: 403 }
+        );
+      }
+    }
+
     const token = createToken(user.id);
 
     // Log login activity for recruiter tracking — default to IDLE so time
     // does not start counting until the recruiter explicitly picks a status.
-    if (user.role === 'USER') {
+    if (user.role !== 'SUPER_ADMIN') {
       try {
         await db.activityLog.create({
           data: {

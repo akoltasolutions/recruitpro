@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
+import { formatDateTimeExport } from '@/lib/formatters';
 
 // ── Valid pipeline stages (admin view excludes NEW) ──────────────────────
 const ADMIN_STAGES = ['SHORTLISTED', 'FOLLOW_UP', 'INTERVIEWED', 'JOINED', 'BACKOUT'] as const;
@@ -65,16 +66,7 @@ function formatDateIso(date: Date): string {
 }
 
 function formatDateTimeReadable(date: Date): string {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  let hours = d.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const seconds = String(d.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
+  return formatDateTimeExport(date);
 }
 
 // ── GET /api/admin/pipeline ─────────────────────────────────────────────

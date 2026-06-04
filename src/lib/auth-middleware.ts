@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 // Generate a TOKEN_SECRET at module load time
-// Use a stable fallback secret to avoid module instance issues in dev mode (Turbopack)
-const TOKEN_SECRET = process.env.TOKEN_SECRET || 'recruitpro-hmac-secret-key-2024-stable-v1';
+const TOKEN_SECRET = process.env.TOKEN_SECRET;
+
+// Startup validation — log a CRITICAL warning if TOKEN_SECRET is missing
+if (!TOKEN_SECRET) {
+  console.error('');
+  console.error('╔══════════════════════════════════════════════════════════════╗');
+  console.error('║  CRITICAL: TOKEN_SECRET environment variable is not set!    ║');
+  console.error('║  All JWT tokens will fail. Set TOKEN_SECRET in your .env.    ║');
+  console.error('╚══════════════════════════════════════════════════════════════╝');
+  console.error('');
+}
 
 /**
  * Create a signed token for a user.
@@ -62,10 +71,17 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
       return null;
     }
 
-    // Verify HMAC signature
+    // Verify HMAC signature using timing-safe comparison
     const payload = `${userId}:${timestamp}`;
+    if (!TOKEN_SECRET) return null;
     const expectedSignature = createHmac('sha256', TOKEN_SECRET).update(payload).digest('hex');
-    if (signature !== expectedSignature) {
+    try {
+      const isValid = timingSafeEqual(
+        Buffer.from(signature),
+        Buffer.from(expectedSignature)
+      );
+      if (!isValid) return null;
+    } catch {
       return null;
     }
 
@@ -124,7 +140,8 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthCon
           }
         : null,
     };
-  } catch {
+  } catch (error) {
+    console.error('[Auth] Token verification error:', error);
     return null;
   }
 }

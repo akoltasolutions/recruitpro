@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 import * as XLSX from 'xlsx';
 import { startOfDay, endOfDay } from 'date-fns';
+import { formatDateTimeExport } from '@/lib/formatters';
 
 /**
  * GET /api/export-calls
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { calledAt: 'desc' },
+      take: 100000, // safety limit: cap at 100K records
     });
 
     if (callRecords.length === 0) {
@@ -93,7 +95,7 @@ export async function GET(request: NextRequest) {
       'Call Status': record.disposition?.heading ?? '',
       'Notes': record.notes ?? '',
       'Call Date & Time': record.calledAt
-        ? formatDateTime(record.calledAt)
+        ? formatDateTimeExport(record.calledAt)
         : '',
       'Recruiter Name': record.recruiter?.name ?? '',
     }));
@@ -145,21 +147,4 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
 
-/**
- * Format a Date to a human-readable date-time string suitable for Excel.
- * Output: "YYYY-MM-DD hh:mm:ss AM/PM"
- */
-function formatDateTime(date: Date): string {
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  let hours = d.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const seconds = String(d.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${String(hours).padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
-}

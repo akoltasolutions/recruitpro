@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { spawn } from 'child_process';
 
 export async function POST(request: NextRequest) {
@@ -10,10 +11,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Ignored: not a push event' }, { status: 200 });
     }
 
-    // Parse the body
+    // ── Verify GitHub webhook signature ──
+    const githubSecret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!githubSecret) {
+      console.error('[Deploy Webhook] GITHUB_WEBHOOK_SECRET not set');
+      return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+    }
+
+    const signature = request.headers.get('x-hub-signature-256');
+    if (!signature) {
+      return NextResponse.json({ error: 'Missing signature' }, { status: 401 });
+    }
+
+    const rawBody = await request.text();
+    const expectedSig = 'sha256=' + createHmac('sha256', githubSecret).update(rawBody).digest('hex');
+
+    try {
+      const isValid = timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig));
+      if (!isValid) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    // Parse body from rawBody instead of request.json()
     let body: Record<string, unknown>;
     try {
-      body = await request.json();
+      body = JSON.parse(rawBody);
     } catch {
       body = {};
     }
