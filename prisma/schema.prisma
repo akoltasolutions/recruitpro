@@ -225,6 +225,19 @@ model User {
   resetTokenExpires   DateTime?
   otpCode             String?
   otpExpires          DateTime?
+  // MFA fields
+  mfaSecret           String?
+  mfaEnabled          Boolean  @default(false)
+  mfaVerified         Boolean  @default(false)
+  mfaBackupCodes      String?  // JSON array of backup codes
+  // Account security fields
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+  tokenVersion        Int      @default(0)
+  passwordChangedAt   DateTime?
+  // Login tracking
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -238,6 +251,8 @@ model User {
   activityLogs        ActivityLog[]
   shiftAssignment     ShiftAssignment?
   pipelineNotes        PipelineNote[]
+  passwordHistories    PasswordHistory[]
+  sessions            Session[]
 
   @@index([organizationId, role])
   @@index([organizationId, isActive])
@@ -447,4 +462,54 @@ model PipelineNote {
 
   @@index([candidateId])
   @@index([organizationId])
+}
+
+// ==================== SECURITY MODELS ====================
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model SecurityAuditLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  organizationId String?
+  action         String
+  resourceType   String?
+  resourceId     String?
+  details        String?  // JSON string
+  ipAddress      String?
+  userAgent      String?
+  status         String   @default("SUCCESS") // SUCCESS, FAILURE, BLOCKED
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+}
+
+model Session {
+  id                 String   @id @default(cuid())
+  userId             String
+  token              String   @unique
+  ipAddress          String?
+  userAgent          String?
+  deviceFingerprint  String?
+  isActive           Boolean  @default(true)
+  expiresAt          DateTime
+  lastActivityAt     DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@index([expiresAt])
 }
