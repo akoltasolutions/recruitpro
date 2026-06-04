@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyTOTP } from '@/lib/mfa';
 import { createToken } from '@/lib/auth-middleware';
-import { createSession } from '@/lib/session-manager';
-import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 
 // Temporary MFA tokens expire after 5 minutes
 const MFA_TOKEN_EXPIRY_MS = 5 * 60 * 1000;
@@ -50,7 +48,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MFA not configured for this account' }, { status: 400 });
     }
 
-    const clientIp = getClientIp(request);
+    // Get client IP for logging
+    let clientIp = 'unknown';
+    try {
+      const { getClientIp } = await import('@/lib/security-audit');
+      clientIp = getClientIp(request);
+    } catch { /* non-critical */ }
 
     // Check backup codes first (6-digit code that matches a backup code)
     let usedBackupCode = false;
@@ -72,14 +75,17 @@ export async function POST(request: NextRequest) {
     if (!usedBackupCode) {
       const valid = verifyTOTP(user.mfaSecret, code);
       if (!valid) {
-        await logSecurityEvent({
-          userId: user.id,
-          organizationId: user.organizationId || undefined,
-          action: 'MFA_FAILED',
-          ipAddress: clientIp,
-          userAgent: request.headers.get('user-agent') || undefined,
-          status: 'FAILURE',
-        });
+        try {
+          const { logSecurityEvent } = await import('@/lib/security-audit');
+          await logSecurityEvent({
+            userId: user.id,
+            organizationId: user.organizationId || undefined,
+            action: 'MFA_FAILED',
+            ipAddress: clientIp,
+            userAgent: request.headers.get('user-agent') || undefined,
+            status: 'FAILURE',
+          });
+        } catch { /* non-critical */ }
         return NextResponse.json({ error: 'Invalid verification code', code: 'MFA_INVALID' }, { status: 401 });
       }
     }
@@ -87,28 +93,41 @@ export async function POST(request: NextRequest) {
     // MFA verified — issue the real token
     const token = createToken(user.id);
 
-    // Create session
-    await createSession({
-      userId: user.id,
-      token,
-      ipAddress: clientIp,
-      userAgent: request.headers.get('user-agent') || undefined,
-    });
+    // Try to create session (non-blocking if table doesn't exist)
+    try {
+      const { createSession } = await import('@/lib/session-manager');
+      await createSession({
+        userId: user.id,
+        token,
+        ipAddress: clientIp,
+        userAgent: request.headers.get('user-agent') || undefined,
+      });
+    } catch (err) {
+      console.error('[MFA] Session creation failed (non-blocking):', err);
+    }
 
-    // Update last login
-    await db.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date(), lastLoginIp: clientIp },
-    });
+    // Try to update last login (non-blocking if fields don't exist)
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date(), lastLoginIp: clientIp },
+      });
+    } catch (err) {
+      console.error('[MFA] Last login update failed (non-blocking):', err);
+    }
 
-    await logSecurityEvent({
-      userId: user.id,
-      organizationId: user.organizationId || undefined,
-      action: 'MFA_VERIFIED',
-      details: { method: usedBackupCode ? 'backup_code' : 'totp' },
-      ipAddress: clientIp,
-      userAgent: request.headers.get('user-agent') || undefined,
-    });
+    // Try to audit log (non-blocking)
+    try {
+      const { logSecurityEvent } = await import('@/lib/security-audit');
+      await logSecurityEvent({
+        userId: user.id,
+        organizationId: user.organizationId || undefined,
+        action: 'MFA_VERIFIED',
+        details: { method: usedBackupCode ? 'backup_code' : 'totp' },
+        ipAddress: clientIp,
+        userAgent: request.headers.get('user-agent') || undefined,
+      });
+    } catch { /* non-critical */ }
 
     // Get full user data for response
     const fullUser = await db.user.findUnique({

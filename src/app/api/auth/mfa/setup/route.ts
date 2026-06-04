@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
 import { generateTOTPSecret, getTOTPUri, generateBackupCodes, verifyTOTP } from '@/lib/mfa';
-import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
+
+async function safeLogSecurityEvent(options: Record<string, unknown>, request: NextRequest) {
+  try {
+    const { logSecurityEvent, getClientIp } = await import('@/lib/security-audit');
+    await logSecurityEvent({
+      ...options,
+      ipAddress: getClientIp(request),
+    } as any);
+  } catch {
+    // non-critical — audit logging may fail if schema not synced
+  }
+}
 
 /**
  * GET: Get MFA setup status (starts setup flow)
@@ -80,12 +91,11 @@ export async function POST(request: NextRequest) {
 
       const valid = verifyTOTP(user.mfaSecret, code);
       if (!valid) {
-        await logSecurityEvent({
+        await safeLogSecurityEvent({
           userId: auth.userId,
           action: 'MFA_FAILED',
-          ipAddress: getClientIp(request),
           status: 'FAILURE',
-        });
+        }, request);
         return NextResponse.json({ error: 'Invalid verification code. Please try again.' }, { status: 400 });
       }
 
@@ -102,12 +112,11 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await logSecurityEvent({
+      await safeLogSecurityEvent({
         userId: auth.userId,
         organizationId: auth.organizationId || undefined,
         action: 'MFA_ENABLED',
-        ipAddress: getClientIp(request),
-      });
+      }, request);
 
       return NextResponse.json({
         mfaEnabled: true,
@@ -141,12 +150,11 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    await logSecurityEvent({
+    await safeLogSecurityEvent({
       userId: auth.userId,
       organizationId: auth.organizationId || undefined,
       action: 'MFA_DISABLED',
-      ipAddress: getClientIp(request),
-    });
+    }, request);
 
     return NextResponse.json({ message: 'MFA disabled successfully' });
   } catch (error) {

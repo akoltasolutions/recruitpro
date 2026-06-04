@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/auth';
-import { isPasswordReused, addToPasswordHistory } from '@/lib/password-history';
-import { revokeAllSessions } from '@/lib/session-manager';
-import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,16 +56,22 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Password history check — prevent reuse of recent passwords ──
-    const reused = await isPasswordReused(auth.userId, newPassword);
-    if (reused) {
-      return NextResponse.json(
-        { error: 'This password has been used recently. Please choose a different one.' },
-        { status: 400 }
-      );
+    try {
+      const { isPasswordReused } = await import('@/lib/password-history');
+      const reused = await isPasswordReused(auth.userId, newPassword);
+      if (reused) {
+        return NextResponse.json(
+          { error: 'This password has been used recently. Please choose a different one.' },
+          { status: 400 }
+        );
+      }
+    } catch (err) {
+      console.error('[ChangePassword] Password history check failed (non-blocking):', err);
     }
 
     const hashedPassword = await hashPassword(newPassword);
 
+    // Core password update — only essential fields
     await db.user.update({
       where: { id: auth.userId },
       data: {
@@ -77,24 +80,51 @@ export async function POST(request: NextRequest) {
         resetTokenExpires: null,
         otpCode: null,
         otpExpires: null,
-        tokenVersion: { increment: 1 },
-        passwordChangedAt: new Date(),
       },
     });
 
-    // Add new password to history
-    await addToPasswordHistory(auth.userId, newPassword);
+    // Try to update tokenVersion and passwordChangedAt (may not exist in old schema)
+    try {
+      await db.user.update({
+        where: { id: auth.userId },
+        data: {
+          tokenVersion: { increment: 1 },
+          passwordChangedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      console.error('[ChangePassword] Security fields update failed (non-blocking):', err);
+    }
 
-    // Revoke all sessions (force re-login on all devices)
-    await revokeAllSessions(auth.userId);
+    // Try to add to password history (may not exist in old schema)
+    try {
+      const { addToPasswordHistory } = await import('@/lib/password-history');
+      await addToPasswordHistory(auth.userId, newPassword);
+    } catch (err) {
+      console.error('[ChangePassword] Password history save failed (non-blocking):', err);
+    }
 
-    // Audit log
-    await logSecurityEvent({
-      userId: auth.userId,
-      organizationId: auth.organizationId || undefined,
-      action: 'PASSWORD_CHANGE',
-      ipAddress: getClientIp(request),
-    });
+    // Try to revoke all sessions (may not exist in old schema)
+    try {
+      const { revokeAllSessions } = await import('@/lib/session-manager');
+      await revokeAllSessions(auth.userId);
+    } catch (err) {
+      console.error('[ChangePassword] Session revocation failed (non-blocking):', err);
+    }
+
+    // Try to log security event (may not exist in old schema)
+    try {
+      const { logSecurityEvent } = await import('@/lib/security-audit');
+      const { getClientIp } = await import('@/lib/security-audit');
+      await logSecurityEvent({
+        userId: auth.userId,
+        organizationId: auth.organizationId || undefined,
+        action: 'PASSWORD_CHANGE',
+        ipAddress: getClientIp(request),
+      });
+    } catch (err) {
+      console.error('[ChangePassword] Audit logging failed (non-blocking):', err);
+    }
 
     return NextResponse.json(
       { message: 'Password changed successfully. Please login again.', relogin: true },

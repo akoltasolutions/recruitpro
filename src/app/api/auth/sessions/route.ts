@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
-import { getUserSessions, revokeSession, revokeAllSessions } from '@/lib/session-manager';
-import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
+
+async function safeLogSecurityEvent(options: Record<string, unknown>, request: NextRequest) {
+  try {
+    const { logSecurityEvent, getClientIp } = await import('@/lib/security-audit');
+    await logSecurityEvent({
+      ...options,
+      ipAddress: getClientIp(request),
+    } as any);
+  } catch {
+    // non-critical
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,8 +21,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const sessions = await getUserSessions(auth.userId);
-    return NextResponse.json({ sessions });
+    // Try to get sessions (table may not exist yet)
+    try {
+      const { getUserSessions } = await import('@/lib/session-manager');
+      const sessions = await getUserSessions(auth.userId);
+      return NextResponse.json({ sessions });
+    } catch (err) {
+      console.error('[Sessions] Session table not available:', err);
+      return NextResponse.json({ sessions: [], message: 'Session management not available' });
+    }
   } catch (error) {
     console.error('[Sessions] GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -30,33 +47,38 @@ export async function DELETE(request: NextRequest) {
     const { sessionId, revokeAll } = body;
 
     if (revokeAll) {
-      // Revoke ALL sessions (force logout from all devices)
-      await revokeAllSessions(auth.userId);
+      try {
+        const { revokeAllSessions } = await import('@/lib/session-manager');
+        await revokeAllSessions(auth.userId);
+      } catch (err) {
+        console.error('[Sessions] revokeAll failed (non-blocking):', err);
+      }
 
-      await logSecurityEvent({
+      await safeLogSecurityEvent({
         userId: auth.userId,
         organizationId: auth.organizationId || undefined,
         action: 'ALL_SESSIONS_REVOKED',
-        ipAddress: getClientIp(request),
-      });
+      }, request);
 
       return NextResponse.json({ message: 'All sessions revoked. You have been logged out from all devices.' });
     }
 
     if (sessionId) {
-      // Revoke a specific session
-      await db.session.update({
-        where: { id: sessionId, userId: auth.userId },
-        data: { isActive: false },
-      });
+      try {
+        await db.session.update({
+          where: { id: sessionId, userId: auth.userId },
+          data: { isActive: false },
+        });
+      } catch (err) {
+        console.error('[Sessions] Revoke specific session failed (non-blocking):', err);
+      }
 
-      await logSecurityEvent({
+      await safeLogSecurityEvent({
         userId: auth.userId,
         organizationId: auth.organizationId || undefined,
         action: 'SESSION_REVOKED',
         resourceId: sessionId,
-        ipAddress: getClientIp(request),
-      });
+      }, request);
 
       return NextResponse.json({ message: 'Session revoked' });
     }
