@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
           id: true, email: true, name: true, phone: true, role: true,
           isActive: true, avatarUrl: true, callModeOn: true,
           whatsappAccess: true, uploadPermission: true, createListPermission: true,
-          approvalStatus: true, createdAt: true, updatedAt: true,
+          createdAt: true, updatedAt: true,
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,

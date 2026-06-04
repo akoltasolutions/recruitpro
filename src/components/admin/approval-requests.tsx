@@ -60,18 +60,10 @@ export function ApprovalRequests() {
   const fetchUsers = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await authFetch('/api/users?limit=200')
+      const res = await authFetch('/api/users/pending-approvals')
       if (!res.ok) throw new Error()
       const data = await res.json()
-      // Show RECRUITER users who are PENDING, REJECTED (legacy or new model)
-      // Exclude DELETED and already-APPROVED+active users
-      const approvalUsers = (data.users || []).filter(
-        (u: PendingUser) =>
-          u.role === 'RECRUITER' &&
-          u.approvalStatus !== 'DELETED' &&
-          (u.approvalStatus !== 'APPROVED' || !u.isActive)
-      )
-      setAllUsers(approvalUsers)
+      setAllUsers(data.users || [])
     } catch {
       toast.error('Failed to load approval requests')
     } finally {
