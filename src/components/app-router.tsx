@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore, isWithinLoginGrace } from '@/stores/auth-store'
 import { LoginPage } from '@/components/auth/login-page'
 import { SignupPage } from '@/components/auth/signup-page'
 import { RegisterPage } from '@/components/auth/register-page'
@@ -183,19 +183,24 @@ export function AppContent() {
     }
   }, [])
 
-  // Validate stored token on mount and when auth state changes
+  // Validate stored token on mount and when auth state changes.
+  // Skip right after login (grace period) — the login API already validated credentials.
+  // Never logout on network errors — only on explicit 401 (invalid/stale token).
   useEffect(() => {
     if (isAuthenticated && user) {
+      // Skip validation during login grace period (login already proved credentials)
+      if (isWithinLoginGrace()) return
+
       fetch('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${useAuthStore.getState().token}` }
       }).then((res) => {
-        if (!res.ok) {
+        if (res.status === 401) {
           logout()
           navigateTo('login')
         }
+        // Any other non-200 status (500, 503, etc.) does NOT logout — just ignore
       }).catch(() => {
-        logout()
-        navigateTo('login')
+        // Network errors do NOT logout — the server might be temporarily unreachable
       })
     }
   }, [isAuthenticated, user?.id])

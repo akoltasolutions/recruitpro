@@ -1,6 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+/**
+ * Login grace period — prevents auto-logout from race conditions
+ * during the first few seconds after a fresh login.
+ */
+let _lastLoginTime = 0;
+const LOGIN_GRACE_MS = 10_000; // 10 seconds
+
+/** Call right after successful login to start the grace period */
+export function markLoginTime() {
+  _lastLoginTime = Date.now();
+}
+
+/** Returns true if we are inside the post-login grace window */
+export function isWithinLoginGrace(): boolean {
+  return Date.now() - _lastLoginTime < LOGIN_GRACE_MS;
+}
+
 export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'ADMIN' | 'USER' | 'RECRUITER';
 
 export interface Organization {
@@ -62,9 +79,11 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
   const res = await fetch(url, { ...options, headers });
 
-  // Auto-logout on 401: token is stale or user was deleted/invalidated (deduplicated)
+  // Auto-logout on 401: token is stale or user was deleted/invalidated.
+  // Skip during login grace period to avoid race-condition false positives.
   if (res.status === 401 && useAuthStore.getState().isAuthenticated) {
     if (!useAuthStore.getState().token) return res // already logged out
+    if (isWithinLoginGrace()) return res // just logged in — don't nuke the session
     useAuthStore.getState().logout();
   }
 
@@ -78,13 +97,15 @@ export const useAuthStore = create<AuthState>()(
       organization: null,
       token: null,
       isAuthenticated: false,
-      login: (user, token, organization = null) =>
+      login: (user, token, organization = null) => {
+        markLoginTime(); // start grace period
         set({
           user,
           organization,
           token,
           isAuthenticated: true,
-        }),
+        });
+      },
       logout: () =>
         set({
           user: null,
