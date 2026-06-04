@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as crypto from 'crypto';
 import { db } from '@/lib/db';
+import { checkRateLimit } from '@/lib/rate-limiter';
+import { getClientIp } from '@/lib/security-audit';
 
 /**
  * Send password reset email via Resend.
@@ -73,6 +75,16 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Rate limiting — max 3 reset requests per 15 minutes per IP ──
+    const clientIp = getClientIp(request);
+    const rateLimit = checkRateLimit(`reset:${clientIp}`, { maxRequests: 3, windowMs: 15 * 60 * 1000 });
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { message: 'Too many password reset attempts. Please try again later.', code: 'RATE_LIMITED' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { method, identifier } = body;
 

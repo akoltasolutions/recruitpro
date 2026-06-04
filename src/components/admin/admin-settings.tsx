@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/shared/page-header'
 import { toast } from 'sonner'
 import { useAuthStore, authFetch } from '@/stores/auth-store'
+import { SecuritySettings } from './security-settings'
 
 interface AdminSettingsProps {
   userId: string
@@ -154,7 +155,15 @@ export function AdminSettings({ userId }: AdminSettingsProps) {
         setSavingPassword(false)
         return
       }
-      toast.success('Password changed successfully')
+      if (data.relogin) {
+        toast.success(data.message || 'Password changed successfully. Please login again.')
+        setTimeout(() => {
+          useAuthStore.getState().logout()
+          window.location.href = '/login'
+        }, 2000)
+      } else {
+        toast.success('Password changed successfully')
+      }
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
@@ -489,6 +498,9 @@ export function AdminSettings({ userId }: AdminSettingsProps) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Security Settings */}
+      <SecuritySettings showMfa />
     </div>
   )
 }

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/auth';
+import { isPasswordReused, addToPasswordHistory } from '@/lib/password-history';
+import { revokeAllSessions } from '@/lib/session-manager';
+import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,6 +58,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Password history check — prevent reuse of recent passwords ──
+    const reused = await isPasswordReused(auth.userId, newPassword);
+    if (reused) {
+      return NextResponse.json(
+        { error: 'This password has been used recently. Please choose a different one.' },
+        { status: 400 }
+      );
+    }
+
     const hashedPassword = await hashPassword(newPassword);
 
     await db.user.update({
@@ -65,10 +77,29 @@ export async function POST(request: NextRequest) {
         resetTokenExpires: null,
         otpCode: null,
         otpExpires: null,
+        tokenVersion: { increment: 1 },
+        passwordChangedAt: new Date(),
       },
     });
 
-    return NextResponse.json({ message: 'Password changed successfully' }, { status: 200 });
+    // Add new password to history
+    await addToPasswordHistory(auth.userId, newPassword);
+
+    // Revoke all sessions (force re-login on all devices)
+    await revokeAllSessions(auth.userId);
+
+    // Audit log
+    await logSecurityEvent({
+      userId: auth.userId,
+      organizationId: auth.organizationId || undefined,
+      action: 'PASSWORD_CHANGE',
+      ipAddress: getClientIp(request),
+    });
+
+    return NextResponse.json(
+      { message: 'Password changed successfully. Please login again.', relogin: true },
+      { status: 200 }
+    );
   } catch (error) {
     console.error('Change password error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

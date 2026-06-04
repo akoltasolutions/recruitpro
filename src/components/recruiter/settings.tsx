@@ -13,6 +13,7 @@ import {
   Check,
   Loader2,
 } from 'lucide-react'
+import { SecuritySettings } from '../admin/security-settings'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -155,6 +156,15 @@ export function Settings({ userId, onLogout }: SettingsProps) {
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Failed to change password' }))
         toast.error(data.error || 'Failed to change password')
+        setSavingPassword(false)
+        return
+      }
+      if (data.relogin) {
+        toast.success(data.message || 'Password changed successfully. Please login again.')
+        setTimeout(() => {
+          useAuthStore.getState().logout()
+          window.location.href = '/login'
+        }, 2000)
         setSavingPassword(false)
         return
       }
@@ -515,6 +525,9 @@ export function Settings({ userId, onLogout }: SettingsProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Security - Session Management (no MFA for recruiters) */}
+      <SecuritySettings showMfa={false} />
 
       {/* Danger Zone */}
       <Card className="border-red-200">

@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
         whatsappAccess: true,
         uploadPermission: true,
         createListPermission: true,
+        mfaEnabled: true,
+        mfaVerified: true,
       },
     });
 

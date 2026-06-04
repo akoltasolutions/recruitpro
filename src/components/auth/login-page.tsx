@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Smartphone, Building2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { MfaVerification } from './mfa-verification'
 
 interface LoginPageProps {
   onSwitch: () => void
@@ -22,6 +23,7 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
   const [errorCode, setErrorCode] = useState('')
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
   const { login } = useAuthStore()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,17 +52,34 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
         setServerError(data.error || 'Login failed. Please try again.')
 
         // Also show a toast for visibility
-        if (data.code === 'USER_NOT_FOUND') {
-          toast.error('User is not registered. Please sign up or contact admin.')
-        } else if (data.code === 'WRONG_PASSWORD') {
-          toast.error('Incorrect password. Please try again.')
+        if (data.code === 'USER_NOT_FOUND' || data.code === 'INVALID_CREDENTIALS') {
+          if (data.remainingAttempts !== undefined) {
+            toast.error(`${data.error} (${data.remainingAttempts} attempts remaining)`)
+          } else {
+            toast.error(data.error || 'Invalid email/phone or password')
+          }
+        } else if (data.code === 'ACCOUNT_LOCKED') {
+          toast.error(data.error || 'Account temporarily locked')
         } else if (data.code === 'ACCOUNT_INACTIVE') {
           toast.error('Your account is inactive. Please contact the administrator.')
+        } else if (data.code === 'RATE_LIMITED') {
+          toast.error('Too many login attempts. Please try again later.')
         } else if (data.code === 'SERVER_ERROR') {
           toast.error('Something went wrong. Please try again later.')
         } else {
-          toast.error(data.error || 'Login failed.')
+          if (data.remainingAttempts !== undefined) {
+            toast.error(`${data.error || 'Login failed.'} (${data.remainingAttempts} attempts remaining)`)
+          } else {
+            toast.error(data.error || 'Login failed.')
+          }
         }
+        return
+      }
+
+      // Check if MFA is required
+      if (data.mfaRequired) {
+        setMfaToken(data.mfaToken)
+        toast.info('Please enter your authentication code')
         return
       }
 
@@ -80,6 +99,7 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
       case 'USER_NOT_FOUND': return <UserX className="h-4 w-4 text-red-500 shrink-0" />
       case 'WRONG_PASSWORD': return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
       case 'ACCOUNT_INACTIVE': return <ShieldOff className="h-4 w-4 text-orange-500 shrink-0" />
+      case 'ACCOUNT_LOCKED': return <ShieldAlert className="h-4 w-4 text-red-500 shrink-0" />
       case 'NO_CONNECTION': return <WifiOff className="h-4 w-4 text-red-500 shrink-0" />
       default: return <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
     }
@@ -92,6 +112,20 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
       case 'NO_CONNECTION': return 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
       default: return 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
     }
+  }
+
+  // MFA verification step
+  if (mfaToken) {
+    return (
+      <MfaVerification
+        mfaToken={mfaToken}
+        onSuccess={(token, userData) => {
+          login(userData, token, userData.organization)
+          toast.success(`Welcome back, ${userData.name}!`)
+        }}
+        onCancel={() => setMfaToken(null)}
+      />
+    )
   }
 
   return (
