@@ -124,15 +124,17 @@ export async function POST(request: NextRequest) {
     });
 
     // ── 3. Create admin user as SUPER_ADMIN linked to Akolta org ─────────
-    const adminPassword = await hashPassword('admin123');
+    const adminPassword = await hashPassword('Admin@123');
     const admin = await db.user.upsert({
-      where: { email: 'admin@recruitment.com' },
+      where: { email: 'ompratap@akolta.com' },
       update: {},
       create: {
-        email: 'admin@recruitment.com',
+        email: 'ompratap@akolta.com',
         name: 'Admin',
         password: adminPassword,
         role: 'SUPER_ADMIN',
+        isActive: true,
+        approvalStatus: 'APPROVED',
         organizationId: akoltaOrg.id,
         uploadPermission: true,
         createListPermission: true,
@@ -322,8 +324,8 @@ export async function POST(request: NextRequest) {
       console.log(`  Plan         : Enterprise (ACTIVE)`);
       console.log('');
       console.log('  Admin Credentials:');
-      console.log(`    Email    : admin@recruitment.com`);
-      console.log(`    Password : admin123`);
+      console.log(`    Email    : ompratap@akolta.com`);
+      console.log(`    Password : Admin@123`);
       console.log(`    Role     : SUPER_ADMIN`);
       console.log('');
       console.log('  Recruiter Credentials:');

@@ -154,6 +154,15 @@ else
     log "No approval status migration script found, skipping."
 fi
 
+# Step 3e: Ensure super admin account exists
+log "Step 3e: Ensuring super admin account..."
+if [ -f prisma/migrate-super-admin.ts ]; then
+    bun run prisma/migrate-super-admin.ts
+    log "Super admin migration complete."
+else
+    log "No super admin migration script found, skipping."
+fi
+
 # Step 3c: Ensure platform-settings.json exists
 log "Step 3c: Ensuring platform-settings.json exists..."
 if [ ! -f db/platform-settings.json ]; then
