@@ -444,3 +444,27 @@ Stage Summary:
 - Root cause: SQLite lock during zero-downtime deploy → prisma db push silent failure → missing DB columns
 - Permanent fix: retry logic + PM2 stop fallback + column verification in deploy pipeline
 - Production signup now works correctly with pending approval flow
+---
+Task ID: 15
+Agent: Main Agent
+Task: Fix call list copy-paste "Create with Candidate" button not highlighted
+
+Work Log:
+- Analyzed screenshot: Create Calling List modal with "Copy-Paste Input" tab, data pasted as space-separated text, "Create with 1 Candidate" button not highlighted/active
+- Root cause: parsePasteInput() only split on `\t|,` (tab/comma). Space-separated data like "Test 1234567890 Tele Calling Sahibabad Site 4" treated as single cell → pasteParsed empty → button disabled due to `pasteParsed.length === 0`
+- Enhanced parsePasteInput with 4 parsing strategies:
+  1. Tab-separated (Excel/Sheets copy)
+  2. Comma-separated (CSV)
+  3. Multi-space separated (2+ spaces between fields)
+  4. Single-space with phone detection (finds first 6+ digit token as phone boundary)
+- Updated placeholder text to mention space-separated format with example
+- Added amber warning hints below disabled Create button explaining what's missing
+- Fixed signup route syntax error (P2025 block was outside instanceof check)
+- Tested all parsing strategies: tab, comma, multi-space, single-space, empty, no-phone, phone-first
+
+Stage Summary:
+- 2 files changed: call-list-management.tsx (+69/-19), signup/route.ts (syntax fix)
+- All paste formats now correctly parsed (tab, comma, multi-space, single-space)
+- Button properly enabled when valid data detected
+- Helpful amber hints shown when button is disabled (missing name or no candidates)
+- No other functionality affected
