@@ -3,6 +3,60 @@ import { db } from '@/lib/db';
 import { verifyPassword } from '@/lib/auth';
 import { createToken } from '@/lib/auth-middleware';
 
+// ── In-memory rate limiter (per IP) ─────────────────────────────────────
+const loginAttempts = new Map<string, { count: number; firstAttempt: number; lockedUntil: number }>()
+const MAX_ATTEMPTS = 10
+const LOCKOUT_MS = 5 * 60 * 1000 // 5 minutes
+const WINDOW_MS = 15 * 60 * 1000 // 15 minute window
+
+function getClientIp(request: NextRequest): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+}
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number; lockedUntil?: number } {
+  const now = Date.now()
+  let entry = loginAttempts.get(ip)
+
+  if (!entry) {
+    entry = { count: 0, firstAttempt: now, lockedUntil: 0 }
+    loginAttempts.set(ip, entry)
+  }
+
+  // If locked, check if lockout has expired
+  if (entry.lockedUntil > now) {
+    return { allowed: false, remaining: 0, lockedUntil: entry.lockedUntil }
+  }
+
+  // Reset window if expired
+  if (now - entry.firstAttempt > WINDOW_MS) {
+    entry.count = 0
+    entry.firstAttempt = now
+    entry.lockedUntil = 0
+  }
+
+  entry.count += 1
+
+  // Lock if exceeded
+  if (entry.count > MAX_ATTEMPTS) {
+    entry.lockedUntil = now + LOCKOUT_MS
+    return { allowed: false, remaining: 0, lockedUntil: entry.lockedUntil }
+  }
+
+  return { allowed: true, remaining: MAX_ATTEMPTS - entry.count }
+}
+
+// Cleanup stale entries every 10 minutes
+if (typeof globalThis !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now()
+    for (const [ip, entry] of loginAttempts) {
+      if (entry.lockedUntil <= now && now - entry.firstAttempt > WINDOW_MS) {
+        loginAttempts.delete(ip)
+      }
+    }
+  }, 10 * 60 * 1000)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { identifier, email: legacyEmail, password } = await request.json();
@@ -27,6 +81,17 @@ export async function POST(request: NextRequest) {
         { error: 'Please enter a valid email address or phone number.', code: 'INVALID_IDENTIFIER' },
         { status: 400 }
       );
+    }
+
+    // ── Rate limiting check ──
+    const clientIp = getClientIp(request)
+    const rateResult = checkRateLimit(clientIp)
+    if (!rateResult.allowed) {
+      const lockMinutes = Math.ceil((rateResult.lockedUntil! - Date.now()) / 60000)
+      return NextResponse.json(
+        { error: `Too many failed login attempts. Your IP is temporarily locked for ${lockMinutes} minutes. Please try again later.`, code: 'RATE_LIMITED', lockedUntil: rateResult.lockedUntil },
+        { status: 429 }
+      )
     }
 
     // Search user by email or phone
@@ -70,30 +135,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // User not registered — log specific reason server-side, return generic message to client
+    // User not registered — distinct error code for UI
     if (!user) {
-      console.error('Login attempt for unregistered identifier:', loginId);
+      console.error('[Auth] Login attempt for unregistered identifier:', loginId, 'IP:', clientIp);
       return NextResponse.json(
-        { error: 'Invalid email/phone or password', code: 'INVALID_CREDENTIALS' },
+        { error: 'You are not a registered user. Please sign up to create your account or log in using your registered email address or phone number.', code: 'USER_NOT_FOUND', remainingAttempts: rateResult.remaining },
         { status: 401 }
       );
     }
 
-    // Account disabled/inactive — log specific reason server-side, return generic message to client
+    // Account disabled/inactive
     if (!user.isActive) {
-      console.error('Login attempt on inactive account:', loginId);
+      console.error('[Auth] Login attempt on inactive account:', loginId, 'IP:', clientIp);
       return NextResponse.json(
-        { error: 'Invalid email/phone or password', code: 'INVALID_CREDENTIALS' },
+        { error: 'Your account is inactive. Please contact your administrator.', code: 'ACCOUNT_INACTIVE', remainingAttempts: rateResult.remaining },
         { status: 401 }
       );
     }
 
-    // Wrong password — log specific reason server-side, return generic message to client
+    // Wrong password — distinct error code for UI
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
-      console.error('Login attempt with wrong password for:', loginId);
+      console.error('[Auth] Wrong password attempt for:', loginId, 'IP:', clientIp);
       return NextResponse.json(
-        { error: 'Invalid email/phone or password', code: 'INVALID_CREDENTIALS' },
+        { error: 'Incorrect password. Please try again.', code: 'WRONG_PASSWORD', remainingAttempts: rateResult.remaining },
         { status: 401 }
       );
     }
@@ -109,10 +174,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Successful login — reset rate limit for this IP
+    loginAttempts.delete(clientIp)
+
     const token = createToken(user.id);
 
-    // Log login activity for recruiter tracking — default to IDLE so time
-    // does not start counting until the recruiter explicitly picks a status.
+    // Log login activity for recruiter tracking
     if (user.role !== 'SUPER_ADMIN') {
       try {
         await db.activityLog.create({
@@ -132,7 +199,7 @@ export async function POST(request: NextRequest) {
     if (safeUser.role === 'ADMIN') safeUser.role = 'ORG_ADMIN';
     return NextResponse.json({ user: safeUser, token, organization: organization || null });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[Auth] Login error:', error);
     return NextResponse.json(
       { error: 'Something went wrong. Please try again later.', code: 'SERVER_ERROR' },
       { status: 500 }

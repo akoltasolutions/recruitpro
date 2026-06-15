@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserX, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserPlus, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { MfaVerification } from './mfa-verification'
 
@@ -51,27 +51,19 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
         setErrorCode(data.code || '')
         setServerError(data.error || 'Login failed. Please try again.')
 
-        // Also show a toast for visibility
-        if (data.code === 'USER_NOT_FOUND' || data.code === 'INVALID_CREDENTIALS') {
-          if (data.remainingAttempts !== undefined) {
-            toast.error(`${data.error} (${data.remainingAttempts} attempts remaining)`)
-          } else {
-            toast.error(data.error || 'Invalid email/phone or password')
+        // Toast notifications for different error types
+        if (data.code === 'USER_NOT_FOUND') {
+          toast.error('Account not found', { description: 'Please sign up or check your credentials.' })
+        } else if (data.code === 'WRONG_PASSWORD') {
+          if (data.remainingAttempts !== undefined && data.remainingAttempts <= 5) {
+            toast.error('Incorrect password', { description: `${data.remainingAttempts} attempts remaining.` })
           }
-        } else if (data.code === 'ACCOUNT_LOCKED') {
+        } else if (data.code === 'ACCOUNT_LOCKED' || data.code === 'RATE_LIMITED') {
           toast.error(data.error || 'Account temporarily locked')
         } else if (data.code === 'ACCOUNT_INACTIVE') {
           toast.error('Your account is inactive. Please contact the administrator.')
-        } else if (data.code === 'RATE_LIMITED') {
-          toast.error('Too many login attempts. Please try again later.')
         } else if (data.code === 'SERVER_ERROR') {
           toast.error('Something went wrong. Please try again later.')
-        } else {
-          if (data.remainingAttempts !== undefined) {
-            toast.error(`${data.error || 'Login failed.'} (${data.remainingAttempts} attempts remaining)`)
-          } else {
-            toast.error(data.error || 'Login failed.')
-          }
         }
         return
       }
@@ -94,23 +86,58 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
     }
   }
 
-  const getErrorIcon = () => {
-    switch (errorCode) {
-      case 'USER_NOT_FOUND': return <UserX className="h-4 w-4 text-red-500 shrink-0" />
-      case 'WRONG_PASSWORD': return <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
-      case 'ACCOUNT_INACTIVE': return <ShieldOff className="h-4 w-4 text-orange-500 shrink-0" />
-      case 'ACCOUNT_LOCKED': return <ShieldAlert className="h-4 w-4 text-red-500 shrink-0" />
-      case 'NO_CONNECTION': return <WifiOff className="h-4 w-4 text-red-500 shrink-0" />
-      default: return <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
-    }
-  }
+  // Field highlighting classes based on error type
+  const emailFieldHighlight = errorCode === 'USER_NOT_FOUND' || errorCode === 'INVALID_IDENTIFIER'
+    ? 'border-red-400 ring-2 ring-red-200 dark:ring-red-800/50 dark:border-red-500'
+    : errorCode === 'EMPTY_FIELDS' && !loginId.trim()
+      ? 'border-red-400 ring-2 ring-red-200 dark:ring-red-800/50 dark:border-red-500'
+      : ''
 
-  const getErrorColor = () => {
+  const passwordFieldHighlight = errorCode === 'WRONG_PASSWORD'
+    ? 'border-amber-400 ring-2 ring-amber-200 dark:ring-amber-800/50 dark:border-amber-500'
+    : errorCode === 'EMPTY_FIELDS' && !password.trim()
+      ? 'border-red-400 ring-2 ring-red-200 dark:ring-red-800/50 dark:border-red-500'
+      : ''
+
+  // Error banner styling per code
+  const getErrorStyle = () => {
     switch (errorCode) {
-      case 'WRONG_PASSWORD': return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
-      case 'ACCOUNT_INACTIVE': return 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300'
-      case 'NO_CONNECTION': return 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
-      default: return 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
+      case 'USER_NOT_FOUND':
+        return {
+          bg: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
+          textColor: 'text-red-800 dark:text-red-300',
+          icon: <UserPlus className="h-4 w-4 text-red-500 shrink-0" />,
+        }
+      case 'WRONG_PASSWORD':
+        return {
+          bg: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30',
+          textColor: 'text-amber-800 dark:text-amber-300',
+          icon: <KeyRound className="h-4 w-4 text-amber-500 shrink-0" />,
+        }
+      case 'ACCOUNT_INACTIVE':
+        return {
+          bg: 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30',
+          textColor: 'text-orange-800 dark:text-orange-300',
+          icon: <ShieldOff className="h-4 w-4 text-orange-500 shrink-0" />,
+        }
+      case 'RATE_LIMITED':
+        return {
+          bg: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
+          textColor: 'text-red-800 dark:text-red-300',
+          icon: <ShieldAlert className="h-4 w-4 text-red-500 shrink-0" />,
+        }
+      case 'NO_CONNECTION':
+        return {
+          bg: 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30',
+          textColor: 'text-slate-700 dark:text-slate-300',
+          icon: <WifiOff className="h-4 w-4 text-slate-500 shrink-0" />,
+        }
+      default:
+        return {
+          bg: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30',
+          textColor: 'text-red-800 dark:text-red-300',
+          icon: <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />,
+        }
     }
   }
 
@@ -128,6 +155,8 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
     )
   }
 
+  const errorStyle = serverError ? getErrorStyle() : null
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
       <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
@@ -141,9 +170,9 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-8">
             {/* Server error banner */}
-            {serverError && (
-              <div className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm ${getErrorColor()}`}>
-                {getErrorIcon()}
+            {errorStyle && (
+              <div className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm ${errorStyle.bg} ${errorStyle.textColor}`}>
+                {errorStyle.icon}
                 <p className="flex-1">{serverError}</p>
                 <button type="button" onClick={() => { setServerError(''); setErrorCode('') }} className="text-current opacity-60 hover:opacity-100 shrink-0">
                   ✕
@@ -155,14 +184,14 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
               <Label htmlFor="loginId" className="text-sm sm:text-base">Email or Phone Number</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="loginId" type="text" placeholder="Enter your registered Email or Phone Number" value={loginId} onChange={e => { setLoginId(e.target.value); setServerError(''); }} className="pl-10 h-11 sm:h-12 text-sm sm:text-base" autoComplete="email" />
+                <Input id="loginId" type="text" placeholder="Enter your registered Email or Phone Number" value={loginId} onChange={e => { setLoginId(e.target.value); setServerError(''); setErrorCode('') }} className={`pl-10 h-11 sm:h-12 text-sm sm:text-base transition-colors ${emailFieldHighlight}`} autoComplete="email" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm sm:text-base">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setServerError(''); }} className="pl-10 pr-10 h-11 sm:h-12 text-sm sm:text-base" autoComplete="current-password" />
+                <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" value={password} onChange={e => { setPassword(e.target.value); setServerError(''); setErrorCode('') }} className={`pl-10 pr-10 h-11 sm:h-12 text-sm sm:text-base transition-colors ${passwordFieldHighlight}`} autoComplete="current-password" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Hide password' : 'Show password'}>
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -190,8 +219,36 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
               </p>
             </div>
 
+            {/* Show Sign Up prompt when user not found */}
+            {errorCode === 'USER_NOT_FOUND' && (
+              <div className="w-full border-t pt-3 mt-0">
+                <button
+                  type="button"
+                  onClick={onSwitch}
+                  className="flex items-center justify-center gap-2 w-full text-sm font-medium py-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/50 transition-colors"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Sign Up to Create an Account
+                </button>
+              </div>
+            )}
+
+            {/* Show Forgot Password link when wrong password */}
+            {errorCode === 'WRONG_PASSWORD' && onForgotPassword && (
+              <div className="w-full border-t pt-3 mt-0">
+                <button
+                  type="button"
+                  onClick={onForgotPassword}
+                  className="flex items-center justify-center gap-2 w-full text-sm font-medium py-2 rounded-lg text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 transition-colors"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Forgot Password? Reset it here
+                </button>
+              </div>
+            )}
+
             {/* Register your company link */}
-            {onRegister && (
+            {onRegister && errorCode !== 'USER_NOT_FOUND' && (
               <div className="w-full border-t pt-4 mt-0">
                 <button
                   type="button"
