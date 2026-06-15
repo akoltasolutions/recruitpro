@@ -391,3 +391,34 @@ Stage Summary:
 - Super admin credentials: ompratap@akolta.com / Admin@123
 - Migration runs automatically on every deploy
 - User can change password after first login via admin settings
+
+---
+Task ID: 13
+Agent: Main Agent
+Task: Login UI validation - distinct error messages for user-not-found vs wrong-password
+
+Work Log:
+- Backend (login/route.ts): Changed generic INVALID_CREDENTIALS to distinct codes:
+  - USER_NOT_FOUND (401): "You are not a registered user. Please sign up..."
+  - WRONG_PASSWORD (401): "Incorrect password. Please try again."
+  - ACCOUNT_INACTIVE (401): "Your account is inactive. Please contact your administrator."
+  - RATE_LIMITED (429): "Too many failed login attempts. Your IP is temporarily locked..."
+- Added in-memory rate limiter: 10 attempts per IP per 15-minute window, 5-min lockout
+- Successful login resets rate limit counter for the IP
+- Server-side logging of all failed attempts with client IP
+- Frontend (login-page.tsx): Contextual error UI:
+  - USER_NOT_FOUND: red ring on email field, Sign Up prompt button
+  - WRONG_PASSWORD: amber ring on password field, Forgot Password link
+  - Rate remaining attempts shown in toast when ≤ 5 left
+  - Form values preserved between attempts
+  - Error banner dismissible with ✕ button
+- ESLint: 0 new errors (3 pre-existing in debug route unchanged)
+- Deployed as commit 19a32e7
+
+Stage Summary:
+- 2 files changed, 173 insertions, 49 deletions
+- User-not-found and wrong-password now show distinct, user-friendly messages
+- Field highlighting guides the user to the problematic input
+- Sign Up and Forgot Password CTAs appear contextually
+- Rate limiting prevents brute-force (10 attempts/15min, 5-min lockout)
+- Existing auth, password hashing, session management untouched
