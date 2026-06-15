@@ -367,3 +367,27 @@ Stage Summary:
 - Notification badge only shows PENDING count
 - Backward compatible with existing data
 - Deployed to production via GitHub Actions CI/CD
+
+---
+Task ID: 12
+Agent: Main Agent
+Task: Setup super admin account as ompratap@akolta.com
+
+Work Log:
+- Updated seed script: changed super admin email from admin@recruitment.com to ompratap@akolta.com
+- Default password set to Admin@123 (strong enough for bcrypt)
+- Added isActive: true and approvalStatus: 'APPROVED' to seed creation
+- Created production migration script: prisma/migrate-super-admin.ts
+  - Creates ompratap@akolta.com as SUPER_ADMIN if not exists
+  - Migrates legacy admin@recruitment.com to new email if found
+  - Ensures role=SUPER_ADMIN, isActive=true, approvalStatus=APPROVED
+  - Idempotent — safe to run multiple times
+- Added migration step (Step 3e) to deploy.sh
+- Verified locally: account creation + password verification works
+- Deployed as commit b367714
+
+Stage Summary:
+- 3 files changed (deploy.sh, prisma/migrate-super-admin.ts, src/app/api/seed/route.ts)
+- Super admin credentials: ompratap@akolta.com / Admin@123
+- Migration runs automatically on every deploy
+- User can change password after first login via admin settings
