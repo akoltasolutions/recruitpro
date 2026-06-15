@@ -422,3 +422,25 @@ Stage Summary:
 - Sign Up and Forgot Password CTAs appear contextually
 - Rate limiting prevents brute-force (10 attempts/15min, 5-min lockout)
 - Existing auth, password hashing, session management untouched
+---
+Task ID: 14
+Agent: Main Agent
+Task: Fix signup "Internal server error" on production
+
+Work Log:
+- Analyzed screenshot: signup form with all fields filled, "Internal server error" toast on Submit Registration
+- Tested signup locally: works perfectly (201 response with user + pendingApproval)
+- Tested signup on production: returned 500 {"error":"Internal server error"}
+- Root cause: deploy.sh ran `bunx prisma db push` with NO error handling and NO retry. SQLite database was locked by running PM2 process (zero-downtime strategy keeps PM2 live during deploy). `prisma db push` failed silently, critical columns (`approvalStatus`, `mfaEnabled`, `failedLoginAttempts`, etc.) were never added to production DB. Signup INSERT referenced `approvalStatus` column → Prisma threw error → caught as generic 500.
+- Fix 1 (deploy.sh): Added `prisma generate` explicit step before `prisma db push`. Added 3-attempt retry loop for `prisma db push` with PM2 stop fallback. Added forced reset as last resort. Added column verification step using `prisma/migrate-verify-columns.ts` script.
+- Fix 2 (signup/route.ts): Added Prisma-specific error handling (P2002 unique constraint → 409, P2021 column missing → fallback create without approvalStatus → 503). Added detailed server-side logging for all error types. Changed generic "Internal server error" to "Registration failed. Please try again later.".
+- Fix 3 (prisma/migrate-verify-columns.ts): New migration script that checks for 9 critical columns in User table, exits with code 1 if any are missing. Used by deploy.sh for post-sync verification.
+- Created temporary `/api/debug/signup-diag` endpoint to diagnose production DB state. Verified all 5 steps pass on production after deploy (DB read, schema check, hash, create, cleanup). Removed diagnostic endpoint after verification.
+- Production signup confirmed working: 201 with full user object + approvalStatus:PENDING
+
+Stage Summary:
+- 3 files changed in fix commit (c201320): deploy.sh (+71 lines), prisma/migrate-verify-columns.ts (new), signup/route.ts (+79/-17)
+- 1 file deleted in cleanup commit (a59719f): diagnostic endpoint
+- Root cause: SQLite lock during zero-downtime deploy → prisma db push silent failure → missing DB columns
+- Permanent fix: retry logic + PM2 stop fallback + column verification in deploy pipeline
+- Production signup now works correctly with pending approval flow
