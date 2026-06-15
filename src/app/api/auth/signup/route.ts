@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { Prisma } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,17 +42,65 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
 
     // Create recruiter with isActive: false → requires admin approval
-    const user = await db.user.create({
-      data: {
-        name,
-        email: normalizedEmail,
-        phone: phone || null,
-        password: hashedPassword,
-        role: 'RECRUITER',
-        isActive: false, // Pending admin approval
-        approvalStatus: 'PENDING',
-      },
-    });
+    // Wrap in try/catch for Prisma-specific errors (schema mismatch, constraints, etc.)
+    let user;
+    try {
+      user = await db.user.create({
+        data: {
+          name,
+          email: normalizedEmail,
+          phone: phone || null,
+          password: hashedPassword,
+          role: 'RECRUITER',
+          isActive: false, // Pending admin approval
+          approvalStatus: 'PENDING',
+        },
+      });
+    } catch (createError) {
+      // Handle Prisma-specific errors
+      if (createError instanceof Prisma.PrismaClientKnownRequestError) {
+        const prismaError = createError as Prisma.PrismaClientKnownRequestError;
+
+        // P2002: Unique constraint violation
+        if (prismaError.code === 'P2002') {
+          const target = Array.isArray(prismaError.meta?.target) ? prismaError.meta.target.join(', ') : 'field';
+          console.error('[Signup] Unique constraint violation on:', target);
+          return NextResponse.json(
+            { error: 'An account with this email or phone number already exists.' },
+            { status: 409 }
+          );
+        }
+
+        // P2021: Column does not exist (schema out of sync)
+        if (prismaError.code === 'P2021') {
+          const column = String(prismaError.meta?.column_name || 'unknown');
+          console.error(`[Signup] Column does not exist: ${column} — schema out of sync!`);
+          // Attempt fallback create without the missing column
+          try {
+            user = await db.user.create({
+              data: {
+                name,
+                email: normalizedEmail,
+                phone: phone || null,
+                password: hashedPassword,
+                role: 'RECRUITER',
+                isActive: false,
+              },
+            });
+            console.error('[Signup] Fallback create succeeded (without approvalStatus column).');
+          } catch (fallbackError) {
+            console.error('[Signup] Fallback create also failed:', fallbackError);
+            return NextResponse.json(
+              { error: 'Registration is temporarily unavailable. Please try again later or contact support.', code: 'SCHEMA_MISMATCH' },
+              { status: 503 }
+            );
+          }
+        }
+      }
+
+      // Re-throw if not handled above
+      if (!user) throw createError;
+    }
 
     // Don't return a token — user cannot log in until approved
     const { password: _, ...safeUser } = user;
@@ -64,7 +113,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Signup error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[Signup] Error:', error);
+    // Return a user-friendly message; log details server-side only
+    return NextResponse.json(
+      { error: 'Registration failed. Please try again later.' },
+      { status: 500 }
+    );
   }
 }

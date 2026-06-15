@@ -140,10 +140,46 @@ else
     log "WARNING: resend package NOT found — forgot-password emails will fail!"
 fi
 
-# Step 3: Sync database
-log "Step 3: Syncing database schema..."
-bunx prisma db push
-log "Database synced."
+# Step 3: Generate Prisma Client & Sync database
+log "Step 3: Generating Prisma Client..."
+bunx prisma generate
+log "Prisma Client generated."
+
+log "Step 3b: Syncing database schema..."
+DB_SYNC_SUCCESS=false
+# Try prisma db push up to 3 times (SQLite may be locked by running PM2)
+for attempt in 1 2 3; do
+    log "  DB sync attempt $attempt..."
+    if bunx prisma db push 2>&1; then
+        DB_SYNC_SUCCESS=true
+        log "  DB sync succeeded on attempt $attempt."
+        break
+    else
+        log "  DB sync attempt $attempt failed."
+        if [ "$attempt" -lt 3 ]; then
+            log "  Stopping PM2 to release SQLite lock..."
+            pm2 stop recruitpro 2>/dev/null || true
+            sleep 2
+        fi
+    fi
+done
+
+if [ "$DB_SYNC_SUCCESS" = false ]; then
+    log "ERROR: All 3 DB sync attempts failed! Schema may be out of sync."
+    log "Attempting forced sync with PM2 stopped..."
+    pm2 stop recruitpro 2>/dev/null || true
+    sleep 3
+    if bunx prisma db push --force-reset 2>&1; then
+        log "Forced DB sync succeeded (data loss possible for new columns)."
+    else
+        log "CRITICAL: Forced DB sync also failed! Manual intervention required."
+    fi
+    # Restart PM2 regardless
+    pm2 restart recruitpro 2>/dev/null || true
+    sleep 3
+else
+    log "Database synced successfully."
+fi
 
 # Step 3d: Migrate existing pending users to PENDING approvalStatus
 log "Step 3d: Migrating approval status data..."
@@ -188,6 +224,33 @@ if [ -f prisma/migrate-tenant.ts ]; then
     log "Tenant migration complete."
 else
     log "No migration script found, skipping."
+fi
+
+# Step 3f: Verify critical columns exist in production database
+log "Step 3f: Verifying critical database columns..."
+if [ -f prisma/migrate-verify-columns.ts ]; then
+    bun run prisma/migrate-verify-columns.ts 2>&1 | tee -a "$LOG_FILE"
+    COLUMN_CHECK=${PIPESTATUS[0]}
+    if [ "$COLUMN_CHECK" -ne 0 ]; then
+        log "WARNING: Critical columns missing! Attempting repair..."
+        pm2 stop recruitpro 2>/dev/null || true
+        sleep 2
+        bunx prisma db push 2>&1 | tee -a "$LOG_FILE"
+        bunx prisma generate 2>&1 | tee -a "$LOG_FILE"
+        bun run prisma/migrate-verify-columns.ts 2>&1 | tee -a "$LOG_FILE"
+        REPAIR_CHECK=${PIPESTATUS[0]}
+        if [ "$REPAIR_CHECK" -ne 0 ]; then
+            log "CRITICAL: Column repair failed! Manual intervention required."
+        else
+            log "Column repair verified OK."
+        fi
+        pm2 restart recruitpro 2>/dev/null || true
+        sleep 3
+    else
+        log "Critical columns verified OK."
+    fi
+else
+    log "No column verification script found, skipping."
 fi
 
 # ── Clean caches to free memory ──
