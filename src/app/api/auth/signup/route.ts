@@ -98,6 +98,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // P2025: Record not found (shouldn't happen on create, but handle it)
+        if (prismaError.code === 'P2025') {
+          console.error('[Signup] Record not found error:', prismaError.message);
+          return NextResponse.json(
+            { error: 'Registration failed due to a data error. Please contact support.', code: 'RECORD_ERROR' },
+            { status: 400 }
+          );
+        }
+
+        // Log unhandled Prisma errors with code for diagnostics
+        console.error(`[Signup] Unhandled Prisma error (${prismaError.code}):`, prismaError.message, prismaError.meta);
+      }
+
+      // Log non-Prisma create errors
+      console.error('[Signup] User create error:', createError instanceof Error ? createError.message : String(createError));
+
       // Re-throw if not handled above
       if (!user) throw createError;
     }
