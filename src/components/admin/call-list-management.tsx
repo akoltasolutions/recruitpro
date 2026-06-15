@@ -393,7 +393,43 @@ export function CallListManagement({ userId }: { userId: string }) {
 
     for (const line of lines) {
       if (!line.trim()) continue
-      const cells = line.split(/\t|,/).map(c => c.trim())
+
+      // Strategy 1: Tab-separated (Excel/Sheets copy) — most reliable
+      // Strategy 2: Comma-separated (CSV)
+      // Strategy 3: Multi-space separated (2+ spaces between fields)
+      // Strategy 4: Single-space with phone detection — find first token that
+      //   looks like a phone number (6+ digits) and split name/phone there
+      let cells: string[]
+
+      if (line.includes('\t')) {
+        cells = line.split('\t').map(c => c.trim())
+      } else if (line.includes(',')) {
+        cells = line.split(',').map(c => c.trim())
+      } else if (/  /.test(line)) {
+        // Multi-space: split on 2+ spaces
+        cells = line.split(/  +/).map(c => c.trim())
+      } else {
+        // Single-space: detect phone boundary (first token that is 6+ digits)
+        const tokens = line.split(/\s+/)
+        const phoneIdx = tokens.findIndex(t => /^\d{6,15}$/.test(t.replace(/[\-+()]/g, '')))
+        if (phoneIdx > 0) {
+          // Everything before phone = name, phone = phone, rest = role/location/company
+          const name = tokens.slice(0, phoneIdx).join(' ')
+          const phone = tokens[phoneIdx]
+          const rest = tokens.slice(phoneIdx + 1)
+          cells = [name, phone, rest[0] || '', rest[1] || '', rest.slice(2).join(' ') || '']
+        } else if (phoneIdx === 0) {
+          // Phone is first token — use as-is (no name)
+          const rest = tokens.slice(1)
+          cells = [tokens[0], rest[0] || '', rest[1] || '', rest[2] || '', rest.slice(3).join(' ') || '']
+        } else {
+          // No phone detected — treat first token as name, second as phone (best effort)
+          cells = tokens.length >= 2
+            ? [tokens[0], tokens[1], tokens.slice(2).join(' ')]
+            : tokens
+        }
+      }
+
       if (cells.length >= 2) {
         parsed.push({
           name: cells[0] || '',
@@ -1355,12 +1391,12 @@ export function CallListManagement({ userId }: { userId: string }) {
                   <Textarea
                     value={pasteText}
                     onChange={e => handlePasteChange(e.target.value)}
-                    placeholder={"Paste data here. Each line = one candidate.\n\nSupported formats:\n\u2022 Tab-separated (copied from Excel/Sheets)\n\u2022 Comma-separated (CSV)\n\nColumn order: Name, Phone, Role, Location, Company\n\nExample:\nJohn Doe\t9876543210\tDeveloper\tBangalore\tAcme\nJane Smith\t9876543211\tDesigner\tMumbai\tBeta"}
+                    placeholder={"Paste data here. Each line = one candidate.\n\nSupported formats:\n\u2022 Tab-separated (copied from Excel/Sheets)\n\u2022 Comma-separated (CSV)\n\u2022 Space-separated (2+ spaces between fields)\n\nColumn order: Name, Phone, Role, Location, Company\n\nExamples:\nJohn Doe\t9876543210\tDeveloper\tBangalore\tAcme\nJane Smith,9876543211,Designer,Mumbai,Beta\nRahul Kumar  9876543212  Manager  Delhi  XYZ"}
                     rows={8}
                     className="font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Paste from Excel, Google Sheets, or any tab/comma-separated source. First two columns must be <strong>Name</strong> and <strong>Phone</strong>.
+                    Paste from Excel, Google Sheets, or any tab/comma/space-separated source. First two columns must be <strong>Name</strong> and <strong>Phone</strong>.
                   </p>
                 </div>
 
@@ -1411,17 +1447,32 @@ export function CallListManagement({ userId }: { userId: string }) {
           </div>
 
           <DialogFooter className="pt-2 border-t">
-            <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false) }}>Cancel</Button>
-            <Button
-              onClick={createTab === 'manual' ? handleCreateWithManual : handleCreateWithPaste}
-              disabled={saving || !name || (createTab === 'manual' ? !manualEntries.some(e => e.name.trim() && e.phone.trim()) : pasteParsed.length === 0)}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              {saving ? 'Creating...' : createTab === 'manual'
-                ? `Create with ${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
-                : `Create with ${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
-              }
-            </Button>
+            <div className="flex flex-col gap-2 w-full">
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false) }}>Cancel</Button>
+                <Button
+                  onClick={createTab === 'manual' ? handleCreateWithManual : handleCreateWithPaste}
+                  disabled={saving || !name || (createTab === 'manual' ? !manualEntries.some(e => e.name.trim() && e.phone.trim()) : pasteParsed.length === 0)}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {saving ? 'Creating...' : createTab === 'manual'
+                    ? `Create with ${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
+                    : `Create with ${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
+                  }
+                </Button>
+              </div>
+              {/* Show helpful hints when button is disabled */}
+              {!saving && (createTab === 'paste' ? pasteParsed.length > 0 && !name : manualEntries.some(e => e.name.trim() && e.phone.trim()) && !name) && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ Please enter a <strong>List Name</strong> above to enable the create button.
+                </p>
+              )}
+              {!saving && (createTab === 'paste' ? pasteParsed.length === 0 && pasteText.trim() : !manualEntries.some(e => e.name.trim() && e.phone.trim())) && name && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ No valid candidates detected. Ensure each line has <strong>Name</strong> and <strong>Phone</strong> (tab, comma, or multi-space separated).
+                </p>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
