@@ -576,3 +576,24 @@ Stage Summary:
 - Templates now have mandatory channel separation
 - Dialer no longer has overlapping elements on phone/tablet
 - ~20 dead code items removed improving bundle size and runtime performance
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Add Pending Count & Done Count to Calling List for Super Admin & Corporate Admin
+
+Work Log:
+- Analyzed screenshot showing current Calling List page state (2 lists: "Test" with 2 candidates, "Sahibabad Tele Calling" with 85 candidates)
+- Identified that "Test" list showed "0 pending, 0 done" while "Sahibabad Tele Calling" showed NO pending/done counts at all
+- Root cause: Admin `call-list-management.tsx` interface `CallList` had `candidates: Array<{ id: string }>` — missing `status` field
+- API `/api/call-lists/route.ts` already returns `{ id: true, status: true }` for candidates — no API change needed
+- Updated `CallList` interface: `candidates: Array<{ id: string; status: string }>`
+- Added count calculation in card rendering: `done` (status=DONE), `scheduled` (status=SCHEDULED), `pending` (total - done - scheduled)
+- Added color-coded badges consistent with recruiter calling-list-view: amber for pending, emerald for done, blue for scheduled
+- Lint passed clean, compilation successful
+
+Stage Summary:
+- File modified: `src/components/admin/call-list-management.tsx` (interface + card rendering)
+- No API changes required — API already returns candidate status
+- Pending/Done/Scheduled counts now display for ALL calling lists on the admin page
+- Badge styling matches recruiter view for visual consistency across roles

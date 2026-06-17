@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from 'react'
+     4→import { PageHeader } from '@/components/shared/page-header'
+     5→import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+     6→import { EmptyState } from '@/components/shared/empty-state'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Skeleton } from '@/components/ui/skeleton'
+    12→import { Textarea } from '@/components/ui/textarea'
+    13→import { Checkbox } from '@/components/ui/checkbox'
+    14→import { Separator } from '@/components/ui/separator'
+    15→import { Switch } from '@/components/ui/switch'
+    16→import {
+    17→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+    18→} from '@/components/ui/dialog'
+    19→import {
+    20→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    21→} from '@/components/ui/select'
+    22→import { Alert, AlertDescription } from '@/components/ui/alert'
+    23→import {
+    24→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+    25→} from '@/components/ui/dropdown-menu'
+    26→import {
+    27→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    28→} from '@/components/ui/table'
+    29→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    30→import {
+    31→  PhoneCall, Plus, Trash2, Users, Eye, FileSpreadsheet, Pencil, FileText,
+    32→  UserPlus, ClipboardPaste, GripVertical, Link, RefreshCw, Globe, Loader2,
+    33→  GitMerge, Copy, Search, MoreVertical, AlertTriangle, Upload,
+    34→} from 'lucide-react'
+    35→import Papa from 'papaparse'
+    36→import * as XLSX from 'xlsx'
+    37→import { toast } from 'sonner'
+    38→import { authFetch } from '@/stores/auth-store'
+    39→import { format, formatDistanceToNow } from 'date-fns'
+    40→import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
+    41→
+    42→interface CallList {
+    43→  id: string
+    44→  name: string
+    45→  description: string | null
+    46→  source: string
+    47→  createdBy: string
+    48→  createdAt: string
+    49→  googleSheetsUrl: string | null
+    50→  googleSheetGid: string | null
+    51→  syncInterval: number
+    52→  lastSyncedAt: string | null
+    53→  candidates: Array<{ id: string }>
+    54→  assignments: Array<{ recruiter: { id: string; name: string; email: string } }>
+    55→}
+    56→
+    57→interface Candidate {
+    58→  id: string
+    59→  name: string
+    60→  phone: string
+    61→  email: string | null
+    62→  role: string | null
+    63→  location: string | null
+    64→  company: string | null
+    65→  status: string
+    66→}
+    67→
+    68→interface User {
+    69→  id: string
+    70→  name: string
+    71→  email: string
+    72→  isActive: boolean
+    73→}
+    74→
+    75→interface ManualEntry {
+    76→  name: string
+    77→  phone: string
+    78→  email: string
+    79→  role: string
+    80→  location: string
+    81→  company: string
+    82→  notes: string
+    83→}
+    84→
+    85→interface DuplicateGroup {
+    86→  phone: string
+    87→  count: number
+    88→  candidateIds: string[]
+    89→}
+    90→
+    91→const columnFields = [
+    92→  { value: 'name', label: 'Name' },
+    93→  { value: 'phone', label: 'Phone' },
+    94→  { value: 'email', label: 'Email' },
+    95→  { value: 'role', label: 'Role' },
+    96→  { value: 'location', label: 'Location' },
+    97→  { value: 'company', label: 'Company' },
+    98→]
+    99→
+   100→const gsColumnFields = [
+   101→  { value: 'name', label: 'Name' },
+   102→  { value: 'phone', label: 'Phone' },
+   103→  { value: 'role', label: 'Role' },
+   104→  { value: 'location', label: 'Location' },
+   105→]
+   106→
+   107→const emptyManualEntry = (): ManualEntry => ({
+   108→  name: '', phone: '', email: '', role: '', location: '', company: '', notes: '',
+   109→})
+   110→
+   111→export function CallListManagement({ userId }: { userId: string }) {
+   112→  const [callLists, setCallLists] = useState<CallList[]>([])
+   113→  const [recruiters, setRecruiters] = useState<User[]>([])
+   114→  const [loading, setLoading] = useState(true)
+   115→  const [createOpen, setCreateOpen] = useState(false)
+   116→  const [candidatesOpen, setCandidatesOpen] = useState(false)
+   117→  const [assignOpen, setAssignOpen] = useState(false)
+   118→  const [uploadOpen, setUploadOpen] = useState(false)
+   119→  const [confirmDelete, setConfirmDelete] = useState<CallList | null>(null)
+   120→  const [selectedList, setSelectedList] = useState<CallList | null>(null)
+   121→  const [selectedRecruiters, setSelectedRecruiters] = useState<string[]>([])
+   122→
+   123→  // Edit state
+   124→  const [editOpen, setEditOpen] = useState(false)
+   125→  const [editList, setEditList] = useState<CallList | null>(null)
+   126→  const [editName, setEditName] = useState('')
+   127→  const [editDescription, setEditDescription] = useState('')
+   128→
+   129→  // Create form
+   130→  const [name, setName] = useState('')
+   131→  const [description, setDescription] = useState('')
+   132→  const [saving, setSaving] = useState(false)
+   133→  const [editSaving, setEditSaving] = useState(false)
+   134→
+   135→  // Create tab state
+   136→  const [createTab, setCreateTab] = useState<'manual' | 'paste'>('manual')
+   137→
+   138→  // Manual entry state
+   139→  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([emptyManualEntry()])
+   140→
+   141→  // Copy-paste state
+   142→  const [pasteText, setPasteText] = useState('')
+   143→  const [pasteParsed, setPasteParsed] = useState<ManualEntry[]>([])
+   144→  const [pasteColumns, setPasteColumns] = useState<string[]>([])
+   145→
+   146→  // Upload state
+   147→  const [parsedData, setParsedData] = useState<Record<string, string>[]>([])
+   148→  const [csvColumns, setCsvColumns] = useState<string[]>([])
+   149→  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({})
+   150→  const [uploadSource, setUploadSource] = useState<string>('CSV')
+   151→  const fileInputRef = useRef<HTMLInputElement>(null)
+   152→  const xlsxInputRef = useRef<HTMLInputElement>(null)
+   153→
+   154→  // Google Sheets state
+   155→  const [gsOpen, setGsOpen] = useState(false)
+   156→  const [gsUrl, setGsUrl] = useState('')
+   157→  const [gsGid, setGsGid] = useState('0')
+   158→  const [gsFetching, setGsFetching] = useState(false)
+   159→  const [gsColumns, setGsColumns] = useState<string[]>([])
+   160→  const [gsRows, setGsRows] = useState<Record<string, string>[]>([])
+   161→  const [gsMapping, setGsMapping] = useState<Record<string, string>>({})
+   162→  const [gsAutoSync, setGsAutoSync] = useState(false)
+   163→  const [gsSyncInterval, setGsSyncInterval] = useState('30') // minutes
+   164→  const [gsSyncing, setGsSyncing] = useState<string | null>(null) // callListId being synced
+   165→
+   166→  // ─── New feature states ───
+   167→  // Merge list state
+   168→  const [mergeOpen, setMergeOpen] = useState(false)
+   169→  const [mergeSourceListId, setMergeSourceListId] = useState('')
+   170→  const [mergeMode, setMergeMode] = useState<'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES'>('SKIP_DUPLICATES')
+   171→  const [keepOldNotes, setKeepOldNotes] = useState(true)
+   172→  const [merging, setMerging] = useState(false)
+   173→
+   174→  // Bulk actions state
+   175→  const [addNumbersOpen, setAddNumbersOpen] = useState(false)
+   176→  const [addNumbersTab, setAddNumbersTab] = useState<'manual' | 'paste'>('manual')
+   177→  const [addNumbersEntries, setAddNumbersEntries] = useState<ManualEntry[]>([emptyManualEntry()])
+   178→  const [addNumbersSaving, setAddNumbersSaving] = useState(false)
+   179→  const [addNumbersPasteText, setAddNumbersPasteText] = useState('')
+   180→  const [addNumbersPasteParsed, setAddNumbersPasteParsed] = useState<ManualEntry[]>([])
+   181→  const [updateStatusOpen, setUpdateStatusOpen] = useState(false)
+   182→  const [updateStatusIds, setUpdateStatusIds] = useState<string[]>([])
+   183→  const [newStatus, setNewStatus] = useState('PENDING')
+   184→  const [updateStatusSaving, setUpdateStatusSaving] = useState(false)
+   185→  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([])
+   186→
+   187→  // Candidate filter state
+   188→  const [filterRole, setFilterRole] = useState('')
+   189→  const [filterLocation, setFilterLocation] = useState('')
+   190→  const [filterStatus, setFilterStatus] = useState('')
+   191→  const [searchQuery, setSearchQuery] = useState('')
+   192→  const [deleteFilteredConfirm, setDeleteFilteredConfirm] = useState(false)
+   193→  const [deleteFilteredSaving, setDeleteFilteredSaving] = useState(false)
+   194→
+   195→  // ─── Server-side pagination state ───
+   196→  const [totalCount, setTotalCount] = useState(0)
+   197→  const [currentPage, setCurrentPage] = useState(1)
+   198→  const [totalPages, setTotalPages] = useState(0)
+   199→  const [pageSize, setPageSize] = useState(50)
+   200→  const [loadingMore, setLoadingMore] = useState(false)
+   201→  const sentinelRef = useRef<HTMLDivElement>(null)
+   202→
+   203→  // ─── List-level search ───
+   204→  const [listSearchQuery, setListSearchQuery] = useState('')
+   205→  const [debouncedListSearch, setDebouncedListSearch] = useState('')
+   206→
+   207→  // ─── Fetched candidate details (for candidates dialog) ───
+   208→  const [candidateDetails, setCandidateDetails] = useState<Candidate[]>([])
+   209→  const [candidateDetailsLoading, setCandidateDetailsLoading] = useState(false)
+   210→
+   211→  // Deduplicate state
+   212→  const [dedupOpen, setDedupOpen] = useState(false)
+   213→  const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([])
+   214→  const [dedupLoading, setDedupLoading] = useState(false)
+   215→
+   216→  // Import more state
+   217→  const [importMoreOpen, setImportMoreOpen] = useState(false)
+   218→  const [importMoreParsedData, setImportMoreParsedData] = useState<Record<string, string>[]>([])
+   219→  const [importMoreCsvColumns, setImportMoreCsvColumns] = useState<string[]>([])
+   220→  const [importMoreColumnMapping, setImportMoreColumnMapping] = useState<Record<string, string>>({})
+   221→  const importMoreFileRef = useRef<HTMLInputElement>(null)
+   222→
+   223→  const fetchCallLists = useCallback(async (page = 1, limit = 50, searchVal = '', append = false) => {
+   224→    try {
+   225→      if (append) {
+   226→        setLoadingMore(true)
+   227→      } else {
+   228→        setLoading(true)
+   229→      }
+   230→      const params = new URLSearchParams()
+   231→      params.set('page', String(page))
+   232→      params.set('limit', String(limit))
+   233→      if (searchVal) params.set('search', searchVal)
+   234→
+   235→      const res = await authFetch(`/api/call-lists?${params.toString()}`)
+   236→      if (!res.ok) throw new Error()
+   237→      const json = await res.json()
+   238→      if (append) {
+   239→        setCallLists(prev => [...prev, ...(json.callLists || [])])
+   240→      } else {
+   241→        setCallLists(json.callLists || [])
+   242→      }
+   243→      setTotalCount(json.totalCount || 0)
+   244→      setCurrentPage(json.page || page)
+   245→      setTotalPages(json.totalPages || 1)
+   246→    } catch { toast.error('Failed to load calling lists') }
+   247→    finally { setLoading(false); setLoadingMore(false) }
+   248→  }, [])
+   249→
+   250→  const fetchRecruiters = useCallback(async () => {
+   251→    try {
+   252→      const res = await authFetch('/api/users')
+   253→      if (!res.ok) return
+   254→      const json = await res.json()
+   255→      setRecruiters(json.users || [])
+   256→    } catch { /* ignore */ }
+   257→  }, [])
+   258→
+   259→  // ─── Debounced list search ───
+   260→  useEffect(() => {
+   261→    const timer = setTimeout(() => {
+   262→      setDebouncedListSearch(listSearchQuery.trim())
+   263→    }, 300)
+   264→    return () => clearTimeout(timer)
+   265→  }, [listSearchQuery])
+   266→
+   267→  // Initial load + refetch when search or page size changes
+   268→  useEffect(() => {
+   269→    setCurrentPage(1)
+   270→    setCallLists([])
+   271→    fetchCallLists(1, pageSize, debouncedListSearch)
+   272→    fetchRecruiters()
+   273→  }, [debouncedListSearch, pageSize, fetchCallLists, fetchRecruiters])
+   274→
+   275→  // ─── Infinite Scroll ───
+   276→  const hasMore = currentPage < totalPages && callLists.length < totalCount
+   277→
+   278→  const loadMoreFn = () => {
+   279→    if (loadingMore || !hasMore) return
+   280→    fetchCallLists(currentPage + 1, pageSize, debouncedListSearch, true)
+   281→  }
+   282→
+   283→  const loadMoreRef = useRef(loadMoreFn)
+   284→  loadMoreRef.current = loadMoreFn
+   285→
+   286→  useEffect(() => {
+   287→    const el = sentinelRef.current
+   288→    if (!el) return
+   289→    const observer = new IntersectionObserver(
+   290→      (entries) => {
+   291→        if (entries[0].isIntersecting) {
+   292→          loadMoreRef.current()
+   293→        }
+   294→      },
+   295→      { threshold: 0.1 }
+   296→    )
+   297→    observer.observe(el)
+   298→    return () => observer.disconnect()
+   299→  }, [])
+   300→
+   301→  // ─── Fetch full candidate details for a list (for candidates dialog) ───
+   302→  const fetchListCandidates = useCallback(async (listId: string) => {
+   303→    setCandidateDetailsLoading(true)
+   304→    try {
+   305→      const res = await authFetch(`/api/call-lists/${listId}/candidates`)
+   306→      if (!res.ok) throw new Error()
+   307→      const json = await res.json()
+   308→      setCandidateDetails(json.candidates || [])
+   309→    } catch {
+   310→      toast.error('Failed to load candidates')
+   311→      setCandidateDetails([])
+   312→    } finally {
+   313→      setCandidateDetailsLoading(false)
+   314→    }
+   315→  }, [])
+   316→
+   317→  // ─── Google Sheets auto-sync useEffect ───
+   318→  useEffect(() => {
+   319→    if (callLists.length === 0) return
+   320→    const gsLists = callLists.filter(l => l.source === 'GOOGLE_SHEETS' && l.syncInterval > 0)
+   321→    if (gsLists.length === 0) return
+   322→
+   323→    const minInterval = Math.min(...gsLists.map(l => l.syncInterval))
+   324→    const intervalMs = minInterval * 60 * 1000
+   325→
+   326→    const syncAll = async () => {
+   327→      for (const list of gsLists) {
+   328→        try {
+   329→          await authFetch(`/api/call-lists/${list.id}/sync`, { method: 'POST' })
+   330→        } catch { /* silent */ }
+   331→      }
+   332→      fetchCallLists(1, pageSize, debouncedListSearch)
+   333→    }
+   334→
+   335→    const timer = setInterval(syncAll, intervalMs)
+   336→    return () => clearInterval(timer)
+   337→  }, [callLists, fetchCallLists, pageSize, debouncedListSearch])
+   338→
+   339→  // ─── Manual Entry helpers ───
+   340→  const updateManualEntry = (index: number, field: keyof ManualEntry, value: string) => {
+   341→    setManualEntries(prev => {
+   342→      const updated = [...prev]
+   343→      updated[index] = { ...updated[index], [field]: value }
+   344→      return updated
+   345→    })
+   346→  }
+   347→
+   348→  const addManualRow = () => {
+   349→    setManualEntries(prev => [...prev, emptyManualEntry()])
+   350→  }
+   351→
+   352→  const removeManualRow = (index: number) => {
+   353→    if (manualEntries.length <= 1) return
+   354→    setManualEntries(prev => prev.filter((_, i) => i !== index))
+   355→  }
+   356→
+   357→  const handleCreateWithManual = async () => {
+   358→    if (!name) { toast.error('Name is required'); return }
+   359→    const valid = manualEntries.filter(e => e.name.trim() && e.phone.trim())
+   360→    if (valid.length === 0) { toast.error('Add at least one candidate with name and phone'); return }
+   361→
+   362→    const candidates = valid.map(e => ({
+   363→      name: e.name.trim(),
+   364→      phone: e.phone.trim(),
+   365→      email: null,
+   366→      role: e.role.trim() || null,
+   367→      location: e.location.trim() || null,
+   368→      company: e.company.trim() || null,
+   369→    }))
+   370→
+   371→    setSaving(true)
+   372→    try {
+   373→      const res = await authFetch('/api/call-lists', {
+   374→        method: 'POST',
+   375→        headers: { 'Content-Type': 'application/json' },
+   376→        body: JSON.stringify({ name, description, source: 'MANUAL', createdBy: userId, candidates }),
+   377→      })
+   378→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   379→      toast.success(`Calling list created with ${candidates.length} candidates`)
+   380→      setCreateOpen(false)
+   381→      resetCreateForm()
+   382→      fetchCallLists(1, pageSize, debouncedListSearch)
+   383→    } catch { toast.error('Something went wrong') }
+   384→    finally { setSaving(false) }
+   385→  }
+   386→
+   387→  // ─── Copy-Paste helpers ───
+   388→  const parsePasteInput = (text: string) => {
+   389→    if (!text.trim()) { setPasteParsed([]); setPasteColumns([]); return }
+   390→
+   391→    const lines = text.trim().split(/\r?\n/)
+   392→    const parsed: ManualEntry[] = []
+   393→
+   394→    for (const line of lines) {
+   395→      if (!line.trim()) continue
+   396→
+   397→      // Strategy 1: Tab-separated (Excel/Sheets copy) — most reliable
+   398→      // Strategy 2: Comma-separated (CSV)
+   399→      // Strategy 3: Multi-space separated (2+ spaces between fields)
+   400→      // Strategy 4: Single-space with phone detection — find first token that
+   401→      //   looks like a phone number (6+ digits) and split name/phone there
+   402→      let cells: string[]
+   403→
+   404→      if (line.includes('\t')) {
+   405→        cells = line.split('\t').map(c => c.trim())
+   406→      } else if (line.includes(',')) {
+   407→        cells = line.split(',').map(c => c.trim())
+   408→      } else if (/  /.test(line)) {
+   409→        // Multi-space: split on 2+ spaces
+   410→        cells = line.split(/  +/).map(c => c.trim())
+   411→      } else {
+   412→        // Single-space: detect phone boundary (first token that is 6+ digits)
+   413→        const tokens = line.split(/\s+/)
+   414→        const phoneIdx = tokens.findIndex(t => /^\d{6,15}$/.test(t.replace(/[\-+()]/g, '')))
+   415→        if (phoneIdx > 0) {
+   416→          // Everything before phone = name, phone = phone, rest = role/location/company
+   417→          const name = tokens.slice(0, phoneIdx).join(' ')
+   418→          const phone = tokens[phoneIdx]
+   419→          const rest = tokens.slice(phoneIdx + 1)
+   420→          cells = [name, phone, rest[0] || '', rest[1] || '', rest.slice(2).join(' ') || '']
+   421→        } else if (phoneIdx === 0) {
+   422→          // Phone is first token — use as-is (no name)
+   423→          const rest = tokens.slice(1)
+   424→          cells = [tokens[0], rest[0] || '', rest[1] || '', rest[2] || '', rest.slice(3).join(' ') || '']
+   425→        } else {
+   426→          // No phone detected — treat first token as name, second as phone (best effort)
+   427→          cells = tokens.length >= 2
+   428→            ? [tokens[0], tokens[1], tokens.slice(2).join(' ')]
+   429→            : tokens
+   430→        }
+   431→      }
+   432→
+   433→      if (cells.length >= 2) {
+   434→        parsed.push({
+   435→          name: cells[0] || '',
+   436→          phone: cells[1] || '',
+   437→          role: cells[2] || '',
+   438→          location: cells[3] || '',
+   439→          company: cells[4] || '',
+   440→        })
+   441→      }
+   442→    }
+   443→
+   444→    setPasteParsed(parsed)
+   445→    setPasteColumns(parsed.length > 0 ? Object.keys(parsed[0]) : [])
+   446→  }
+   447→
+   448→  const handlePasteChange = (value: string) => {
+   449→    setPasteText(value)
+   450→    parsePasteInput(value)
+   451→  }
+   452→
+   453→  const handleCreateWithPaste = async () => {
+   454→    if (!name) { toast.error('Name is required'); return }
+   455→    const valid = pasteParsed.filter(e => e.name.trim() && e.phone.trim())
+   456→    if (valid.length === 0) { toast.error('No valid candidates found. Ensure each line has Name, Phone (tab or comma separated).'); return }
+   457→
+   458→    const seen = new Set<string>()
+   459→    const unique: ManualEntry[] = []
+   460→    for (const entry of valid) {
+   461→      const phone = entry.phone.trim()
+   462→      if (!seen.has(phone)) {
+   463→        seen.add(phone)
+   464→        unique.push(entry)
+   465→      }
+   466→    }
+   467→
+   468→    const candidates = unique.map(e => ({
+   469→      name: e.name.trim(),
+   470→      phone: e.phone.trim(),
+   471→      email: null,
+   472→      role: e.role.trim() || null,
+   473→      location: e.location.trim() || null,
+   474→      company: e.company.trim() || null,
+   475→    }))
+   476→
+   477→    setSaving(true)
+   478→    try {
+   479→      const res = await authFetch('/api/call-lists', {
+   480→        method: 'POST',
+   481→        headers: { 'Content-Type': 'application/json' },
+   482→        body: JSON.stringify({ name, description, source: 'COPY_PASTE', createdBy: userId, candidates }),
+   483→      })
+   484→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   485→      const dupes = valid.length - unique.length
+   486→      toast.success(`Calling list created with ${candidates.length} candidates${dupes > 0 ? ` (${dupes} duplicates removed)` : ''}`)
+   487→      setCreateOpen(false)
+   488→      resetCreateForm()
+   489→      fetchCallLists(1, pageSize, debouncedListSearch)
+   490→    } catch { toast.error('Something went wrong') }
+   491→    finally { setSaving(false) }
+   492→  }
+   493→
+   494→  const resetCreateForm = () => {
+   495→    setName('')
+   496→    setDescription('')
+   497→    setManualEntries([emptyManualEntry()])
+   498→    setPasteText('')
+   499→    setPasteParsed([])
+   500→    setPasteColumns([])
+   501→  }
+   502→
+   503→  const handleCreateOpen = (tab?: 'manual' | 'paste') => {
+   504→    resetCreateForm()
+   505→    setCreateTab(tab || 'manual')
+   506→    setCreateOpen(true)
+   507→  }
+   508→
+   509→  // ─── Delete ───
+   510→  const handleDelete = async () => {
+   511→    if (!confirmDelete) return
+   512→    const listId = confirmDelete.id
+   513→    const listName = confirmDelete.name
+   514→    setConfirmDelete(null)
+   515→    try {
+   516→      const res = await authFetch(`/api/call-lists/${listId}`, { method: 'DELETE' })
+   517→      if (!res.ok) {
+   518→        const data = await res.json().catch(() => ({}))
+   519→        toast.error(data.error || `Failed to delete "${listName}"`)
+   520→        return
+   521→      }
+   522→      toast.success(`"${listName}" deleted successfully`)
+   523→      fetchCallLists(1, pageSize, debouncedListSearch)
+   524→    } catch {
+   525→      toast.error('Something went wrong while deleting')
+   526→    }
+   527→  }
+   528→
+   529→  // ─── CSV / XLSX upload ───
+   530→  const autoDetectMapping = (cols: string[]) => {
+   531→    const mapping: Record<string, string> = {}
+   532→    cols.forEach(col => {
+   533→      const lower = col.toLowerCase()
+   534→      if (lower.includes('name') && !lower.includes('client') && !lower.includes('company')) mapping[col] = 'name'
+   535→      else if (lower.includes('phone') || lower.includes('mobile') || lower.includes('number')) mapping[col] = 'phone'
+   536→      else if (lower.includes('email') || lower.includes('mail')) mapping[col] = 'email'
+   537→      else if (lower.includes('role') || lower.includes('position') || lower.includes('title') || lower.includes('job')) mapping[col] = 'role'
+   538→      else if (lower.includes('location') || lower.includes('city') || lower.includes('place')) mapping[col] = 'location'
+   539→      else if (lower.includes('company') || lower.includes('org') || lower.includes('employer')) mapping[col] = 'company'
+   540→    })
+   541→    return mapping
+   542→  }
+   543→
+   544→  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   545→    const file = e.target.files?.[0]
+   546→    if (!file) return
+   547→    setUploadSource('CSV')
+   548→
+   549→    Papa.parse(file, {
+   550→      header: true,
+   551→      skipEmptyLines: true,
+   552→      complete: (results) => {
+   553→        const cols = results.meta.fields || []
+   554→        setCsvColumns(cols)
+   555→        setParsedData(results.data as Record<string, string>[])
+   556→        setColumnMapping(autoDetectMapping(cols))
+   557→        toast.success(`Parsed ${results.data.length} rows from CSV`)
+   558→      },
+   559→      error: () => toast.error('Failed to parse CSV file'),
+   560→    })
+   561→  }
+   562→
+   563→  const handleXLSXUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   564→    const file = e.target.files?.[0]
+   565→    if (!file) return
+   566→    setUploadSource('XLSX')
+   567→
+   568→    const reader = new FileReader()
+   569→    reader.onload = (evt) => {
+   570→      try {
+   571→        const data = new Uint8Array(evt.target?.result as ArrayBuffer)
+   572→        const workbook = XLSX.read(data, { type: 'array' })
+   573→        const firstSheetName = workbook.SheetNames[0]
+   574→        if (!firstSheetName) { toast.error('The workbook has no sheets'); return }
+   575→        const worksheet = workbook.Sheets[firstSheetName]
+   576→        const jsonData = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { defval: '' })
+   577→
+   578→        if (jsonData.length === 0) { toast.error('The sheet is empty'); return }
+   579→
+   580→        const cols = Object.keys(jsonData[0])
+   581→        setCsvColumns(cols)
+   582→        setParsedData(jsonData)
+   583→        setColumnMapping(autoDetectMapping(cols))
+   584→
+   585→        const sheetCount = workbook.SheetNames.length
+   586→        toast.success(`Parsed ${jsonData.length} rows from ${file.name}${sheetCount > 1 ? ` (Sheet: ${firstSheetName}, ${sheetCount} sheets total)` : ''}`)
+   587→      } catch { toast.error('Failed to parse XLS/XLSX file') }
+   588→    }
+   589→    reader.onerror = () => toast.error('Failed to read file')
+   590→    reader.readAsArrayBuffer(file)
+   591→  }
+   592→
+   593→  const handleImportCSV = async () => {
+   594→    if (parsedData.length === 0) { toast.error('No data to import'); return }
+   595→    if (!name) { toast.error('Enter a name for the calling list'); return }
+   596→
+   597→    const seen = new Set<string>()
+   598→    const uniqueData = parsedData.filter(row => {
+   599→      const phone = String(row[columnMapping.phone] || '').trim()
+   600→      if (!phone || seen.has(phone)) return false
+   601→      seen.add(phone)
+   602→      return true
+   603→    })
+   604→
+   605→    const candidates = uniqueData.map(row => ({
+   606→      name: columnMapping.name && columnMapping.name !== 'SKIP' ? String(row[columnMapping.name] || '').trim() : '',
+   607→      phone: columnMapping.phone && columnMapping.phone !== 'SKIP' ? String(row[columnMapping.phone] || '').trim() : '',
+   608→      email: columnMapping.email && columnMapping.email !== 'SKIP' ? String(row[columnMapping.email] || '').trim() || null : null,
+   609→      role: columnMapping.role && columnMapping.role !== 'SKIP' ? String(row[columnMapping.role] || '').trim() || null : null,
+   610→      location: columnMapping.location && columnMapping.location !== 'SKIP' ? String(row[columnMapping.location] || '').trim() || null : null,
+   611→      company: columnMapping.company && columnMapping.company !== 'SKIP' ? String(row[columnMapping.company] || '').trim() || null : null,
+   612→    })).filter(c => c.name && c.phone)
+   613→
+   614→    if (candidates.length === 0) { toast.error('No valid candidates found. Check your column mapping.'); return }
+   615→
+   616→    setSaving(true)
+   617→    try {
+   618→      const res = await authFetch('/api/call-lists', {
+   619→        method: 'POST',
+   620→        headers: { 'Content-Type': 'application/json' },
+   621→        body: JSON.stringify({ name, description, source: uploadSource, createdBy: userId, candidates }),
+   622→      })
+   623→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   624→      toast.success(`Imported ${candidates.length} candidates (${parsedData.length - uniqueData.length} duplicates removed)`)
+   625→      setUploadOpen(false)
+   626→      setName('')
+   627→      setDescription('')
+   628→      setParsedData([])
+   629→      setCsvColumns([])
+   630→      setColumnMapping({})
+   631→      fetchCallLists(1, pageSize, debouncedListSearch)
+   632→    } catch { toast.error('Something went wrong') }
+   633→    finally { setSaving(false) }
+   634→  }
+   635→
+   636→  // ─── Google Sheets ───
+   637→  const handleGsOpen = () => {
+   638→    setGsUrl('')
+   639→    setGsGid('0')
+   640→    setGsFetching(false)
+   641→    setGsColumns([])
+   642→    setGsRows([])
+   643→    setGsMapping({})
+   644→    setGsAutoSync(false)
+   645→    setGsSyncInterval('30')
+   646→    setName('')
+   647→    setDescription('')
+   648→    setGsOpen(true)
+   649→  }
+   650→
+   651→  const handleGsClose = () => {
+   652→    setGsUrl('')
+   653→    setGsGid('0')
+   654→    setGsFetching(false)
+   655→    setGsColumns([])
+   656→    setGsRows([])
+   657→    setGsMapping({})
+   658→    setGsAutoSync(false)
+   659→    setGsSyncInterval('30')
+   660→    setGsOpen(false)
+   661→  }
+   662→
+   663→  const handleGsFetch = async () => {
+   664→    if (!gsUrl.trim()) { toast.error('Please enter a Google Sheets URL'); return }
+   665→    setGsFetching(true)
+   666→    try {
+   667→      const res = await authFetch('/api/google-sheets/fetch', {
+   668→        method: 'POST',
+   669→        headers: { 'Content-Type': 'application/json' },
+   670→        body: JSON.stringify({ url: gsUrl.trim(), gid: gsGid.trim() || '0' }),
+   671→      })
+   672→      const json = await res.json()
+   673→      if (!res.ok || !json.success) {
+   674→        toast.error(json.error || 'Failed to fetch Google Sheet')
+   675→        return
+   676→      }
+   677→      setGsColumns(json.columns || [])
+   678→      setGsRows(json.rows || [])
+   679→      setGsMapping(autoDetectMapping(json.columns || []))
+   680→      toast.success(`Fetched ${json.rows?.length || 0} rows from Google Sheet`)
+   681→    } catch {
+   682→      toast.error('Failed to fetch Google Sheet. Check the URL and try again.')
+   683→    } finally {
+   684→      setGsFetching(false)
+   685→    }
+   686→  }
+   687→
+   688→  const handleGsImport = async () => {
+   689→    if (gsRows.length === 0) { toast.error('No data to import'); return }
+   690→    if (!name) { toast.error('Enter a name for the calling list'); return }
+   691→
+   692→    const seen = new Set<string>()
+   693→    const uniqueData = gsRows.filter(row => {
+   694→      const phone = String(row[gsMapping.phone] || '').trim()
+   695→      if (!phone || seen.has(phone)) return false
+   696→      seen.add(phone)
+   697→      return true
+   698→    })
+   699→
+   700→    const candidates = uniqueData.map(row => ({
+   701→      name: gsMapping.name ? String(row[gsMapping.name] || '').trim() : '',
+   702→      phone: gsMapping.phone ? String(row[gsMapping.phone] || '').trim() : '',
+   703→      role: gsMapping.role ? String(row[gsMapping.role] || '').trim() || null : null,
+   704→      location: gsMapping.location ? String(row[gsMapping.location] || '').trim() || null : null,
+   705→    })).filter(c => c.name && c.phone)
+   706→
+   707→    if (candidates.length === 0) { toast.error('No valid candidates found. Check your column mapping.'); return }
+   708→
+   709→    setSaving(true)
+   710→    try {
+   711→      const res = await authFetch('/api/call-lists', {
+   712→        method: 'POST',
+   713→        headers: { 'Content-Type': 'application/json' },
+   714→        body: JSON.stringify({
+   715→          name,
+   716→          description,
+   717→          source: 'GOOGLE_SHEETS',
+   718→          createdBy: userId,
+   719→          candidates,
+   720→          googleSheetsUrl: gsUrl.trim(),
+   721→          googleSheetGid: gsGid.trim() || '0',
+   722→          syncInterval: gsAutoSync ? Number(gsSyncInterval) : 0,
+   723→        }),
+   724→      })
+   725→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   726→      toast.success(`Imported ${candidates.length} candidates from Google Sheets (${gsRows.length - uniqueData.length} duplicates removed)`)
+   727→      handleGsClose()
+   728→      fetchCallLists(1, pageSize, debouncedListSearch)
+   729→    } catch { toast.error('Something went wrong') }
+   730→    finally { setSaving(false) }
+   731→  }
+   732→
+   733→  const handleGsSync = async (listId: string) => {
+   734→    setGsSyncing(listId)
+   735→    try {
+   736→      const res = await authFetch(`/api/call-lists/${listId}/sync`, { method: 'POST' })
+   737→      const json = await res.json()
+   738→      if (!res.ok || !json.success) {
+   739→        toast.error(json.error || 'Sync failed')
+   740→        return
+   741→      }
+   742→      toast.success(`Sync complete: ${json.created} created, ${json.updated} updated (${json.total} total)`)
+   743→      fetchCallLists(1, pageSize, debouncedListSearch)
+   744→    } catch {
+   745→      toast.error('Failed to sync')
+   746→    } finally {
+   747→      setGsSyncing(null)
+   748→    }
+   749→  }
+   750→
+   751→  // ─── Merge List ───
+   752→  const openMergeDialog = () => {
+   753→    setMergeSourceListId('')
+   754→    setMergeMode('SKIP_DUPLICATES')
+   755→    setKeepOldNotes(true)
+   756→    setMergeOpen(true)
+   757→  }
+   758→
+   759→  const handleMerge = async () => {
+   760→    if (!selectedList || !mergeSourceListId) { toast.error('Please select a source list'); return }
+   761→    setMerging(true)
+   762→    try {
+   763→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/merge`, {
+   764→        method: 'POST',
+   765→        headers: { 'Content-Type': 'application/json' },
+   766→        body: JSON.stringify({ sourceListId: mergeSourceListId, mergeMode, keepOldNotes }),
+   767→      })
+   768→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed to merge'); return }
+   769→      const result = await res.json()
+   770→      toast.success(`Merge complete: ${result.added} added, ${result.skipped} skipped, ${result.replaced} replaced (${result.total} total)`)
+   771→      setMergeOpen(false)
+   772→      fetchCallLists(1, pageSize, debouncedListSearch)
+   773→    } catch { toast.error('Something went wrong') }
+   774→    finally { setMerging(false) }
+   775→  }
+   776→
+   777→  // ─── Add Numbers Paste helpers ───
+   778→  const parseAddNumbersPaste = (text: string) => {
+   779→    if (!text.trim()) { setAddNumbersPasteParsed([]); return }
+   780→    const lines = text.trim().split(/\r?\n/)
+   781→    const parsed: ManualEntry[] = []
+   782→    for (const line of lines) {
+   783→      if (!line.trim()) continue
+   784→      const cells = line.split(/\t|,/).map(c => c.trim())
+   785→      if (cells.length >= 2) {
+   786→        parsed.push({ name: cells[0] || '', phone: cells[1] || '', role: cells[2] || '', location: cells[3] || '', company: cells[4] || '', email: '', notes: '' })
+   787→      }
+   788→    }
+   789→    setAddNumbersPasteParsed(parsed)
+   790→  }
+   791→
+   792→  const handleAddNumbersPaste = async () => {
+   793→    if (!selectedList) return
+   794→    const valid = addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim())
+   795→    if (valid.length === 0) { toast.error('No valid candidates. Ensure each line has Name,Phone (tab/comma separated)'); return }
+   796→
+   797→    setAddNumbersSaving(true)
+   798→    try {
+   799→      const seen = new Set<string>()
+   800→      const unique = valid.filter(e => { const p = e.phone.trim(); if (seen.has(p)) return false; seen.add(p); return true })
+   801→      const candidates = unique.map(e => ({
+   802→        name: e.name.trim(), phone: e.phone.trim(),
+   803→        role: e.role.trim() || undefined, location: e.location.trim() || undefined,
+   804→        company: e.company.trim() || undefined,
+   805→      }))
+   806→
+   807→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+   808→        method: 'POST',
+   809→        headers: { 'Content-Type': 'application/json' },
+   810→        body: JSON.stringify({ action: 'ADD', data: { candidates } }),
+   811→      })
+   812→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   813→      const json = await res.json()
+   814→      const dupes = valid.length - unique.length
+   815→      toast.success(`${json.count} candidates added${dupes > 0 ? ` (${dupes} duplicates skipped)` : ''}`)
+   816→      setAddNumbersOpen(false)
+   817→      setAddNumbersPasteText('')
+   818→      setAddNumbersPasteParsed([])
+   819→      fetchCallLists(1, pageSize, debouncedListSearch)
+   820→    } catch { toast.error('Something went wrong') }
+   821→    finally { setAddNumbersSaving(false) }
+   822→  }
+   823→
+   824→  // ─── Add Numbers (bulk add to existing list) ───
+   825→  const updateAddNumberEntry = (index: number, field: keyof ManualEntry, value: string) => {
+   826→    setAddNumbersEntries(prev => {
+   827→      const updated = [...prev]
+   828→      updated[index] = { ...updated[index], [field]: value }
+   829→      return updated
+   830→    })
+   831→  }
+   832→
+   833→  const addAddNumberRow = () => {
+   834→    setAddNumbersEntries(prev => [...prev, emptyManualEntry()])
+   835→  }
+   836→
+   837→  const removeAddNumberRow = (index: number) => {
+   838→    if (addNumbersEntries.length <= 1) return
+   839→    setAddNumbersEntries(prev => prev.filter((_, i) => i !== index))
+   840→  }
+   841→
+   842→  const handleAddNumbers = async () => {
+   843→    if (!selectedList) return
+   844→    const valid = addNumbersEntries.filter(e => e.name.trim() && e.phone.trim())
+   845→    if (valid.length === 0) { toast.error('Add at least one candidate with name and phone'); return }
+   846→
+   847→    setAddNumbersSaving(true)
+   848→    try {
+   849→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+   850→        method: 'POST',
+   851→        headers: { 'Content-Type': 'application/json' },
+   852→        body: JSON.stringify({
+   853→          action: 'ADD',
+   854→          data: {
+   855→            candidates: valid.map(e => ({
+   856→              name: e.name.trim(),
+   857→              phone: e.phone.trim(),
+   858→              email: e.email.trim() || undefined,
+   859→              role: e.role.trim() || undefined,
+   860→              location: e.location.trim() || undefined,
+   861→              company: e.company.trim() || undefined,
+   862→              notes: e.notes.trim() || undefined,
+   863→            })),
+   864→          },
+   865→        }),
+   866→      })
+   867→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   868→      const json = await res.json()
+   869→      toast.success(`${json.count} candidates added`)
+   870→      setAddNumbersOpen(false)
+   871→      setAddNumbersEntries([emptyManualEntry()])
+   872→      fetchCallLists(1, pageSize, debouncedListSearch)
+   873→    } catch { toast.error('Something went wrong') }
+   874→    finally { setAddNumbersSaving(false) }
+   875→  }
+   876→
+   877→  // ─── Delete by Filter helpers ───
+   878→  const getFilteredCandidates = () => {
+   879→    if (!selectedList) return []
+   880→    const query = searchQuery.trim().toLowerCase()
+   881→    return candidateDetails.filter(c => {
+   882→      if (filterRole && (c.role || '').toLowerCase() !== filterRole.toLowerCase()) return false
+   883→      if (filterLocation && (c.location || '').toLowerCase() !== filterLocation.toLowerCase()) return false
+   884→      if (filterStatus && c.status !== filterStatus) return false
+   885→      if (query) {
+   886→        const haystack = `${c.name} ${c.phone} ${c.role || ''} ${c.location || ''} ${c.email || ''}`.toLowerCase()
+   887→        if (!haystack.includes(query)) return false
+   888→      }
+   889→      return true
+   890→    })
+   891→  }
+   892→
+   893→  const getUniqueValues = (field: 'role' | 'location' | 'status') => {
+   894→    if (!selectedList) return []
+   895→    const values = new Set(candidateDetails.map(c => c[field]).filter(Boolean) as string[])
+   896→    return Array.from(values).sort()
+   897→  }
+   898→
+   899→  const clearFilters = () => {
+   900→    setFilterRole('')
+   901→    setFilterLocation('')
+   902→    setFilterStatus('')
+   903→    setSearchQuery('')
+   904→  }
+   905→
+   906→  const hasActiveFilters = !!(filterRole || filterLocation || filterStatus || searchQuery.trim())
+   907→
+   908→  const handleDeleteFiltered = async () => {
+   909→    if (!selectedList) return
+   910→    const filtered = getFilteredCandidates()
+   911→    if (filtered.length === 0) { toast.error('No candidates match the current filters'); return }
+   912→
+   913→    setDeleteFilteredSaving(true)
+   914→    try {
+   915→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+   916→        method: 'POST',
+   917→        headers: { 'Content-Type': 'application/json' },
+   918→        body: JSON.stringify({ action: 'DELETE', candidateIds: filtered.map(c => c.id) }),
+   919→      })
+   920→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   921→      const json = await res.json()
+   922→      toast.success(`${json.count} filtered candidates removed`)
+   923→      setDeleteFilteredConfirm(false)
+   924→      setSelectedCandidateIds([])
+   925→      clearFilters()
+   926→      fetchCallLists(1, pageSize, debouncedListSearch)
+   927→    } catch { toast.error('Something went wrong') }
+   928→    finally { setDeleteFilteredSaving(false) }
+   929→  }
+   930→
+   931→  // ─── Bulk Delete Selected ───
+   932→  const handleBulkDelete = async () => {
+   933→    if (!selectedList || selectedCandidateIds.length === 0) { toast.error('No candidates selected'); return }
+   934→    try {
+   935→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+   936→        method: 'POST',
+   937→        headers: { 'Content-Type': 'application/json' },
+   938→        body: JSON.stringify({ action: 'DELETE', candidateIds: selectedCandidateIds }),
+   939→      })
+   940→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   941→      const json = await res.json()
+   942→      toast.success(`${json.count} candidates removed`)
+   943→      setSelectedCandidateIds([])
+   944→      fetchCallLists(1, pageSize, debouncedListSearch)
+   945→    } catch { toast.error('Something went wrong') }
+   946→  }
+   947→
+   948→  // ─── Bulk Update Status ───
+   949→  const openUpdateStatusDialog = () => {
+   950→    if (selectedCandidateIds.length === 0) { toast.error('Select candidates first'); return }
+   951→    setUpdateStatusIds([...selectedCandidateIds])
+   952→    setNewStatus('PENDING')
+   953→    setUpdateStatusOpen(true)
+   954→  }
+   955→
+   956→  const handleUpdateStatus = async () => {
+   957→    if (!selectedList) return
+   958→    setUpdateStatusSaving(true)
+   959→    try {
+   960→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+   961→        method: 'POST',
+   962→        headers: { 'Content-Type': 'application/json' },
+   963→        body: JSON.stringify({ action: 'UPDATE_STATUS', candidateIds: updateStatusIds, data: { status: newStatus } }),
+   964→      })
+   965→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+   966→      const json = await res.json()
+   967→      toast.success(`${json.count} candidates updated to ${newStatus}`)
+   968→      setUpdateStatusOpen(false)
+   969→      setSelectedCandidateIds([])
+   970→      fetchCallLists(1, pageSize, debouncedListSearch)
+   971→    } catch { toast.error('Something went wrong') }
+   972→    finally { setUpdateStatusSaving(false) }
+   973→  }
+   974→
+   975→  // ─── Deduplicate ───
+   976→  const openDedupDialog = async () => {
+   977→    if (!selectedList) return
+   978→    setDuplicates([])
+   979→    setDedupLoading(true)
+   980→    setDedupOpen(true)
+   981→    try {
+   982→      const res = await authFetch(`/api/call-lists/${selectedList.id}/deduplicate`, {
+   983→        method: 'POST',
+   984→        headers: { 'Content-Type': 'application/json' },
+   985→        body: JSON.stringify({ action: 'LIST' }),
+   986→      })
+   987→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); setDedupOpen(false); return }
+   988→      const json = await res.json()
+   989→      setDuplicates(json.duplicates || [])
+   990→    } catch { toast.error('Something went wrong') }
+   991→    finally { setDedupLoading(false) }
+   992→  }
+   993→
+   994→  const handleRemoveDuplicates = async () => {
+   995→    if (!selectedList) return
+   996→    try {
+   997→      const res = await authFetch(`/api/call-lists/${selectedList.id}/deduplicate`, {
+   998→        method: 'POST',
+   999→        headers: { 'Content-Type': 'application/json' },
+  1000→        body: JSON.stringify({ action: 'REMOVE' }),
+  1001→      })
+  1002→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+  1003→      const json = await res.json()
+  1004→      toast.success(`${json.removed} duplicate candidates removed`)
+  1005→      setDedupOpen(false)
+  1006→      setDuplicates([])
+  1007→      fetchCallLists(1, pageSize, debouncedListSearch)
+  1008→    } catch { toast.error('Something went wrong') }
+  1009→  }
+  1010→
+  1011→  // ─── Import More (add to existing list) ───
+  1012→  const openImportMoreDialog = () => {
+  1013→    setImportMoreParsedData([])
+  1014→    setImportMoreCsvColumns([])
+  1015→    setImportMoreColumnMapping({})
+  1016→    setImportMoreOpen(true)
+  1017→  }
+  1018→
+  1019→  const handleImportMoreUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  1020→    const file = e.target.files?.[0]
+  1021→    if (!file) return
+  1022→
+  1023→    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+  1024→      const reader = new FileReader()
+  1025→      reader.onload = (evt) => {
+  1026→        try {
+  1027→          const data = new Uint8Array(evt.target?.result as ArrayBuffer)
+  1028→          const workbook = XLSX.read(data, { type: 'array' })
+  1029→          const firstSheetName = workbook.SheetNames[0]
+  1030→          if (!firstSheetName) { toast.error('The workbook has no sheets'); return }
+  1031→          const worksheet = workbook.Sheets[firstSheetName]
+  1032→          const jsonData = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { defval: '' })
+  1033→          if (jsonData.length === 0) { toast.error('The sheet is empty'); return }
+  1034→          const cols = Object.keys(jsonData[0])
+  1035→          setImportMoreCsvColumns(cols)
+  1036→          setImportMoreParsedData(jsonData)
+  1037→          setImportMoreColumnMapping(autoDetectMapping(cols))
+  1038→          toast.success(`Parsed ${jsonData.length} rows from Excel`)
+  1039→        } catch { toast.error('Failed to parse Excel file') }
+  1040→      }
+  1041→      reader.readAsArrayBuffer(file)
+  1042→    } else {
+  1043→      Papa.parse(file, {
+  1044→        header: true,
+  1045→        skipEmptyLines: true,
+  1046→        complete: (results) => {
+  1047→          const cols = results.meta.fields || []
+  1048→          setImportMoreCsvColumns(cols)
+  1049→          setImportMoreParsedData(results.data as Record<string, string>[])
+  1050→          setImportMoreColumnMapping(autoDetectMapping(cols))
+  1051→          toast.success(`Parsed ${results.data.length} rows from CSV`)
+  1052→        },
+  1053→        error: () => toast.error('Failed to parse CSV file'),
+  1054→      })
+  1055→    }
+  1056→  }
+  1057→
+  1058→  const handleImportMore = async () => {
+  1059→    if (!selectedList || importMoreParsedData.length === 0) { toast.error('No data to import'); return }
+  1060→
+  1061→    const candidates = importMoreParsedData.map(row => ({
+  1062→      name: importMoreColumnMapping.name ? String(row[importMoreColumnMapping.name] || '').trim() : '',
+  1063→      phone: importMoreColumnMapping.phone ? String(row[importMoreColumnMapping.phone] || '').trim() : '',
+  1064→      email: importMoreColumnMapping.email ? String(row[importMoreColumnMapping.email] || '').trim() || undefined : undefined,
+  1065→      role: importMoreColumnMapping.role ? String(row[importMoreColumnMapping.role] || '').trim() || undefined : undefined,
+  1066→      location: importMoreColumnMapping.location ? String(row[importMoreColumnMapping.location] || '').trim() || undefined : undefined,
+  1067→      company: importMoreColumnMapping.company ? String(row[importMoreColumnMapping.company] || '').trim() || undefined : undefined,
+  1068→    })).filter(c => c.name && c.phone)
+  1069→
+  1070→    if (candidates.length === 0) { toast.error('No valid candidates found. Check your column mapping.'); return }
+  1071→
+  1072→    setAddNumbersSaving(true)
+  1073→    try {
+  1074→      const res = await authFetch(`/api/call-lists/${selectedList.id}/candidates/bulk`, {
+  1075→        method: 'POST',
+  1076→        headers: { 'Content-Type': 'application/json' },
+  1077→        body: JSON.stringify({ action: 'ADD', data: { candidates } }),
+  1078→      })
+  1079→      if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
+  1080→      const json = await res.json()
+  1081→      toast.success(`${json.count} candidates imported into "${selectedList.name}"`)
+  1082→      setImportMoreOpen(false)
+  1083→      setImportMoreParsedData([])
+  1084→      setImportMoreCsvColumns([])
+  1085→      setImportMoreColumnMapping({})
+  1086→      fetchCallLists(1, pageSize, debouncedListSearch)
+  1087→    } catch { toast.error('Something went wrong') }
+  1088→    finally { setAddNumbersSaving(false) }
+  1089→  }
+  1090→
+  1091→  // ─── Assign ───
+  1092→  const openAssignDialog = (list: CallList) => {
+  1093→    setSelectedList(list)
+  1094→    setSelectedRecruiters(list.assignments.map(a => a.recruiter.id))
+  1095→    setAssignOpen(true)
+  1096→  }
+  1097→
+  1098→  const handleAssign = async () => {
+  1099→    if (!selectedList) return
+  1100→    try {
+  1101→      const res = await authFetch(`/api/call-lists/${selectedList.id}/assign`, {
+  1102→        method: 'POST',
+  1103→        headers: { 'Content-Type': 'application/json' },
+  1104→        body: JSON.stringify({ recruiterIds: selectedRecruiters }),
+  1105→      })
+  1106→      if (!res.ok) { toast.error('Failed to assign'); return }
+  1107→      toast.success('Recruiters assigned')
+  1108→      setAssignOpen(false)
+  1109→      fetchCallLists(1, pageSize, debouncedListSearch)
+  1110→    } catch { toast.error('Something went wrong') }
+  1111→  }
+  1112→
+  1113→  const toggleRecruiter = (id: string) => {
+  1114→    setSelectedRecruiters(prev =>
+  1115→      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+  1116→    )
+  1117→  }
+  1118→
+  1119→  // ─── Edit ───
+  1120→  const openEditDialog = (list: CallList) => {
+  1121→    setEditList(list)
+  1122→    setEditName(list.name)
+  1123→    setEditDescription(list.description || '')
+  1124→    setEditOpen(true)
+  1125→  }
+  1126→
+  1127→  const handleEditSave = async () => {
+  1128→    if (!editList || !editName) return
+  1129→    setEditSaving(true)
+  1130→    try {
+  1131→      const res = await authFetch(`/api/call-lists/${editList.id}`, {
+  1132→        method: 'PUT',
+  1133→        headers: { 'Content-Type': 'application/json' },
+  1134→        body: JSON.stringify({ name: editName, description: editDescription }),
+  1135→      })
+  1136→      if (!res.ok) { toast.error('Failed to update calling list'); return }
+  1137→      toast.success('Calling list updated')
+  1138→      setEditOpen(false)
+  1139→      fetchCallLists(1, pageSize, debouncedListSearch)
+  1140→    } catch { toast.error('Something went wrong') }
+  1141→    finally { setEditSaving(false) }
+  1142→  }
+  1143→
+  1144→  const sourceColors: Record<string, string> = {
+  1145→    MANUAL: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  1146→    COPY_PASTE: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+  1147→    CSV: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+  1148→    XLSX: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
+  1149→    GOOGLE_SHEETS: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+  1150→  }
+  1151→
+  1152→  const sourceLabels: Record<string, string> = {
+  1153→    MANUAL: 'Manual',
+  1154→    COPY_PASTE: 'Copy-Paste',
+  1155→    CSV: 'CSV',
+  1156→    XLSX: 'XLS/XLSX',
+  1157→    GOOGLE_SHEETS: 'Google Sheets',
+  1158→  }
+  1159→
+  1160→  const formatSyncInterval = (minutes: number): string => {
+  1161→    if (minutes >= 1440) return `${minutes / 1440} day${minutes / 1440 !== 1 ? 's' : ''}`
+  1162→    if (minutes >= 60) return `${minutes / 60} hour${minutes / 60 !== 1 ? 's' : ''}`
+  1163→    return `${minutes} min`
+  1164→  }
+  1165→
+  1166→  return (
+  1167→    <div>
+  1168→      <PageHeader title="Calling List Management" description="Manage candidate lists for calling" icon={PhoneCall}>
+  1169→        <Button variant="outline" onClick={() => { setName(''); setDescription(''); setUploadSource('CSV'); setUploadOpen(true) }}>
+  1170→          <FileText className="h-4 w-4 mr-2" /> Import CSV
+  1171→        </Button>
+  1172→        <Button variant="outline" onClick={() => { setName(''); setDescription(''); setUploadSource('XLSX'); setUploadOpen(true) }}>
+  1173→          <FileSpreadsheet className="h-4 w-4 mr-2" /> Import XLS/XLSX
+  1174→        </Button>
+  1175→        <Button variant="outline" onClick={handleGsOpen}>
+  1176→          <Globe className="h-4 w-4 mr-2" /> Google Sheets
+  1177→        </Button>
+  1178→        <Button onClick={() => handleCreateOpen('manual')} className="bg-emerald-600 hover:bg-emerald-700">
+  1179→          <Plus className="h-4 w-4 mr-2" /> Create List (Manual)
+  1180→        </Button>
+  1181→      </PageHeader>
+  1182→
+  1183→      {/* Search bar */}
+  1184→      <div className="relative max-w-sm mb-4">
+  1185→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1186→        <Input
+  1187→          placeholder="Search calling lists..."
+  1188→          value={listSearchQuery}
+  1189→          onChange={(e) => setListSearchQuery(e.target.value)}
+  1190→          className="pl-9"
+  1191→        />
+  1192→      </div>
+  1193→
+  1194→      {loading ? (
+  1195→        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
+  1196→      ) : callLists.length === 0 ? (
+  1197→        <EmptyState icon={PhoneCall} title="No calling lists" description="Create or import a calling list to get started" actionLabel="Create List" onAction={() => handleCreateOpen('manual')} />
+  1198→      ) : (
+  1199→        <div className="space-y-3">
+  1200→          {callLists.map(list => {
+  1201→            const total = list.candidates?.length || 0
+  1202→            return (
+  1203→              <div key={list.id} className="rounded-lg border p-4 hover:shadow-sm transition-shadow">
+  1204→                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  1205→                  <div className="min-w-0 flex-1">
+  1206→                    <div className="flex items-center gap-2 mb-1">
+  1207→                      <h3 className="font-semibold truncate">{list.name}</h3>
+  1208→                      <Badge className={sourceColors[list.source] || ''}>{sourceLabels[list.source] || list.source}</Badge>
+  1209→                      {list.source === 'GOOGLE_SHEETS' && (
+  1210→                        <Badge variant="outline" className="text-xs">
+  1211→                          Auto-sync: {list.syncInterval > 0 ? `every ${formatSyncInterval(list.syncInterval)}` : 'disabled'}
+  1212→                        </Badge>
+  1213→                      )}
+  1214→                    </div>
+  1215→                    {list.description && <p className="text-sm text-muted-foreground truncate">{list.description}</p>}
+  1216→                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
+  1217→                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {total} candidates</span>
+  1218→                      <span>Created {format(new Date(list.createdAt), 'MMM dd, yyyy')}</span>
+  1219→                      {list.source === 'GOOGLE_SHEETS' && list.lastSyncedAt && (
+  1220→                        <span className="text-blue-500">Last synced: {formatDistanceToNow(new Date(list.lastSyncedAt), { addSuffix: true })}</span>
+  1221→                      )}
+  1222→                    </div>
+  1223→                    {list.assignments.length > 0 && (
+  1224→                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+  1225→                        <span className="text-xs text-muted-foreground">Assigned:</span>
+  1226→                        {list.assignments.map(a => (
+  1227→                          <Badge key={a.recruiter.id} variant="secondary" className="text-xs">{a.recruiter.name}</Badge>
+  1228→                        ))}
+  1229→                      </div>
+  1230→                    )}
+  1231→                  </div>
+  1232→                  <div className="flex items-center gap-1 shrink-0">
+  1233→                    <Button variant="ghost" size="sm" onClick={() => { setSelectedList(list); fetchListCandidates(list.id); setCandidatesOpen(true) }}>
+  1234→                      <Eye className="h-4 w-4 mr-1" /> View
+  1235→                    </Button>
+  1236→                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(list)}>
+  1237→                      <Pencil className="h-4 w-4 mr-1" /> Edit
+  1238→                    </Button>
+  1239→                    {list.source === 'GOOGLE_SHEETS' && (
+  1240→                      <Button
+  1241→                        variant="ghost"
+  1242→                        size="sm"
+  1243→                        onClick={() => handleGsSync(list.id)}
+  1244→                        disabled={gsSyncing === list.id}
+  1245→                      >
+  1246→                        {gsSyncing === list.id
+  1247→                          ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+  1248→                          : <RefreshCw className="h-4 w-4 mr-1" />
+  1249→                        }
+  1250→                        Sync
+  1251→                      </Button>
+  1252→                    )}
+  1253→                    <Button variant="ghost" size="sm" onClick={() => openAssignDialog(list)}>
+  1254→                      <Users className="h-4 w-4 mr-1" /> Assign
+  1255→                    </Button>
+  1256→                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => setConfirmDelete(list)}>
+  1257→                      <Trash2 className="h-4 w-4" />
+  1258→                    </Button>
+  1259→                  </div>
+  1260→                </div>
+  1261→              </div>
+  1262→            )
+  1263→          })}
+  1264→
+  1265→          {/* Sentinel for infinite scroll */}
+  1266→          <div ref={sentinelRef} className="h-1" />
+  1267→
+  1268→          {/* Infinite scroll loader */}
+  1269→          <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && callLists.length > 0} />
+  1270→
+  1271→          {/* Pagination controls */}
+  1272→          <PaginationControls
+  1273→            totalCount={totalCount}
+  1274→            displayedCount={callLists.length}
+  1275→            currentPage={currentPage}
+  1276→            totalPages={totalPages}
+  1277→            pageSize={pageSize}
+  1278→            pageSizeOptions={[50, 100]}
+  1279→            onPageSizeChange={(newSize) => {
+  1280→              setPageSize(newSize)
+  1281→              setCurrentPage(1)
+  1282→              setCallLists([])
+  1283→            }}
+  1284→            onLoadMore={loadMoreFn}
+  1285→            loadingMore={loadingMore}
+  1286→            loading={loading}
+  1287→            hasMore={hasMore}
+  1288→          />
+  1289→        </div>
+  1290→      )}
+  1291→
+  1292→      {/* ═══════════ Create List Dialog (Manual Entry + Copy-Paste) ═══════════ */}
+  1293→      <Dialog open={createOpen} onOpenChange={(open) => { if (!open) resetCreateForm(); setCreateOpen(open) }}>
+  1294→        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
+  1295→          <DialogHeader><DialogTitle>Create Calling List</DialogTitle></DialogHeader>
+  1296→
+  1297→          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
+  1298→            {/* Shared: list name & description */}
+  1299→            <div className="space-y-3">
+  1300→              <div className="space-y-2">
+  1301→                <Label>List Name *</Label>
+  1302→                <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Tech Hiring - July 2025" />
+  1303→              </div>
+  1304→              <div className="space-y-2">
+  1305→                <Label>Description</Label>
+  1306→                <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" rows={2} />
+  1307→              </div>
+  1308→            </div>
+  1309→
+  1310→            <Separator />
+  1311→
+  1312→            {/* Tabs: Manual Entry / Copy-Paste */}
+  1313→            <Tabs value={createTab} onValueChange={(v) => setCreateTab(v as 'manual' | 'paste')} className="w-full">
+  1314→              <TabsList className="w-full">
+  1315→                <TabsTrigger value="manual" className="flex-1 gap-1.5">
+  1316→                  <UserPlus className="h-4 w-4" /> Manual Entry
+  1317→                </TabsTrigger>
+  1318→                <TabsTrigger value="paste" className="flex-1 gap-1.5">
+  1319→                  <ClipboardPaste className="h-4 w-4" /> Copy-Paste Input
+  1320→                </TabsTrigger>
+  1321→              </TabsList>
+  1322→
+  1323→              {/* ─── Manual Entry Tab ─── */}
+  1324→              <TabsContent value="manual" className="mt-4 space-y-3">
+  1325→                <div className="flex items-center justify-between">
+  1326→                  <p className="text-sm text-muted-foreground">Add candidates one by one</p>
+  1327→                  <div className="flex items-center gap-2">
+  1328→                    <Badge variant="secondary" className="text-xs">{manualEntries.filter(e => e.name.trim() && e.phone.trim()).length} valid</Badge>
+  1329→                    <Button variant="outline" size="sm" onClick={addManualRow}>
+  1330→                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
+  1331→                    </Button>
+  1332→                  </div>
+  1333→                </div>
+  1334→
+  1335→                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+  1336→                  {manualEntries.map((entry, index) => (
+  1337→                    <div key={index} className="flex items-start gap-2 p-3 rounded-lg border bg-muted/30">
+  1338→                      <div className="flex items-center justify-center pt-2 text-muted-foreground">
+  1339→                        <GripVertical className="h-4 w-4" />
+  1340→                      </div>
+  1341→                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+  1342→                        <div className="space-y-1">
+  1343→                          <Label className="text-xs">Name *</Label>
+  1344→                          <Input value={entry.name} onChange={e => updateManualEntry(index, 'name', e.target.value)} placeholder="Full name" className="h-8 text-sm" />
+  1345→                        </div>
+  1346→                        <div className="space-y-1">
+  1347→                          <Label className="text-xs">Phone *</Label>
+  1348→                          <Input value={entry.phone} onChange={e => updateManualEntry(index, 'phone', e.target.value)} placeholder="Phone number" className="h-8 text-sm" />
+  1349→                        </div>
+  1350→                        <div className="space-y-1">
+  1351→                          <Label className="text-xs">Role</Label>
+  1352→                          <Input value={entry.role} onChange={e => updateManualEntry(index, 'role', e.target.value)} placeholder="Job role" className="h-8 text-sm" />
+  1353→                        </div>
+  1354→                        <div className="space-y-1">
+  1355→                          <Label className="text-xs">Location</Label>
+  1356→                          <Input value={entry.location} onChange={e => updateManualEntry(index, 'location', e.target.value)} placeholder="City" className="h-8 text-sm" />
+  1357→                        </div>
+  1358→                        <div className="space-y-1">
+  1359→                          <Label className="text-xs">Company</Label>
+  1360→                          <Input value={entry.company} onChange={e => updateManualEntry(index, 'company', e.target.value)} placeholder="Company name" className="h-8 text-sm" />
+  1361→                        </div>
+  1362→                      </div>
+  1363→                      <Button
+  1364→                        variant="ghost"
+  1365→                        size="sm"
+  1366→                        className="mt-1 text-muted-foreground hover:text-red-600 shrink-0"
+  1367→                        onClick={() => removeManualRow(index)}
+  1368→                        disabled={manualEntries.length <= 1}
+  1369→                      >
+  1370→                        <Trash2 className="h-4 w-4" />
+  1371→                      </Button>
+  1372→                    </div>
+  1373→                  ))}
+  1374→                </div>
+  1375→              </TabsContent>
+  1376→
+  1377→              {/* ─── Copy-Paste Input Tab ─── */}
+  1378→              <TabsContent value="paste" className="mt-4 space-y-3">
+  1379→                <div className="space-y-2">
+  1380→                  <div className="flex items-center justify-between">
+  1381→                    <Label>Paste Data</Label>
+  1382→                    <Button
+  1383→                      variant="ghost"
+  1384→                      size="sm"
+  1385→                      className="text-xs text-muted-foreground"
+  1386→                      onClick={() => { setPasteText(''); setPasteParsed([]); setPasteColumns([]) }}
+  1387→                    >
+  1388→                      Clear
+  1389→                    </Button>
+  1390→                  </div>
+  1391→                  <Textarea
+  1392→                    value={pasteText}
+  1393→                    onChange={e => handlePasteChange(e.target.value)}
+  1394→                    placeholder={"Paste data here. Each line = one candidate.\n\nSupported formats:\n\u2022 Tab-separated (copied from Excel/Sheets)\n\u2022 Comma-separated (CSV)\n\u2022 Space-separated (2+ spaces between fields)\n\nColumn order: Name, Phone, Role, Location, Company\n\nExamples:\nJohn Doe\t9876543210\tDeveloper\tBangalore\tAcme\nJane Smith,9876543211,Designer,Mumbai,Beta\nRahul Kumar  9876543212  Manager  Delhi  XYZ"}
+  1395→                    rows={8}
+  1396→                    className="font-mono text-sm"
+  1397→                  />
+  1398→                  <p className="text-xs text-muted-foreground">
+  1399→                    Paste from Excel, Google Sheets, or any tab/comma/space-separated source. First two columns must be <strong>Name</strong> and <strong>Phone</strong>.
+  1400→                  </p>
+  1401→                </div>
+  1402→
+  1403→                {pasteParsed.length > 0 && (
+  1404→                  <>
+  1405→                    <Separator />
+  1406→                    <div className="space-y-2">
+  1407→                      <div className="flex items-center justify-between">
+  1408→                        <Label className="text-sm font-semibold">
+  1409→                          Preview ({pasteParsed.length} {pasteParsed.length === 1 ? 'row' : 'rows'} parsed)
+  1410→                        </Label>
+  1411→                        <Badge variant="secondary" className="text-xs">
+  1412→                          {pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} valid
+  1413→                        </Badge>
+  1414→                      </div>
+  1415→                      <div className="rounded-md border overflow-x-auto max-h-48">
+  1416→                        <Table>
+  1417→                          <TableHeader>
+  1418→                            <TableRow>
+  1419→                              <TableHead className="text-xs">#</TableHead>
+  1420→                              <TableHead className="text-xs">Name</TableHead>
+  1421→                              <TableHead className="text-xs">Phone</TableHead>
+  1422→                              <TableHead className="text-xs hidden sm:table-cell">Role</TableHead>
+  1423→                              <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
+  1424→                            </TableRow>
+  1425→                          </TableHeader>
+  1426→                          <TableBody>
+  1427→                            {pasteParsed.slice(0, 10).map((row, i) => (
+  1428→                              <TableRow key={i}>
+  1429→                                <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+  1430→                                <TableCell className="text-xs font-medium">{row.name || <span className="text-red-500">Missing</span>}</TableCell>
+  1431→                                <TableCell className="text-xs">{row.phone || <span className="text-red-500">Missing</span>}</TableCell>
+  1432→                                <TableCell className="text-xs hidden sm:table-cell">{row.role || '-'}</TableCell>
+  1433→                                <TableCell className="text-xs hidden lg:table-cell">{row.location || '-'}</TableCell>
+  1434→                              </TableRow>
+  1435→                            ))}
+  1436→                          </TableBody>
+  1437→                        </Table>
+  1438→                      </div>
+  1439→                      {pasteParsed.length > 10 && (
+  1440→                        <p className="text-xs text-muted-foreground">... and {pasteParsed.length - 10} more rows</p>
+  1441→                      )}
+  1442→                    </div>
+  1443→                  </>
+  1444→                )}
+  1445→              </TabsContent>
+  1446→            </Tabs>
+  1447→          </div>
+  1448→
+  1449→          <DialogFooter className="pt-2 border-t">
+  1450→            <div className="flex flex-col gap-2 w-full">
+  1451→              <div className="flex items-center gap-3">
+  1452→                <Button variant="outline" onClick={() => { resetCreateForm(); setCreateOpen(false) }}>Cancel</Button>
+  1453→                <Button
+  1454→                  onClick={createTab === 'manual' ? handleCreateWithManual : handleCreateWithPaste}
+  1455→                  disabled={saving || !name || (createTab === 'manual' ? !manualEntries.some(e => e.name.trim() && e.phone.trim()) : pasteParsed.length === 0)}
+  1456→                  className="bg-emerald-600 hover:bg-emerald-700"
+  1457→                >
+  1458→                  {saving ? 'Creating...' : createTab === 'manual'
+  1459→                    ? `Create with ${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${manualEntries.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
+  1460→                    : `Create with ${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} Candidate${pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length !== 1 ? 's' : ''}`
+  1461→                  }
+  1462→                </Button>
+  1463→              </div>
+  1464→              {/* Show helpful hints when button is disabled */}
+  1465→              {!saving && (createTab === 'paste' ? pasteParsed.length > 0 && !name : manualEntries.some(e => e.name.trim() && e.phone.trim()) && !name) && (
+  1466→                <p className="text-xs text-amber-600 dark:text-amber-400">
+  1467→                  ⚠ Please enter a <strong>List Name</strong> above to enable the create button.
+  1468→                </p>
+  1469→              )}
+  1470→              {!saving && (createTab === 'paste' ? pasteParsed.length === 0 && pasteText.trim() : !manualEntries.some(e => e.name.trim() && e.phone.trim())) && name && (
+  1471→                <p className="text-xs text-amber-600 dark:text-amber-400">
+  1472→                  ⚠ No valid candidates detected. Ensure each line has <strong>Name</strong> and <strong>Phone</strong> (tab, comma, or multi-space separated).
+  1473→                </p>
+  1474→              )}
+  1475→            </div>
+  1476→          </DialogFooter>
+  1477→        </DialogContent>
+  1478→      </Dialog>
+  1479→
+  1480→      {/* ═══════════ Upload Dialog (CSV / XLSX) ═══════════ */}
+  1481→      <Dialog open={uploadOpen} onOpenChange={(open) => { setUploadOpen(open); if (!open) { setParsedData([]); setCsvColumns([]); setColumnMapping({}); setUploadSource('CSV') } }}>
+  1482→        <DialogContent className="max-w-2xl max-h-[90vh]">
+  1483→          <DialogHeader>
+  1484→            <DialogTitle className="flex items-center gap-2">
+  1485→              {uploadSource === 'XLSX' ? <FileSpreadsheet className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+  1486→              Import from {uploadSource === 'XLSX' ? 'XLS/XLSX' : 'CSV'}
+  1487→            </DialogTitle>
+  1488→          </DialogHeader>
+  1489→          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
+  1490→            <div className="space-y-2"><Label>List Name *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Name for this calling list" /></div>
+  1491→            <div className="space-y-2"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" rows={2} /></div>
+  1492→            <div className="space-y-2">
+  1493→              <Label>Upload {uploadSource === 'XLSX' ? 'Excel' : 'CSV'} File</Label>
+  1494→              {uploadSource === 'XLSX' ? (
+  1495→                <Input ref={xlsxInputRef} type="file" accept=".xls,.xlsx" onChange={handleXLSXUpload} />
+  1496→              ) : (
+  1497→                <Input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVUpload} />
+  1498→              )}
+  1499→              <p className="text-xs text-muted-foreground">
+  1500→                {uploadSource === 'XLSX'
+  1501→                  ? 'Supports .xls and .xlsx files. First sheet will be used. Headers must be in the first row.'
+  1502→                  : 'Supports .csv files with headers in the first row.'
+  1503→                }
+  1504→              </p>
+  1505→            </div>
+  1506→
+  1507→            {csvColumns.length > 0 && (
+  1508→              <>
+  1509→                <Separator />
+  1510→                <div className="space-y-2">
+  1511→                  <Label className="text-sm font-semibold">Column Mapping ({parsedData.length} rows)</Label>
+  1512→                  <div className="grid gap-2">
+  1513→                    {columnFields.map(field => (
+  1514→                      <div key={field.value} className="flex items-center gap-2">
+  1515→                        <Label className="w-24 text-sm shrink-0">{field.label}</Label>
+  1516→                        <select
+  1517→                          value={columnMapping[field.value] || ''}
+  1518→                          onChange={(e) => setColumnMapping(prev => ({ ...prev, [field.value]: e.target.value }))}
+  1519→                          className="flex-1 h-9 px-3 rounded-md border border-input bg-transparent text-sm"
+  1520→                        >
+  1521→                          <option value="">Select column</option>
+  1522→                          <option value="SKIP" className="text-muted-foreground">— Skip —</option>
+  1523→                          {csvColumns.map(col => (
+  1524→                            <option key={col} value={col}>{col}</option>
+  1525→                          ))}
+  1526→                        </select>
+  1527→                      </div>
+  1528→                    ))}
+  1529→                  </div>
+  1530→                </div>
+  1531→
+  1532→                <Separator />
+  1533→                <div className="space-y-2">
+  1534→                  <Label className="text-sm font-semibold">Preview (first 5 rows)</Label>
+  1535→                  <div className="rounded-md border overflow-x-auto max-h-48">
+  1536→                    <Table>
+  1537→                      <TableHeader>
+  1538→                        <TableRow>
+  1539→                          {csvColumns.map(col => <TableHead key={col} className="text-xs whitespace-nowrap">{col}</TableHead>)}
+  1540→                        </TableRow>
+  1541→                      </TableHeader>
+  1542→                      <TableBody>
+  1543→                        {parsedData.slice(0, 5).map((row, i) => (
+  1544→                          <TableRow key={i}>
+  1545→                            {csvColumns.map(col => <TableCell key={col} className="text-xs py-1.5 whitespace-nowrap">{String(row[col] || '')}</TableCell>)}
+  1546→                          </TableRow>
+  1547→                        ))}
+  1548→                      </TableBody>
+  1549→                    </Table>
+  1550→                  </div>
+  1551→                </div>
+  1552→              </>
+  1553→            )}
+  1554→          </div>
+  1555→          <DialogFooter className="pt-2 border-t">
+  1556→            <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+  1557→            <Button onClick={handleImportCSV} disabled={saving || parsedData.length === 0 || !name} className="bg-emerald-600 hover:bg-emerald-700">
+  1558→              {saving ? 'Importing...' : `Import ${parsedData.length} Candidates`}
+  1559→            </Button>
+  1560→          </DialogFooter>
+  1561→        </DialogContent>
+  1562→      </Dialog>
+  1563→
+  1564→      {/* ═══════════ Google Sheets Import Dialog ═══════════ */}
+  1565→      <Dialog open={gsOpen} onOpenChange={(open) => { if (!open) handleGsClose() }}>
+  1566→        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
+  1567→          <DialogHeader>
+  1568→            <DialogTitle className="flex items-center gap-2">
+  1569→              <Globe className="h-5 w-5 text-blue-600" />
+  1570→              Import from Google Sheets
+  1571→            </DialogTitle>
+  1572→          </DialogHeader>
+  1573→
+  1574→          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
+  1575→            {/* Section 1: List Name & Description */}
+  1576→            <div className="space-y-3">
+  1577→              <div className="space-y-2">
+  1578→                <Label>List Name *</Label>
+  1579→                <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Tech Hiring - July 2025" />
+  1580→              </div>
+  1581→              <div className="space-y-2">
+  1582→                <Label>Description</Label>
+  1583→                <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" rows={2} />
+  1584→              </div>
+  1585→            </div>
+  1586→
+  1587→            <Separator />
+  1588→
+  1589→            {/* Section 2: Google Sheets URL */}
+  1590→            <div className="space-y-3">
+  1591→              <Label className="text-sm font-semibold">Google Sheets URL</Label>
+  1592→              <div className="space-y-2">
+  1593→                <div className="relative">
+  1594→                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+  1595→                  <Input
+  1596→                    value={gsUrl}
+  1597→                    onChange={e => setGsUrl(e.target.value)}
+  1598→                    placeholder="https://docs.google.com/spreadsheets/d/..."
+  1599→                    className="pl-10"
+  1600→                  />
+  1601→                </div>
+  1602→                <div className="flex items-center gap-2">
+  1603→                  <Label className="text-sm shrink-0 whitespace-nowrap">Sheet GID (tab #)</Label>
+  1604→                  <Input
+  1605→                    value={gsGid}
+  1606→                    onChange={e => setGsGid(e.target.value)}
+  1607→                    placeholder="0"
+  1608→                    className="w-24"
+  1609→                  />
+  1610→                  <Button
+  1611→                    onClick={handleGsFetch}
+  1612→                    disabled={gsFetching || !gsUrl.trim()}
+  1613→                    variant="outline"
+  1614→                    className="shrink-0"
+  1615→                  >
+  1616→                    {gsFetching ? (
+  1617→                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Fetching...</>
+  1618→                    ) : (
+  1619→                      <><Link className="h-4 w-4 mr-2" /> Fetch Sheet</>
+  1620→                    )}
+  1621→                  </Button>
+  1622→                </div>
+  1623→                <p className="text-xs text-muted-foreground">
+  1624→                  Paste a Google Sheets link. The sheet must be published to the web (File &rarr; Share &rarr; Publish to web).
+  1625→                </p>
+  1626→              </div>
+  1627→            </div>
+  1628→
+  1629→            {/* Section 3: Data Preview (shown after successful fetch) */}
+  1630→            {gsColumns.length > 0 && (
+  1631→              <>
+  1632→                <Separator />
+  1633→                <div className="space-y-2">
+  1634→                  <div className="flex items-center gap-2">
+  1635→                    <Label className="text-sm font-semibold">Data Preview</Label>
+  1636→                    <Badge variant="secondary" className="text-xs">{gsRows.length} rows</Badge>
+  1637→                  </div>
+  1638→                  <div className="rounded-md border overflow-x-auto max-h-48">
+  1639→                    <Table>
+  1640→                      <TableHeader>
+  1641→                        <TableRow>
+  1642→                          {gsColumns.map(col => <TableHead key={col} className="text-xs whitespace-nowrap">{col}</TableHead>)}
+  1643→                        </TableRow>
+  1644→                      </TableHeader>
+  1645→                      <TableBody>
+  1646→                        {gsRows.slice(0, 5).map((row, i) => (
+  1647→                          <TableRow key={i}>
+  1648→                            {gsColumns.map(col => (
+  1649→                              <TableCell key={col} className="text-xs py-1.5 whitespace-nowrap max-w-[200px] truncate">
+  1650→                                {String(row[col] || '')}
+  1651→                              </TableCell>
+  1652→                            ))}
+  1653→                          </TableRow>
+  1654→                        ))}
+  1655→                      </TableBody>
+  1656→                    </Table>
+  1657→                  </div>
+  1658→                  {gsRows.length > 5 && (
+  1659→                    <p className="text-xs text-muted-foreground">... and {gsRows.length - 5} more rows</p>
+  1660→                  )}
+  1661→                </div>
+  1662→
+  1663→                {/* Section 4: Column Mapping */}
+  1664→                <Separator />
+  1665→                <div className="space-y-2">
+  1666→                  <Label className="text-sm font-semibold">Column Mapping</Label>
+  1667→                  <p className="text-xs text-muted-foreground">Map your sheet columns to the system fields below.</p>
+  1668→                  <div className="grid gap-2">
+  1669→                    {gsColumnFields.map(field => (
+  1670→                      <div key={field.value} className="flex items-center gap-2">
+  1671→                        <Label className="w-24 text-sm shrink-0">{field.label}</Label>
+  1672→                        <select
+  1673→                          value={gsMapping[field.value] || ''}
+  1674→                          onChange={(e) => setGsMapping(prev => ({ ...prev, [field.value]: e.target.value }))}
+  1675→                          className="flex-1 h-9 px-3 rounded-md border border-input bg-transparent text-sm"
+  1676→                        >
+  1677→                          <option value="">Select column</option>
+  1678→                          <option value="SKIP" className="text-muted-foreground">— Skip —</option>
+  1679→                          {gsColumns.map(col => (
+  1680→                            <option key={col} value={col}>{col}</option>
+  1681→                          ))}
+  1682→                        </select>
+  1683→                      </div>
+  1684→                    ))}
+  1685→                  </div>
+  1686→                </div>
+  1687→
+  1688→                {/* Section 5: Auto Sync Settings */}
+  1689→                <Separator />
+  1690→                <div className="space-y-3">
+  1691→                  <div className="flex items-center justify-between">
+  1692→                    <Label className="text-sm font-semibold">Auto Sync Settings</Label>
+  1693→                    <Switch
+  1694→                      checked={gsAutoSync}
+  1695→                      onCheckedChange={setGsAutoSync}
+  1696→                    />
+  1697→                  </div>
+  1698→                  {gsAutoSync && (
+  1699→                    <div className="flex items-center gap-2">
+  1700→                      <Label className="text-sm shrink-0">Sync interval</Label>
+  1701→                      <select
+  1702→                        value={gsSyncInterval}
+  1703→                        onChange={(e) => setGsSyncInterval(e.target.value)}
+  1704→                        className="w-40 h-9 px-3 rounded-md border border-input bg-transparent text-sm"
+  1705→                      >
+  1706→                        <option value="5">Every 5 minutes</option>
+  1707→                        <option value="15">Every 15 minutes</option>
+  1708→                        <option value="30">Every 30 minutes</option>
+  1709→                        <option value="60">Every 1 hour</option>
+  1710→                        <option value="360">Every 6 hours</option>
+  1711→                        <option value="720">Every 12 hours</option>
+  1712→                        <option value="1440">Every 24 hours</option>
+  1713→                      </select>
+  1714→                    </div>
+  1715→                  )}
+  1716→                  <p className="text-xs text-muted-foreground">
+  1717→                    Automatically sync data from the Google Sheet at the selected interval.
+  1718→                  </p>
+  1719→                </div>
+  1720→              </>
+  1721→            )}
+  1722→          </div>
+  1723→
+  1724→          <DialogFooter className="pt-2 border-t">
+  1725→            <Button variant="outline" onClick={handleGsClose}>Cancel</Button>
+  1726→            <Button
+  1727→              onClick={handleGsImport}
+  1728→              disabled={saving || gsRows.length === 0 || !name}
+  1729→              className="bg-blue-600 hover:bg-blue-700"
+  1730→            >
+  1731→              {saving ? 'Importing...' : `Import ${gsRows.length} Candidates`}
+  1732→            </Button>
+  1733→          </DialogFooter>
+  1734→        </DialogContent>
+  1735→      </Dialog>
+  1736→
+  1737→      {/* ═══════════ Candidates Dialog ═══════════ */}
+  1738→      <Dialog open={candidatesOpen} onOpenChange={(open) => { setCandidatesOpen(open); if (!open) { setSelectedCandidateIds([]); clearFilters(); setCandidateDetails([]) } }}>
+  1739→        <DialogContent className="sm:max-w-5xl max-h-[90vh]">
+  1740→          <DialogHeader>
+  1741→            <DialogTitle>{selectedList?.name} - Candidates ({candidateDetailsLoading ? '...' : candidateDetails.length || selectedList?.candidates?.length || 0})</DialogTitle>
+  1742→            <DialogDescription>View and manage candidates in this calling list</DialogDescription>
+  1743→          </DialogHeader>
+  1744→
+  1745→          {/* Action buttons row */}
+  1746→          <div className="flex flex-wrap gap-2 py-1">
+  1747→            <Button variant="outline" size="sm" onClick={() => { setSelectedCandidateIds([]); openMergeDialog() }}>
+  1748→              <GitMerge className="h-4 w-4 mr-1.5" /> Merge List
+  1749→            </Button>
+  1750→            <DropdownMenu>
+  1751→              <DropdownMenuTrigger asChild>
+  1752→                <Button variant="outline" size="sm">
+  1753→                  <MoreVertical className="h-4 w-4 mr-1.5" /> Bulk Actions
+  1754→                  {selectedCandidateIds.length > 0 && (
+  1755→                    <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">{selectedCandidateIds.length}</Badge>
+  1756→                  )}
+  1757→                </Button>
+  1758→              </DropdownMenuTrigger>
+  1759→              <DropdownMenuContent align="start">
+  1760→                <DropdownMenuItem onClick={handleBulkDelete} disabled={selectedCandidateIds.length === 0} className="text-red-600">
+  1761→                  <Trash2 className="h-4 w-4 mr-2" /> Delete Selected ({selectedCandidateIds.length})
+  1762→                </DropdownMenuItem>
+  1763→                <DropdownMenuItem onClick={openUpdateStatusDialog} disabled={selectedCandidateIds.length === 0}>
+  1764→                  <Copy className="h-4 w-4 mr-2" /> Update Status ({selectedCandidateIds.length})
+  1765→                </DropdownMenuItem>
+  1766→                <DropdownMenuItem onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersTab('manual'); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]); setAddNumbersOpen(true) }}>
+  1767→                  <UserPlus className="h-4 w-4 mr-2" /> Add Numbers
+  1768→                </DropdownMenuItem>
+  1769→                <DropdownMenuSeparator />
+  1770→                <DropdownMenuItem onClick={() => { if (getFilteredCandidates().length === 0) { toast.error('No candidates match filters'); return }; setDeleteFilteredConfirm(true) }} disabled={!hasActiveFilters} className="text-red-600">
+  1771→                  <Trash2 className="h-4 w-4 mr-2" /> Delete Filtered ({getFilteredCandidates().length})
+  1772→                </DropdownMenuItem>
+  1773→              </DropdownMenuContent>
+  1774→            </DropdownMenu>
+  1775→            <Button variant="outline" size="sm" onClick={() => { setSelectedCandidateIds([]); openDedupDialog() }}>
+  1776→              <Search className="h-4 w-4 mr-1.5" /> Find Duplicates
+  1777→            </Button>
+  1778→            <Button variant="outline" size="sm" onClick={() => { setAddNumbersEntries([emptyManualEntry()]); setAddNumbersTab('manual'); setAddNumbersPasteText(''); setAddNumbersPasteParsed([]); setAddNumbersOpen(true) }}>
+  1779→              <Plus className="h-4 w-4 mr-1.5" /> Add Numbers
+  1780→            </Button>
+  1781→            <Button variant="outline" size="sm" onClick={openImportMoreDialog}>
+  1782→              <Upload className="h-4 w-4 mr-1.5" /> Import More
+  1783→            </Button>
+  1784→            {(selectedCandidateIds.length > 0 || hasActiveFilters) && (
+  1785→              <div className="flex items-center gap-2 ml-auto">
+  1786→                {selectedCandidateIds.length > 0 && (
+  1787→                  <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateIds([])}>
+  1788→                    Clear selection
+  1789→                  </Button>
+  1790→                )}
+  1791→                {hasActiveFilters && (
+  1792→                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+  1793→                    Clear filters
+  1794→                  </Button>
+  1795→                )}
+  1796→              </div>
+  1797→            )}
+  1798→          </div>
+  1799→
+  1800→          {/* Filter + Search row */}
+  1801→          <div className="flex flex-wrap items-center gap-2 py-2 border rounded-lg px-3 bg-muted/30">
+  1802→            <div className="relative flex-1 min-w-[180px] max-w-xs">
+  1803→              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+  1804→              <Input
+  1805→                placeholder="Search name, phone, location..."
+  1806→                value={searchQuery}
+  1807→                onChange={(e) => setSearchQuery(e.target.value)}
+  1808→                className="h-8 text-xs pl-8 pr-3"
+  1809→              />
+  1810→            </div>
+  1811→            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">|</span>
+  1812→            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Role:</span>
+  1813→            <select
+  1814→              value={filterRole || '__all__'}
+  1815→              onChange={(e) => setFilterRole(e.target.value === '__all__' ? '' : e.target.value)}
+  1816→              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[110px]"
+  1817→            >
+  1818→              <option value="__all__">All Roles</option>
+  1819→              {getUniqueValues('role').map(r => (
+  1820→                <option key={r} value={r}>{r}</option>
+  1821→              ))}
+  1822→            </select>
+  1823→            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Location:</span>
+  1824→            <select
+  1825→              value={filterLocation || '__all__'}
+  1826→              onChange={(e) => setFilterLocation(e.target.value === '__all__' ? '' : e.target.value)}
+  1827→              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[120px]"
+  1828→            >
+  1829→              <option value="__all__">All Locations</option>
+  1830→              {getUniqueValues('location').map(l => (
+  1831→                <option key={l} value={l}>{l}</option>
+  1832→              ))}
+  1833→            </select>
+  1834→            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Status:</span>
+  1835→            <select
+  1836→              value={filterStatus || '__all__'}
+  1837→              onChange={(e) => setFilterStatus(e.target.value === '__all__' ? '' : e.target.value)}
+  1838→              className="h-8 px-2 text-xs rounded-md border border-input bg-transparent min-w-[120px]"
+  1839→            >
+  1840→              <option value="__all__">All Statuses</option>
+  1841→              {getUniqueValues('status').map(s => (
+  1842→                <option key={s} value={s}>{s}</option>
+  1843→              ))}
+  1844→            </select>
+  1845→            {hasActiveFilters && (
+  1846→              <Badge variant="secondary" className="text-xs">
+  1847→                Showing {getFilteredCandidates().length} of {candidateDetails.length || 0}
+  1848→              </Badge>
+  1849→            )}
+  1850→          </div>
+  1851→
+  1852→          <div className="rounded-md border overflow-x-auto max-h-96 flex-1 min-h-0">
+  1853→            <Table>
+  1854→              <TableHeader>
+  1855→                <TableRow>
+  1856→                  <TableHead className="w-10">
+  1857→                    <Checkbox
+  1858→                      checked={candidateDetails.length ? selectedCandidateIds.length === candidateDetails.length : false}
+  1859→                      onCheckedChange={(checked) => {
+  1860→                        if (!selectedList) return
+  1861→                        setSelectedCandidateIds(checked ? candidateDetails.map(c => c.id) : [])
+  1862→                      }}
+  1863→                    />
+  1864→                  </TableHead>
+  1865→                  <TableHead>Name</TableHead>
+  1866→                  <TableHead>Phone</TableHead>
+  1867→                  <TableHead className="hidden sm:table-cell">Role</TableHead>
+  1868→                  <TableHead className="hidden md:table-cell">Location</TableHead>
+  1869→                  <TableHead>Status</TableHead>
+  1870→                </TableRow>
+  1871→              </TableHeader>
+  1872→              <TableBody>
+  1873→                {selectedList && (() => {
+  1874→                  if (candidateDetailsLoading) {
+  1875→                    return (
+  1876→                      <TableRow>
+  1877→                        <TableCell colSpan={6} className="h-24 text-center">
+  1878→                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+  1879→                            <Loader2 className="h-4 w-4 animate-spin" />
+  1880→                            <span className="text-sm">Loading candidates...</span>
+  1881→                          </div>
+  1882→                        </TableCell>
+  1883→                      </TableRow>
+  1884→                    )
+  1885→                  }
+  1886→                  const displayCandidates = hasActiveFilters ? getFilteredCandidates() : candidateDetails
+  1887→                  return displayCandidates.length === 0 ? (
+  1888→                    <TableRow>
+  1889→                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+  1890→                        {hasActiveFilters ? 'No candidates match the current filters' : 'No candidates in this list'}
+  1891→                      </TableCell>
+  1892→                    </TableRow>
+  1893→                  ) : (
+  1894→                    displayCandidates.map(c => (
+  1895→                      <TableRow key={c.id} className={selectedCandidateIds.includes(c.id) ? 'bg-muted/50' : ''}>
+  1896→                        <TableCell>
+  1897→                          <Checkbox
+  1898→                            checked={selectedCandidateIds.includes(c.id)}
+  1899→                            onCheckedChange={(checked) => {
+  1900→                              setSelectedCandidateIds(prev =>
+  1901→                                checked
+  1902→                                  ? [...prev, c.id]
+  1903→                                  : prev.filter(id => id !== c.id)
+  1904→                              )
+  1905→                            }}
+  1906→                          />
+  1907→                        </TableCell>
+  1908→                        <TableCell className="font-medium">{c.name}</TableCell>
+  1909→                        <TableCell>{c.phone}</TableCell>
+  1910→                        <TableCell className="hidden sm:table-cell">{c.role || '-'}</TableCell>
+  1911→                        <TableCell className="hidden md:table-cell">{c.location || '-'}</TableCell>
+  1912→                        <TableCell>
+  1913→                          <Badge variant="outline" className={c.status === 'DONE' ? 'border-emerald-500 text-emerald-700' : c.status === 'SCHEDULED' ? 'border-amber-500 text-amber-700' : 'border-slate-400 text-slate-600'}>
+  1914→                            {c.status}
+  1915→                          </Badge>
+  1916→                        </TableCell>
+  1917→                      </TableRow>
+  1918→                    ))
+  1919→                  )
+  1920→                })()}
+  1921→              </TableBody>
+  1922→            </Table>
+  1923→          </div>
+  1924→        </DialogContent>
+  1925→      </Dialog>
+  1926→
+  1927→      {/* ═══════════ Assign Dialog ═══════════ */}
+  1928→      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+  1929→        <DialogContent>
+  1930→          <DialogHeader><DialogTitle>Assign Recruiters to &ldquo;{selectedList?.name}&rdquo;</DialogTitle></DialogHeader>
+  1931→          <div className="space-y-3 py-2 max-h-64 overflow-y-auto">
+  1932→            {recruiters.filter(r => r.isActive).map(r => (
+  1933→              <div key={r.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+  1934→                <Checkbox checked={selectedRecruiters.includes(r.id)} onCheckedChange={() => toggleRecruiter(r.id)} />
+  1935→                <div className="flex-1 min-w-0">
+  1936→                  <p className="text-sm font-medium">{r.name}</p>
+  1937→                  <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+  1938→                </div>
+  1939→              </div>
+  1940→            ))}
+  1941→          </div>
+  1942→          <DialogFooter>
+  1943→            <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
+  1944→            <Button onClick={handleAssign} className="bg-emerald-600 hover:bg-emerald-700">Assign ({selectedRecruiters.length})</Button>
+  1945→          </DialogFooter>
+  1946→        </DialogContent>
+  1947→      </Dialog>
+  1948→
+  1949→      {/* ═══════════ Merge List Dialog ═══════════ */}
+  1950→      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+  1951→        <DialogContent className="max-w-lg max-h-[90vh]">
+  1952→          <DialogHeader>
+  1953→            <DialogTitle className="flex items-center gap-2">
+  1954→              <GitMerge className="h-5 w-5" />
+  1955→              Merge into &ldquo;{selectedList?.name}&rdquo;
+  1956→            </DialogTitle>
+  1957→            <DialogDescription>Import candidates from another calling list into this one.</DialogDescription>
+  1958→          </DialogHeader>
+  1959→          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4 py-2">
+  1960→            <div className="space-y-2">
+  1961→              <Label>Source List *</Label>
+  1962→              <Select value={mergeSourceListId} onValueChange={setMergeSourceListId} modal={false}>
+  1963→                <SelectTrigger>
+  1964→                  <SelectValue placeholder="Select a calling list to merge from" />
+  1965→                </SelectTrigger>
+  1966→                <SelectContent>
+  1967→                  {callLists
+  1968→                    .filter(l => l.id !== selectedList?.id)
+  1969→                    .map(l => (
+  1970→                      <SelectItem key={l.id} value={l.id}>
+  1971→                        {l.name} ({l.candidates.length} candidates)
+  1972→                      </SelectItem>
+  1973→                    ))}
+  1974→                </SelectContent>
+  1975→              </Select>
+  1976→              {callLists.filter(l => l.id !== selectedList?.id).length === 0 && (
+  1977→                <p className="text-xs text-muted-foreground">No other lists available to merge.</p>
+  1978→              )}
+  1979→            </div>
+  1980→
+  1981→            <div className="space-y-2">
+  1982→              <Label>Merge Mode *</Label>
+  1983→              <Select value={mergeMode} onValueChange={(v) => setMergeMode(v as 'APPEND' | 'SKIP_DUPLICATES' | 'REPLACE_DUPLICATES')} modal={false}>
+  1984→                <SelectTrigger>
+  1985→                  <SelectValue />
+  1986→                </SelectTrigger>
+  1987→                <SelectContent>
+  1988→                  <SelectItem value="APPEND">Append All - Add every candidate, even duplicates</SelectItem>
+  1989→                  <SelectItem value="SKIP_DUPLICATES">Skip Duplicates - Only add new phone numbers</SelectItem>
+  1990→                  <SelectItem value="REPLACE_DUPLICATES">Replace Duplicates - Update existing with new data</SelectItem>
+  1991→                </SelectContent>
+  1992→              </Select>
+  1993→            </div>
+  1994→
+  1995→            {mergeMode === 'REPLACE_DUPLICATES' && (
+  1996→              <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+  1997→                <Checkbox
+  1998→                  id="keepOldNotes"
+  1999→                  checked={keepOldNotes}
+  2000→                  onCheckedChange={(checked) => setKeepOldNotes(checked === true)}
+
+[showing lines 1-2000 of 2430; use offset=2001 with limit to continue reading]

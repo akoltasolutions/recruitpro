@@ -50,7 +50,7 @@ interface CallList {
   googleSheetGid: string | null
   syncInterval: number
   lastSyncedAt: string | null
-  candidates: Array<{ id: string }>
+  candidates: Array<{ id: string; status: string }>
   assignments: Array<{ recruiter: { id: string; name: string; email: string } }>
 }
 
@@ -1199,6 +1199,9 @@ export function CallListManagement({ userId }: { userId: string }) {
         <div className="space-y-3">
           {callLists.map(list => {
             const total = list.candidates?.length || 0
+            const done = list.candidates?.filter((c) => c.status === 'DONE').length || 0
+            const scheduled = list.candidates?.filter((c) => c.status === 'SCHEDULED').length || 0
+            const pending = total - done - scheduled
             return (
               <div key={list.id} className="rounded-lg border p-4 hover:shadow-sm transition-shadow">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1215,6 +1218,9 @@ export function CallListManagement({ userId }: { userId: string }) {
                     {list.description && <p className="text-sm text-muted-foreground truncate">{list.description}</p>}
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {total} candidates</span>
+                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 text-xs px-1.5 py-0">{pending} pending</Badge>
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 text-xs px-1.5 py-0">{done} done</Badge>
+                      {scheduled > 0 && <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 text-xs px-1.5 py-0">{scheduled} scheduled</Badge>}
                       <span>Created {format(new Date(list.createdAt), 'MMM dd, yyyy')}</span>
                       {list.source === 'GOOGLE_SHEETS' && list.lastSyncedAt && (
                         <span className="text-blue-500">Last synced: {formatDistanceToNow(new Date(list.lastSyncedAt), { addSuffix: true })}</span>
