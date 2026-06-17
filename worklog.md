@@ -494,3 +494,24 @@ Stage Summary:
 - Dead code: CLEANED — 1 file removed, ~15 console.log removed, 3 lint errors fixed
 - Performance: OPTIMIZED — 19 components lazy-loaded for code splitting
 - All changes backward compatible, no business logic modified
+---
+Task ID: 3-b
+Agent: Main Agent
+Task: Fix mobile bottom nav overlapping content — permanent solution
+
+Work Log:
+- Analyzed screenshot showing recruiter dashboard bottom nav overlapping "Your Shift Timing" card
+- Identified root cause: 9 nav items (7 menu + Settings + potential Create List) with min-w-[52px] each = 468px exceeding 375px mobile screens
+- Recruiter layout pb-20 (80px) was insufficient — admin/super-admin already used pb-24 (96px)
+- Rewrote recruiter mobile bottom nav: 4 items directly + More popover (matching admin pattern)
+- Added Settings and Logout inside More popover to reduce items from 9 to 4+1
+- Added label truncation to first word only for narrow screens
+- Increased all three layouts bottom padding to pb-28 (112px) for consistent safe-area handling
+- Performed global overlapping audit across 90+ components — no other issues found
+- Lint clean, browser verified, deployed to live
+
+Stage Summary:
+- Recruiter: 4 bottom nav items + More popover (was 9 items overflowing)
+- All layouts: pb-28 bottom padding (was pb-20/pb-24)
+- Global audit: No other overlapping issues found
+- Deployed to https://app.akolta.com via GitHub Actions
