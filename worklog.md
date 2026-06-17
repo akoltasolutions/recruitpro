@@ -534,3 +534,24 @@ Stage Summary:
 - In minified production builds, `stopCallTimer` was minified to `ti`, producing the visible error
 - Permanent fix: Reordered 4 hook declarations to precede all references in dependency arrays
 - Production deployment triggered via GitHub push to main branch
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix calling-list count calculation (pending/done/candidate) + add created date + auto-sync
+
+Work Log:
+- Analyzed screenshot showing "Test" list with 2 candidates but Done=0, Pending=0
+- Investigated full data flow: API → Frontend → Stats calculation
+- Found root cause: API returned candidates with only { id } (no status field)
+- Found secondary bug: Frontend computed stats from lazily-loaded listCandidatesMap that starts empty
+- Fixed API: Added 'status' to candidate select in GET /api/call-lists
+- Fixed Frontend: Compute stats directly from list.candidates in API response
+- Added always-visible Candidate Count, Pending Count, Done Count badges
+- Added Created Date display on each list card
+- Added auto-sync: visibilitychange + focus event listeners with 3s throttle to refetch lists
+- Lint passed, deployed to production
+
+Stage Summary:
+- 2 files changed: src/app/api/call-lists/route.ts, src/components/recruiter/calling-list-view.tsx
+- Commit d1e0070 pushed and deployed to app.akolta.com
+- The fix also benefits create-calling-list page (same API endpoint)
