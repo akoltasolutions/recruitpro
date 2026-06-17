@@ -618,3 +618,29 @@ Stage Summary:
 - No API changes needed
 - Counts now match admin dashboard: SMS counts SMS+ALL, WhatsApp counts WHATSAPP+ALL
 - Committed: 927ed9a, pushed to main
+
+---
+Task ID: 3
+Agent: Main Agent + full-stack-developer subagent
+Task: Active Time = Call Click to Disposition Submit
+
+Work Log:
+- Analyzed screenshot: Dashboard showing "5h 19m 41s" Active Time (incorrectly counting all time since login)
+- Identified root cause: Active Duration = Login-to-Now - Break - Idle (counts ALL non-break/idle time)
+- Changed Active Duration to sum CALL_SESSION_START → DISPOSITION_SAVE periods
+- Added CALL_SESSION_START activity log in auto-dialer when call button clicked (non-blocking)
+- Changed call-records API to log DISPOSITION_SAVE instead of CALL_END on disposition submit
+- Rewrote calculateStatusInfo() in /api/user-status/route.ts with session-based calculation
+- Rewrote calculateMemberStatus() in /api/user-status/team/route.ts identically
+- Updated status-management.tsx live timer to only count during active call sessions
+- Added currentCallSessionStart to all interfaces and API responses
+- Safety cap: ongoing sessions capped at 30 min for abandoned sessions
+- Lint clean, pushed to GitHub
+
+Stage Summary:
+- Files modified: 5 (auto-dialer.tsx, call-records/route.ts, user-status/route.ts, user-status/team/route.ts, status-management.tsx)
+- Active Time now = sum of (Call Click → Disposition Submit) periods
+- Includes: ringing, connected call, after-call work, disposition filling, notes, follow-up selection
+- Ends ONLY when disposition is submitted/saved
+- Status toggle buttons, auto-idle after 15 min, and all other functionality unchanged
+- Committed: 7f6112b, pushed to main
