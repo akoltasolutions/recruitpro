@@ -604,6 +604,13 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
     recordCallActivity() // Reset auto-idle timer on call initiation
 
+    // Log call session start for active time tracking
+    authFetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'CALL_SESSION_START', status: 'ACTIVE' }),
+    }).catch(() => {}) // Non-blocking, best-effort
+
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
 

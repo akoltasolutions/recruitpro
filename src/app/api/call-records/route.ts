@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
       await db.activityLog.create({
         data: {
           userId: recruiterId,
-          action: 'CALL_END',
+          action: 'DISPOSITION_SAVE',
           status: 'ACTIVE',
           organizationId, // Also set org on activity log
           metadata: JSON.stringify({
@@ -182,6 +182,7 @@ export async function POST(request: NextRequest) {
             phone: candidate?.phone,
             disposition: dispositionId,
             duration: callDuration || 0,
+            callSessionDuration: callDuration || 0,
           }),
         },
       });

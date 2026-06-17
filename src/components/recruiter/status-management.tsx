@@ -23,6 +23,7 @@ interface StatusInfo {
   totalActiveDurationMs: number
   totalIdleDurationMs: number
   currentBreakStartTime: string | null
+  currentCallSessionStart: string | null
 }
 
 interface StatusManagementProps {
@@ -263,13 +264,13 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
   // Live timers
   // -----------------------------------------------------------------------
 
-  // Active timer: only counts up when status is ACTIVE
-  const isActiveTimerStatus = currentStatus === 'ACTIVE'
+  // Active timer: counts up when there's an ongoing call session
+  const hasActiveSession = !!statusInfo?.currentCallSessionStart
 
   // Simple elapsed-since-fetch counter (1-second interval)
   const [liveElapsed, setLiveElapsed] = useState(0)
   useEffect(() => {
-    if (!isActiveTimerStatus || !lastFetchTimeRef.current) {
+    if (!hasActiveSession || !lastFetchTimeRef.current) {
       setLiveElapsed(0)
       return
     }
@@ -277,10 +278,10 @@ export function StatusManagement({ onStatusChange }: StatusManagementProps) {
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [isActiveTimerStatus])
+  }, [hasActiveSession])
 
-  // Total active duration = API value + live elapsed since last fetch
-  const activeElapsedMs = isActiveTimerStatus && lastFetchTimeRef.current
+  // Total active duration = API value (sum of completed sessions) + live elapsed (ongoing session)
+  const activeElapsedMs = hasActiveSession && lastFetchTimeRef.current
     ? (statusInfo?.totalActiveDurationMs ?? 0) + liveElapsed
     : (statusInfo?.totalActiveDurationMs ?? 0)
 

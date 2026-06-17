@@ -17,6 +17,7 @@ interface StatusInfo {
   totalActiveDurationMs: number;
   totalIdleDurationMs: number;
   currentBreakStartTime: string | null;
+  currentCallSessionStart: string | null;
 }
 
 async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
@@ -38,6 +39,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
       totalActiveDurationMs: 0,
       totalIdleDurationMs: 0,
       currentBreakStartTime: null,
+      currentCallSessionStart: null,
     };
   }
 
@@ -96,13 +98,36 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     totalIdleDurationMs += Date.now() - idleStart.getTime();
   }
 
-  // Calculate total active duration:
-  // From first activity to now, minus total break and idle durations
+  // Calculate total active duration from call sessions:
+  // Active Time = sum of (CALL_SESSION_START → DISPOSITION_SAVE) periods
   let totalActiveDurationMs = 0;
-  if (loginTime) {
-    const loginDate = new Date(loginTime);
-    totalActiveDurationMs = Date.now() - loginDate.getTime() - totalBreakDurationMs - totalIdleDurationMs;
-    if (totalActiveDurationMs < 0) totalActiveDurationMs = 0;
+  let currentCallSessionStart: string | null = null;
+  let sessionStart: Date | null = null;
+
+  for (const log of logs) {
+    if (log.action === 'CALL_SESSION_START') {
+      if (!sessionStart) {
+        sessionStart = log.createdAt;
+      }
+      // If there's already an unclosed session, cap it at 30 minutes and start new
+      // (shouldn't happen normally but handles edge cases)
+    } else if (log.action === 'DISPOSITION_SAVE' && sessionStart) {
+      totalActiveDurationMs += log.createdAt.getTime() - sessionStart.getTime();
+      sessionStart = null;
+    }
+  }
+
+  // If there's an ongoing call session, include it as current + add to total
+  if (sessionStart) {
+    const sessionElapsed = Date.now() - sessionStart.getTime();
+    // Cap ongoing sessions at 30 minutes (safety for abandoned sessions)
+    const maxSessionMs = 30 * 60 * 1000;
+    if (sessionElapsed <= maxSessionMs) {
+      currentCallSessionStart = sessionStart.toISOString();
+      totalActiveDurationMs += sessionElapsed;
+    } else {
+      totalActiveDurationMs += maxSessionMs;
+    }
   }
 
   // Determine current status from the most recent log entry
@@ -140,6 +165,7 @@ async function calculateStatusInfo(userId: string): Promise<StatusInfo> {
     totalActiveDurationMs,
     totalIdleDurationMs,
     currentBreakStartTime,
+    currentCallSessionStart,
   };
 }
 
@@ -167,6 +193,7 @@ export async function GET(request: NextRequest) {
       ...statusInfo,
       userId: auth.userId,
       shiftInfo,
+      currentCallSessionStart: statusInfo.currentCallSessionStart,
     });
   } catch (error) {
     console.error('User status fetch error:', error);
@@ -288,6 +315,7 @@ export async function POST(request: NextRequest) {
       totalActiveDurationMs: updatedInfo.totalActiveDurationMs,
       totalIdleDurationMs: updatedInfo.totalIdleDurationMs,
       currentBreakStartTime: updatedInfo.currentBreakStartTime,
+      currentCallSessionStart: updatedInfo.currentCallSessionStart,
     });
   } catch (error) {
     console.error('User status update error:', error);

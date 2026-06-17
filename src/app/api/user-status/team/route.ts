@@ -20,6 +20,7 @@ interface TeamMemberStatus {
   totalActiveDurationToday: number;
   totalIdleDurationToday: number;
   lastActivity: string | null;
+  currentCallSessionStart: string | null;
 }
 
 function calculateMemberStatus(
@@ -32,7 +33,9 @@ function calculateMemberStatus(
       breakStartTime: null,
       totalBreakDurationToday: 0,
       totalActiveDurationToday: 0,
+      totalIdleDurationToday: 0,
       lastActivity: null,
+      currentCallSessionStart: null,
     };
   }
 
@@ -90,12 +93,36 @@ function calculateMemberStatus(
     totalIdleDurationMs += Date.now() - idleStart.getTime();
   }
 
-  // Calculate total active duration: from first activity to now, minus break and idle
+  // Calculate total active duration from call sessions:
+  // Active Time = sum of (CALL_SESSION_START → DISPOSITION_SAVE) periods
   let totalActiveDurationMs = 0;
-  if (loginTime) {
-    const loginDate = new Date(loginTime);
-    totalActiveDurationMs = Date.now() - loginDate.getTime() - totalBreakDurationMs - totalIdleDurationMs;
-    if (totalActiveDurationMs < 0) totalActiveDurationMs = 0;
+  let currentCallSessionStart: string | null = null;
+  let sessionStart: Date | null = null;
+
+  for (const log of logs) {
+    if (log.action === 'CALL_SESSION_START') {
+      if (!sessionStart) {
+        sessionStart = log.createdAt;
+      }
+      // If there's already an unclosed session, cap it at 30 minutes and start new
+      // (shouldn't happen normally but handles edge cases)
+    } else if (log.action === 'DISPOSITION_SAVE' && sessionStart) {
+      totalActiveDurationMs += log.createdAt.getTime() - sessionStart.getTime();
+      sessionStart = null;
+    }
+  }
+
+  // If there's an ongoing call session, include it as current + add to total
+  if (sessionStart) {
+    const sessionElapsed = Date.now() - sessionStart.getTime();
+    // Cap ongoing sessions at 30 minutes (safety for abandoned sessions)
+    const maxSessionMs = 30 * 60 * 1000;
+    if (sessionElapsed <= maxSessionMs) {
+      currentCallSessionStart = sessionStart.toISOString();
+      totalActiveDurationMs += sessionElapsed;
+    } else {
+      totalActiveDurationMs += maxSessionMs;
+    }
   }
 
   // Determine current status from the most recent log entry
@@ -136,6 +163,7 @@ function calculateMemberStatus(
     totalActiveDurationToday: totalActiveDurationMs,
     totalIdleDurationToday: totalIdleDurationMs,
     lastActivity,
+    currentCallSessionStart,
   };
 }
 
