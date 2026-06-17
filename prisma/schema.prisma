@@ -390,6 +390,7 @@ model MessageTemplate {
   id             String   @id @default(cuid())
   name           String
   type           String   // NOT_ANSWERED, SHORTLISTED, CUSTOM
+  channel        String   @default("ALL") // SMS, WHATSAPP, ALL
   content        String   // supports {{candidate_name}}, {{recruiter_name}}, {{role}}, {{location}}
   isActive       Boolean  @default(true)
   organizationId String?

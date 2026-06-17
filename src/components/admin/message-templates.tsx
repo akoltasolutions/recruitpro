@@ -14,10 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
-import { MessageSquare, Plus, Pencil, Trash2, Power, Eye } from 'lucide-react'
+import { MessageSquare, Plus, Pencil, Trash2, Power, Eye, Smartphone, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { authFetch } from '@/stores/auth-store'
 
@@ -25,6 +22,7 @@ interface MessageTemplate {
   id: string
   name: string
   type: string
+  channel: string
   content: string
   isActive: boolean
   createdAt: string
@@ -41,6 +39,20 @@ const typeLabels: Record<string, string> = {
   SHORTLISTED: 'Shortlisted',
   CUSTOM: 'Custom',
 }
+
+const channelColors: Record<string, string> = {
+  SMS: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400',
+  WHATSAPP: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
+  ALL: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+}
+
+const channelLabels: Record<string, string> = {
+  SMS: 'SMS',
+  WHATSAPP: 'WhatsApp',
+  ALL: 'All',
+}
+
+type ChannelFilter = 'ALL' | 'SMS' | 'WHATSAPP'
 
 const dynamicVariables = [
   { key: '{{candidate_name}}', label: 'Candidate Name' },
@@ -64,11 +76,13 @@ export function MessageTemplates() {
   const [editing, setEditing] = useState<MessageTemplate | null>(null)
   const [name, setName] = useState('')
   const [type, setType] = useState('')
+  const [channel, setChannel] = useState('ALL')
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<MessageTemplate | null>(null)
   const [confirmToggle, setConfirmToggle] = useState<MessageTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<MessageTemplate | null>(null)
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>('ALL')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const fetchTemplates = async () => {
@@ -84,10 +98,22 @@ export function MessageTemplates() {
 
   useEffect(() => { fetchTemplates() }, [])
 
+  // Filter templates by channel
+  const filteredTemplates = channelFilter === 'ALL'
+    ? templates
+    : templates.filter(t => t.channel === channelFilter || t.channel === 'ALL')
+
+  const counts = {
+    all: templates.length,
+    sms: templates.filter(t => t.channel === 'SMS' || t.channel === 'ALL').length,
+    whatsapp: templates.filter(t => t.channel === 'WHATSAPP' || t.channel === 'ALL').length,
+  }
+
   const openCreate = () => {
     setEditing(null)
     setName('')
     setType('')
+    setChannel('ALL')
     setContent('')
     setDialogOpen(true)
   }
@@ -96,6 +122,7 @@ export function MessageTemplates() {
     setEditing(t)
     setName(t.name)
     setType(t.type)
+    setChannel(t.channel || 'ALL')
     setContent(t.content)
     setDialogOpen(true)
   }
@@ -109,7 +136,7 @@ export function MessageTemplates() {
       const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, type, content }),
+        body: JSON.stringify({ name, type, content, channel }),
       })
       if (!res.ok) { const data = await res.json(); toast.error(data.error || 'Failed'); return }
       toast.success(editing ? 'Template updated' : 'Template created')
@@ -174,35 +201,76 @@ export function MessageTemplates() {
         </Button>
       </PageHeader>
 
+      {/* Channel filter tabs */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <Button
+          variant={channelFilter === 'ALL' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setChannelFilter('ALL')}
+          className="text-xs h-8"
+        >
+          All ({counts.all})
+        </Button>
+        <Button
+          variant={channelFilter === 'SMS' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setChannelFilter('SMS')}
+          className="text-xs h-8"
+        >
+          <Smartphone className="h-3 w-3 mr-1" /> SMS ({counts.sms})
+        </Button>
+        <Button
+          variant={channelFilter === 'WHATSAPP' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setChannelFilter('WHATSAPP')}
+          className="text-xs h-8"
+        >
+          <MessageCircle className="h-3 w-3 mr-1" /> WhatsApp ({counts.whatsapp})
+        </Button>
+      </div>
+
       {loading ? (
         <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}</div>
-      ) : templates.length === 0 ? (
-        <EmptyState icon={MessageSquare} title="No templates" description="Create message templates for WhatsApp and SMS" actionLabel="Add Template" onAction={openCreate} />
+      ) : filteredTemplates.length === 0 ? (
+        <EmptyState icon={MessageSquare} title="No templates" description={channelFilter === 'ALL' ? 'Create message templates for WhatsApp and SMS' : `No ${channelFilter.toLowerCase()} templates found`} actionLabel="Add Template" onAction={openCreate} />
       ) : (
         <div className="space-y-3">
-          {templates.map(t => (
+          {filteredTemplates.map(t => (
             <Card key={t.id} className={!t.isActive ? 'opacity-60' : ''}>
               <CardContent className="p-4">
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
                       <h3 className="font-semibold text-sm">{t.name}</h3>
                       <Badge className={typeColors[t.type] || ''}>{typeLabels[t.type] || t.type}</Badge>
+                      <Badge className={channelColors[t.channel] || channelColors.ALL}>
+                        {channel === 'ALL' ? (
+                          <>
+                            <Smartphone className="h-2.5 w-2.5 mr-0.5" />
+                            <MessageCircle className="h-2.5 w-2.5 ml-0.5 mr-1" />
+                          </>
+                        ) : t.channel === 'SMS' ? (
+                          <Smartphone className="h-2.5 w-2.5 mr-1" />
+                        ) : (
+                          <MessageCircle className="h-2.5 w-2.5 mr-1" />
+                        )}
+                        {channelLabels[t.channel] || t.channel}
+                      </Badge>
                       {!t.isActive && <Badge variant="secondary">Inactive</Badge>}
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2">{t.content}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setPreviewTemplate(t); setPreviewOpen(true) }}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setPreviewTemplate(t); setPreviewOpen(true) }}>
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(t)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setConfirmToggle(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setConfirmToggle(t)}>
                       <Power className={`h-3.5 w-3.5 ${t.isActive ? 'text-red-500' : 'text-emerald-500'}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => setConfirmDelete(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-red-500 hover:text-red-700" onClick={() => setConfirmDelete(t)}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -215,25 +283,39 @@ export function MessageTemplates() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-w-[calc(100%-1.5rem)]">
           <DialogHeader><DialogTitle>{editing ? 'Edit Template' : 'Add Template'}</DialogTitle></DialogHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2 -mx-1 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2 -mx-1 px-1 max-h-[60vh]">
             <div className="space-y-2">
               <Label>Template Name</Label>
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Not Answered Template" />
             </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">Select type</option>
-                <option value="NOT_ANSWERED">Not Answered</option>
-                <option value="SHORTLISTED">Shortlisted</option>
-                <option value="CUSTOM">Custom</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm"
+                >
+                  <option value="">Select type</option>
+                  <option value="NOT_ANSWERED">Not Answered</option>
+                  <option value="SHORTLISTED">Shortlisted</option>
+                  <option value="CUSTOM">Custom</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Channel</Label>
+                <select
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm"
+                >
+                  <option value="ALL">SMS & WhatsApp</option>
+                  <option value="SMS">SMS Only</option>
+                  <option value="WHATSAPP">WhatsApp Only</option>
+                </select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Dynamic Variables</Label>
@@ -251,7 +333,7 @@ export function MessageTemplates() {
               <p className="text-xs text-muted-foreground">Click on variables above to insert them at cursor position</p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="pt-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-none">Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 flex-1 sm:flex-none">{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
           </DialogFooter>
@@ -260,9 +342,9 @@ export function MessageTemplates() {
 
       {/* Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-w-[calc(100%-1.5rem)]">
           <DialogHeader><DialogTitle>Template Preview</DialogTitle></DialogHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 py-2 max-h-[60vh]">
             <div>
               <Label className="text-xs text-muted-foreground">Original</Label>
               <p className="text-sm bg-muted rounded-md p-3 whitespace-pre-wrap">{previewTemplate?.content}</p>

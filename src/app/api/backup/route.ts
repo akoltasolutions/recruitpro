@@ -424,8 +424,8 @@ async function restoreFromJSON(buffer: Buffer) {
     for (const tmpl of data.messageTemplates) {
       await db.messageTemplate.upsert({
         where: { id: tmpl.id },
-        update: { name: tmpl.name, type: tmpl.type, content: tmpl.content, isActive: tmpl.isActive },
-        create: { id: tmpl.id, name: tmpl.name, type: tmpl.type, content: tmpl.content, isActive: tmpl.isActive },
+        update: { name: tmpl.name, type: tmpl.type, content: tmpl.content, isActive: tmpl.isActive, channel: tmpl.channel || 'ALL' },
+        create: { id: tmpl.id, name: tmpl.name, type: tmpl.type, content: tmpl.content, isActive: tmpl.isActive, channel: tmpl.channel || 'ALL' },
       });
     }
     stats.messageTemplates = data.messageTemplates.length;

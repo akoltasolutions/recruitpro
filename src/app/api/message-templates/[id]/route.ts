@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { name, type, content, isActive } = await request.json();
+    const { name, type, content, isActive, channel } = await request.json();
 
     // Validate template type
     const validTypes = ['NOT_ANSWERED', 'SHORTLISTED', 'CUSTOM'];
@@ -28,11 +28,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Invalid template type' }, { status: 400 });
     }
 
+    // Validate channel
+    const validChannels = ['SMS', 'WHATSAPP', 'ALL'];
+    if (channel && !validChannels.includes(channel)) {
+      return NextResponse.json({ error: 'Invalid channel. Must be SMS, WHATSAPP, or ALL' }, { status: 400 });
+    }
+
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (content !== undefined) updateData.content = content;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (channel !== undefined) updateData.channel = channel;
 
     const template = await db.messageTemplate.update({ where: { id }, data: updateData });
     return NextResponse.json({ template });

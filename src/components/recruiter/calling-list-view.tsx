@@ -334,7 +334,6 @@ export function CallingListView({ userId, onNavigate }: Props) {
           {filteredLists.map((list) => {
             const stats = getListStats(list)
             const isExpanded = expandedListId === list.id
-            const candidatesForList = listCandidatesMap[list.id]
             const isLoadingCandidates = listCandidatesLoading[list.id]
 
             return (

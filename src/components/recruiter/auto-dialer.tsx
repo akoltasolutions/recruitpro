@@ -29,7 +29,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -89,6 +89,7 @@ interface MessageTemplate {
   id: string
   name: string
   type: string
+  channel: string
   content: string
   isActive: boolean
 }
@@ -263,11 +264,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         const activeTemplates = (t.templates || []).filter((tmpl: MessageTemplate) => tmpl.isActive)
         setTemplates(activeTemplates)
         // Templates loaded
-      } else {
-        console.error('[AutoDialer] Failed to fetch templates:', tmplRes.status)
       }
     } catch (err) {
-      console.error('[AutoDialer] fetchDispositions error:', err)
+      // error logged
     }
   }, [])
 
@@ -337,7 +336,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       }))
       // Call state saved to sessionStorage
     } catch (e) {
-      console.error('[AutoDialer] Failed to save call state:', e)
+      // error logged
     }
   }, [])
 
@@ -473,7 +472,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     window.addEventListener('pageshow', handlePageShow as EventListener)
 
     // Listen for global event dispatched by Android bridge (from page.tsx)
-    const handleGlobalDisposition = (e: Event) => {
+    const handleGlobalDisposition = (_e: Event) => {
       // Global disposition event received
       handleReturnFromDialer()
     }
@@ -496,7 +495,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // Expose global function for Android evaluateJavascript
   // Android WebView can call: webView.evaluateJavascript("showPostCallDisposition('7458898305')", null)
   useEffect(() => {
-    (window as unknown as Record<string, unknown>).showPostCallDisposition = (phoneNumber: string) => {
+    (window as unknown as Record<string, unknown>).showPostCallDisposition = (_phoneNumber: string) => {
       // showPostCallDisposition called from Android
       // Prevent duplicate triggers
       if (dispositionShownRef.current) {
@@ -597,7 +596,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Mark call as initiated
     callInitiatedRef.current = true
     setCallInitiated(true)
-    // Note: startCallTimer() is already called in startPreCallTimer() or prepareCall()
+    // Note: startCallTimer() is already called in startPreCallTimer()
     // to ensure timer starts immediately when Call button is clicked (no delay)
     // Only start here if timer isn't already running
     if (!timerRef.current) {
@@ -842,7 +841,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       // Release the mic stream immediately — we only needed the permission grant
       micStream.getTracks().forEach(t => t.stop())
     } catch (micErr) {
-      console.warn('[Voice] getUserMedia failed (mic may still work):', micErr)
+      // error logged
     }
 
     recognitionRef.current = recognition
@@ -858,7 +857,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
 
     recognition.onerror = (event: { error: string }) => {
-      console.error('[AutoDialer] Speech recognition error:', event?.error)
       if (event?.error === 'not-allowed') {
         toast.error('Microphone permission denied. Please allow microphone access in your device settings.')
       } else {
@@ -877,7 +875,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       recognition.start()
       setIsListening(true)
     } catch (recErr) {
-      console.error('[Voice] Failed to start recognition:', recErr)
+      // error logged
       toast.error('Failed to start voice input')
     }
   }, [isListening])
@@ -1000,40 +998,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     advanceToCandidate(0)
   }, [candidates, canMakeCalls, advanceToCandidate])
 
-  /* ==================== PREPARE CALL STATE (before native tel: link activates) ====================
-   * IMPORTANT: The Call button is a REAL <a href="tel:..."> link.
-   * This is the ONLY method that reliably triggers Android WebView's shouldOverrideUrlLoading.
-   * This function runs on onTouchStart/onMouseDown — BEFORE the native click completes.
-   * The native <a> click then sends the tel: URL to Android, which opens the phone dialer.
-   */
-  const prepareCall = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    if (!currentCandidate?.phone) {
-      e.preventDefault()
-      toast.error('No phone number available')
-      return
-    }
-    const phone = cleanPhone(currentCandidate.phone)
-    if (!phone || phone.length < 7) {
-      e.preventDefault()
-      toast.error('Invalid phone number')
-      return
-    }
-
-    // Mark call as initiated — these run BEFORE the native <a> click navigates
-    callInitiatedRef.current = true
-    setCallInitiated(true)
-    startCallTimer()
-    recordCallActivity() // Reset auto-idle timer on call initiation
-
-    // Persist to sessionStorage — survives if WebView reloads the page
-    saveCallState(currentCandidate!)
-
-    // prepareCall ready — native tel: link will handle the rest
-
-    // Do NOT call e.preventDefault() here!
-    // Let the native <a href="tel:..."> click proceed so Android WebView intercepts it.
-  }, [currentCandidate, startCallTimer, saveCallState])
-
   // Cancel current call
   const handleCancelCall = useCallback(() => {
     stopCallTimer()
@@ -1152,7 +1116,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         return
       }
 
-      const result = await res.json()
+      await res.json()
       recordCallActivity() // Reset auto-idle timer on call record save
 
       // STOP TIMER NOW — disposition submitted, capture final duration
@@ -1175,7 +1139,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         setScreen('select-list')
       }
     } catch (err) {
-      console.error('[AutoDialer] Save error:', err)
+      // error logged
       toast.error('Failed to save call record. Please try again.')
     }
     setSavingRecord(false)
@@ -1205,15 +1169,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         try {
           const errData = await res.json()
           errorMsg = errData.error || errorMsg
-          console.error('[AutoDialer] Save failed:', res.status, errData)
         } catch {
-          console.error('[AutoDialer] Save failed:', res.status, '(could not parse error body)')
+          // error logged
         }
         toast.error(errorMsg)
         return
       }
 
-      const result = await res.json()
+      await res.json()
       recordCallActivity() // Reset auto-idle timer on call record save
 
       // STOP TIMER NOW — disposition submitted, capture final duration
@@ -1227,7 +1190,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       setCompletedCount((prev) => prev + 1)
       setScreen('select-list')
     } catch (err) {
-      console.error('[AutoDialer] Save error:', err)
+      // error logged
       toast.error('Failed to save call record. Please try again.')
     }
     setSavingRecord(false)
@@ -1631,7 +1594,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   <button
                     type="button"
                     onClick={cancelPreCallTimer}
-                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 shadow-md"
+                    className="absolute top-2 right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 shadow-md"
                     style={{ touchAction: 'manipulation' }}
                     aria-label="Cancel"
                   >
@@ -1706,7 +1669,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   <button
                     type="button"
                     onClick={handleGapTimerClose}
-                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors shadow-md"
+                    className="absolute top-2 right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors shadow-md"
                     style={{ touchAction: 'manipulation' }}
                     aria-label="Close"
                   >
@@ -2113,45 +2076,50 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              {/* Scrollable template list — button is OUTSIDE this container (sticky footer) */}
+              {/* Scrollable template list — mobile (filtered by channel) */}
               <div className="overflow-y-auto flex-1 px-4" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', minHeight: 0 }}>
                 <div className="space-y-2 pb-4">
-                  {templates.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-4 text-center">No templates available.</p>
-                  ) : templates.map((tmpl) => {
-                    const isSelected = templateSheetOpen === 'sms' ? selectedSmsTemplate === tmpl.id : selectedWaTemplate === tmpl.id
-                    const handleSelect = () => {
-                      if (templateSheetOpen === 'sms') setSelectedSmsTemplate(tmpl.id)
-                      else setSelectedWaTemplate(tmpl.id)
+                  {(() => {
+                    const ch = templateSheetOpen === 'sms' ? 'SMS' : 'WHATSAPP'
+                    const filtered = templates.filter(t => t.channel === ch || t.channel === 'ALL')
+                    if (filtered.length === 0) {
+                      return <p className="text-xs text-muted-foreground py-4 text-center">No {ch.toLowerCase()} templates available.</p>
                     }
-                    return (
-                      <button
-                        key={tmpl.id}
-                        type="button"
-                        onClick={handleSelect}
-                        onTouchEnd={(e) => { e.preventDefault(); handleSelect() }}
-                        className={cn(
-                          'w-full text-left px-3 py-2.5 rounded-lg text-sm border flex items-start gap-2',
-                          isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-border'
-                        )}
-                        style={{ touchAction: 'manipulation', minHeight: 44 }}
-                      >
-                        <div className="shrink-0 mt-0.5">
-                          {isSelected ? (
-                            <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                              <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                            </div>
-                          ) : (
-                            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
+                    return filtered.map((tmpl) => {
+                      const isSelected = templateSheetOpen === 'sms' ? selectedSmsTemplate === tmpl.id : selectedWaTemplate === tmpl.id
+                      const handleSelect = () => {
+                        if (templateSheetOpen === 'sms') setSelectedSmsTemplate(tmpl.id)
+                        else setSelectedWaTemplate(tmpl.id)
+                      }
+                      return (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={handleSelect}
+                          onTouchEnd={(e) => { e.preventDefault(); handleSelect() }}
+                          className={cn(
+                            'w-full text-left px-3 py-2.5 rounded-lg text-sm border flex items-start gap-2',
+                            isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-border'
                           )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn('font-medium text-xs', isSelected && 'text-emerald-700')}>{tmpl.name}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{fillTemplate(tmpl.content)}</p>
-                        </div>
-                      </button>
-                    )
-                  })}
+                          style={{ touchAction: 'manipulation', minHeight: 44 }}
+                        >
+                          <div className="shrink-0 mt-0.5">
+                            {isSelected ? (
+                              <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                              </div>
+                            ) : (
+                              <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn('font-medium text-xs', isSelected && 'text-emerald-700')}>{tmpl.name}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{fillTemplate(tmpl.content)}</p>
+                          </div>
+                        </button>
+                      )
+                    })
+                  })()}
                 </div>
               </div>
               {/* Sticky footer — Send button always visible at bottom of template sheet */}
@@ -2379,78 +2347,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   )}
                 </div>
 
-                {/* Template selection bottom-sheet (desktop) */}
-                {templateSheetOpen && (
-                  <div>
-                    <div className="fixed inset-0 bg-black/30" data-dialer-overlay="template" style={{ touchAction: 'none' }}
-                      onClick={() => setTemplateSheetOpen(null)} />
-                    <div className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
-                      data-dialer-sheet="template"
-              style={{ bottom: 0, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
-                        <p className="text-sm font-semibold">
-                          {templateSheetOpen === 'sms' ? 'Select SMS Template' : 'Select WhatsApp Template'}
-                        </p>
-                        <button type="button" onClick={() => setTemplateSheetOpen(null)}
-                          className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      {/* Scrollable template list — button is OUTSIDE this container (sticky footer) */}
-                      <div className="overflow-y-auto flex-1 px-4" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', minHeight: 0 }}>
-                        <div className="space-y-2 pb-4">
-                          {templates.length === 0 ? (
-                            <p className="text-xs text-muted-foreground py-4 text-center">No templates available.</p>
-                          ) : templates.map((tmpl) => {
-                            const isSelected = templateSheetOpen === 'sms' ? selectedSmsTemplate === tmpl.id : selectedWaTemplate === tmpl.id
-                            const handleSelect = () => {
-                              if (templateSheetOpen === 'sms') setSelectedSmsTemplate(tmpl.id)
-                              else setSelectedWaTemplate(tmpl.id)
-                            }
-                            return (
-                              <button key={tmpl.id} type="button" onClick={handleSelect} onTouchEnd={(e) => { e.preventDefault(); handleSelect() }}
-                                className={cn('w-full text-left px-3 py-2.5 rounded-lg text-sm border flex items-start gap-2',
-                                  isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-border hover:bg-muted/50')}
-                                style={{ minHeight: 44 }}>
-                                <div className="shrink-0 mt-0.5">
-                                  {isSelected ? (
-                                    <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                                      <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                                    </div>
-                                  ) : (
-                                    <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className={cn('font-medium text-xs', isSelected && 'text-emerald-700')}>{tmpl.name}</p>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">{fillTemplate(tmpl.content)}</p>
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      {/* Sticky footer — Send button always visible at bottom of template sheet */}
-                      <div className="shrink-0 border-t bg-background px-4 pt-3 pb-4">
-                        <Button
-                          size="sm"
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
-                          onClick={() => templateSheetOpen === 'sms' ? handleSendSms() : handleSendWhatsApp()}
-                          disabled={
-                            templateSheetOpen === 'sms' ? !selectedSmsTemplate : !selectedWaTemplate
-                          }
-                        >
-                          {templateSheetOpen === 'sms' ? (
-                            <><Send className="h-3.5 w-3.5 mr-1.5" /> Send SMS</>
-                          ) : (
-                            <><MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Open WhatsApp</>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
               </div>
 
               {/* Action buttons: Save & Next Call / Save Only */}
@@ -2492,6 +2388,83 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 </DialogFooter>
             </DialogContent>
           </Dialog>
+        )}
+
+        {/* Desktop: Template selection bottom-sheet — rendered as sibling of Dialog to avoid clipping by overflow-hidden */}
+        {!isMobile && templateSheetOpen && (
+          <div>
+            <div className="fixed inset-0 bg-black/30" data-dialer-overlay="template" style={{ touchAction: 'none' }}
+              onClick={() => setTemplateSheetOpen(null)} />
+            <div className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
+              data-dialer-sheet="template"
+              style={{ bottom: 0, maxHeight: sheetHeight > 100 ? `${Math.round(sheetHeight * 0.65)}px` : '55vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
+                <p className="text-sm font-semibold">
+                  {templateSheetOpen === 'sms' ? 'Select SMS Template' : 'Select WhatsApp Template'}
+                </p>
+                <button type="button" onClick={() => setTemplateSheetOpen(null)}
+                  className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {/* Scrollable template list — desktop (filtered by channel) */}
+              <div className="overflow-y-auto flex-1 px-4" style={{ touchAction: 'pan-y', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', minHeight: 0 }}>
+                <div className="space-y-2 pb-4">
+                  {(() => {
+                    const ch = templateSheetOpen === 'sms' ? 'SMS' : 'WHATSAPP'
+                    const filtered = templates.filter(t => t.channel === ch || t.channel === 'ALL')
+                    if (filtered.length === 0) {
+                      return <p className="text-xs text-muted-foreground py-4 text-center">No {ch.toLowerCase()} templates available.</p>
+                    }
+                    return filtered.map((tmpl) => {
+                      const isSelected = templateSheetOpen === 'sms' ? selectedSmsTemplate === tmpl.id : selectedWaTemplate === tmpl.id
+                      const handleSelect = () => {
+                        if (templateSheetOpen === 'sms') setSelectedSmsTemplate(tmpl.id)
+                        else setSelectedWaTemplate(tmpl.id)
+                      }
+                      return (
+                        <button key={tmpl.id} type="button" onClick={handleSelect} onTouchEnd={(e) => { e.preventDefault(); handleSelect() }}
+                          className={cn('w-full text-left px-3 py-2.5 rounded-lg text-sm border flex items-start gap-2',
+                            isSelected ? 'border-emerald-500 bg-emerald-50' : 'border-border hover:bg-muted/50')}
+                          style={{ minHeight: 44 }}>
+                          <div className="shrink-0 mt-0.5">
+                            {isSelected ? (
+                              <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                              </div>
+                            ) : (
+                              <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn('font-medium text-xs', isSelected && 'text-emerald-700')}>{tmpl.name}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{fillTemplate(tmpl.content)}</p>
+                          </div>
+                        </button>
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
+              {/* Sticky footer — Send button always visible at bottom of template sheet */}
+              <div className="shrink-0 border-t bg-background px-4 pt-3 pb-4">
+                <Button
+                  size="sm"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
+                  onClick={() => templateSheetOpen === 'sms' ? handleSendSms() : handleSendWhatsApp()}
+                  disabled={
+                    templateSheetOpen === 'sms' ? !selectedSmsTemplate : !selectedWaTemplate
+                  }
+                >
+                  {templateSheetOpen === 'sms' ? (
+                    <><Send className="h-3.5 w-3.5 mr-1.5" /> Send SMS</>
+                  ) : (
+                    <><MessageSquare className="h-3.5 w-3.5 mr-1.5" /> Open WhatsApp</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     )
