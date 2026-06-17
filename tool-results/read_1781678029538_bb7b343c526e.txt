@@ -1,0 +1,781 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { Card, CardContent } from '@/components/ui/card';
+     5→import { Badge } from '@/components/ui/badge';
+     6→import { Button } from '@/components/ui/button';
+     7→import { Skeleton } from '@/components/ui/skeleton';
+     8→import {
+     9→  Monitor,
+    10→  Phone,
+    11→  Coffee,
+    12→  Clock,
+    13→  UserX,
+    14→  Play,
+    15→  Pause,
+    16→  RefreshCw,
+    17→  Users,
+    18→  Timer,
+    19→  Activity,
+    20→  Moon,
+    21→  FileSpreadsheet,
+    22→  ChevronDown,
+    23→  LogOut,
+    24→} from 'lucide-react';
+    25→import {
+    26→  DropdownMenu,
+    27→  DropdownMenuContent,
+    28→  DropdownMenuItem,
+    29→  DropdownMenuSeparator,
+    30→  DropdownMenuTrigger,
+    31→} from '@/components/ui/dropdown-menu';
+    32→import { authFetch } from '@/stores/auth-store';
+    33→import { formatDistanceToNow } from 'date-fns';
+    34→import { RecruiterReport } from '@/components/admin/recruiter-report';
+    35→
+    36→// ---------------------------------------------------------------------------
+    37→// Types
+    38→// ---------------------------------------------------------------------------
+    39→
+    40→interface LiveStatus {
+    41→  userId: string;
+    42→  name: string;
+    43→  status: 'ACTIVE' | 'LUNCH' | 'ON_CALL' | 'ON_BREAK' | 'IDLE' | 'OFFLINE';
+    44→  lastActivity: string | null;
+    45→  totalHoursToday: number;
+    46→  loginTime: string | null;
+    47→  breakStartTime: string | null;
+    48→  totalBreakDurationToday: number;
+    49→  totalActiveDurationToday: number;
+    50→  totalIdleDurationToday: number;
+    51→}
+    52→
+    53→// ---------------------------------------------------------------------------
+    54→// Status helpers
+    55→// ---------------------------------------------------------------------------
+    56→
+    57→type StatusKey = LiveStatus['status'];
+    58→
+    59→const STATUS_CONFIG: Record<
+    60→  StatusKey,
+    61→  { emoji: string; label: string; color: string; bgClass: string; textClass: string; icon: typeof Monitor }
+    62→> = {
+    63→  ACTIVE: {
+    64→    emoji: '✅',
+    65→    label: 'Active',
+    66→    color: 'emerald',
+    67→    bgClass: 'bg-emerald-100 dark:bg-emerald-950',
+    68→    textClass: 'text-emerald-700 dark:text-emerald-300',
+    69→    icon: Activity,
+    70→  },
+    71→  LUNCH: {
+    72→    emoji: '🍱',
+    73→    label: 'Lunch',
+    74→    color: 'blue',
+    75→    bgClass: 'bg-blue-100 dark:bg-blue-950',
+    76→    textClass: 'text-blue-700 dark:text-blue-300',
+    77→    icon: Coffee,
+    78→  },
+    79→  ON_CALL: {
+    80→    emoji: '📞',
+    81→    label: 'On Call',
+    82→    color: 'blue',
+    83→    bgClass: 'bg-blue-100 dark:bg-blue-950',
+    84→    textClass: 'text-blue-700 dark:text-blue-300',
+    85→    icon: Phone,
+    86→  },
+    87→  ON_BREAK: {
+    88→    emoji: '☕',
+    89→    label: 'Break',
+    90→    color: 'amber',
+    91→    bgClass: 'bg-amber-100 dark:bg-amber-950',
+    92→    textClass: 'text-amber-700 dark:text-amber-300',
+    93→    icon: Coffee,
+    94→  },
+    95→  IDLE: {
+    96→    emoji: '😴',
+    97→    label: 'Idle',
+    98→    color: 'slate',
+    99→    bgClass: 'bg-slate-100 dark:bg-slate-950',
+   100→    textClass: 'text-slate-600 dark:text-slate-400',
+   101→    icon: Moon,
+   102→  },
+   103→  OFFLINE: {
+   104→    emoji: '⚪',
+   105→    label: 'Offline',
+   106→    color: 'gray',
+   107→    bgClass: 'bg-gray-100 dark:bg-gray-950',
+   108→    textClass: 'text-gray-600 dark:text-gray-400',
+   109→    icon: UserX,
+   110→  },
+   111→};
+   112→
+   113→function getStatusBadgeVariant(status: StatusKey) {
+   114→  const map: Record<StatusKey, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+   115→    ACTIVE: 'default',
+   116→    LUNCH: 'default',
+   117→    ON_CALL: 'default',
+   118→    ON_BREAK: 'secondary',
+   119→    IDLE: 'secondary',
+   120→    OFFLINE: 'outline',
+   121→  };
+   122→  return map[status] || 'outline';
+   123→}
+   124→
+   125→// ---------------------------------------------------------------------------
+   126→// Utility formatters
+   127→// ---------------------------------------------------------------------------
+   128→
+   129→function formatDuration(ms: number): string {
+   130→  const totalSeconds = Math.floor(ms / 1000);
+   131→  const h = Math.floor(totalSeconds / 3600);
+   132→  const m = Math.floor((totalSeconds % 3600) / 60);
+   133→  const s = totalSeconds % 60;
+   134→  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+   135→}
+   136→
+   137→function formatHours(decimal: number): string {
+   138→  const h = Math.floor(decimal);
+   139→  const m = Math.round((decimal - h) * 60);
+   140→  if (h === 0 && m === 0) return '0m';
+   141→  if (h === 0) return `${m}m`;
+   142→  if (m === 0) return `${h}h`;
+   143→  return `${h}h ${m}m`;
+   144→}
+   145→
+   146→function relativeTime(dateStr: string | null): string {
+   147→  if (!dateStr) return '—';
+   148→  try {
+   149→    return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+   150→  } catch {
+   151→    return '—';
+   152→  }
+   153→}
+   154→
+   155→function formatLoginTime(dateStr: string | null): string {
+   156→  if (!dateStr) return '—';
+   157→  try {
+   158→    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+   159→  } catch {
+   160→    return '—';
+   161→  }
+   162→}
+   163→
+   164→// ---------------------------------------------------------------------------
+   165→// Skeleton loader
+   166→// ---------------------------------------------------------------------------
+   167→
+   168→function TableSkeleton({ rows = 5 }: { rows?: number }) {
+   169→  return (
+   170→    <div className="space-y-3">
+   171→      {Array.from({ length: rows }).map((_, i) => (
+   172→        <div key={i} className="flex items-center gap-4">
+   173→          <Skeleton className="h-4 w-4 rounded-full" />
+   174→          <Skeleton className="h-10 w-10 rounded-full" />
+   175→          <div className="flex-1 space-y-2">
+   176→            <Skeleton className="h-4 w-[140px]" />
+   177→            <Skeleton className="h-3 w-[100px]" />
+   178→          </div>
+   179→          <Skeleton className="h-6 w-20 rounded-full" />
+   180→          <Skeleton className="h-4 w-16 hidden sm:block" />
+   181→          <Skeleton className="h-9 w-24 rounded-md" />
+   182→        </div>
+   183→      ))}
+   184→    </div>
+   185→  );
+   186→}
+   187→
+   188→function MobileCardSkeleton({ rows = 4 }: { rows?: number }) {
+   189→  return (
+   190→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-4">
+   191→      {Array.from({ length: rows }).map((_, i) => (
+   192→        <Skeleton key={i} className="h-44 rounded-xl" />
+   193→      ))}
+   194→    </div>
+   195→  );
+   196→}
+   197→
+   198→// ---------------------------------------------------------------------------
+   199→// Main component
+   200→// ---------------------------------------------------------------------------
+   201→
+   202→type MonitoringTab = 'live' | 'reports';
+   203→
+   204→export function TeamMonitoring() {
+   205→  const [activeTab, setActiveTab] = useState<MonitoringTab>('live');
+   206→  const [statuses, setStatuses] = useState<LiveStatus[]>([]);
+   207→  const [loading, setLoading] = useState(true);
+   208→  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+   209→  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+   210→  const [error, setError] = useState<string | null>(null);
+   211→
+   212→  // -----------------------------------------------------------------------
+   213→  // Data fetching
+   214→  // -----------------------------------------------------------------------
+   215→
+   216→  const fetchStatuses = useCallback(async () => {
+   217→    try {
+   218→      // Use the accurate /api/user-status/team endpoint (proper idle/break tracking)
+   219→      const res = await authFetch('/api/user-status/team');
+   220→      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+   221→      const data = await res.json();
+   222→      const team = data.team || [];
+   223→      // Map API response to LiveStatus format
+   224→      const mapped: LiveStatus[] = team.map((m: Record<string, unknown>) => ({
+   225→        userId: m.userId as string,
+   226→        name: m.name as string,
+   227→        status: (m.status as LiveStatus['status']) || 'OFFLINE',
+   228→        lastActivity: m.lastActivity as string | null,
+   229→        totalHoursToday: Math.round(((m.totalActiveDurationToday as number) || 0) / 3600000 * 100) / 100,
+   230→        loginTime: m.loginTime as string | null,
+   231→        breakStartTime: (m.breakStartTime as string | null) || null,
+   232→        totalBreakDurationToday: (m.totalBreakDurationToday as number) || 0,
+   233→        totalActiveDurationToday: (m.totalActiveDurationToday as number) || 0,
+   234→        totalIdleDurationToday: (m.totalIdleDurationToday as number) || 0,
+   235→      }));
+   236→      setStatuses(mapped);
+   237→      setError(null);
+   238→    } catch (err) {
+   239→      console.error('Failed to fetch team status:', err);
+   240→      setError('Failed to load team activity. Please try again.');
+   241→    } finally {
+   242→      setLoading(false);
+   243→      setLastRefresh(new Date());
+   244→    }
+   245→  }, []);
+   246→
+   247→  // Initial load
+   248→  useEffect(() => {
+   249→    fetchStatuses();
+   250→  }, [fetchStatuses]);
+   251→
+   252→  // Auto-refresh every 30 seconds
+   253→  useEffect(() => {
+   254→    const interval = setInterval(fetchStatuses, 30_000);
+   255→    return () => clearInterval(interval);
+   256→  }, [fetchStatuses]);
+   257→
+   258→  // -----------------------------------------------------------------------
+   259→  // Admin status change handler (for any recruiter)
+   260→  // -----------------------------------------------------------------------
+   261→
+   262→  const handleSetStatus = async (recruiter: LiveStatus, newStatus: StatusKey) => {
+   263→    // Don't set to the same status (except LUNCH can be re-done)
+   264→    if (recruiter.status === newStatus && newStatus !== 'LUNCH') return;
+   265→    setTogglingUserId(recruiter.userId);
+   266→
+   267→    let action: string;
+   268→    let status: string;
+   269→
+   270→    switch (newStatus) {
+   271→      case 'ON_BREAK':
+   272→        action = 'BREAK_START';
+   273→        status = 'ON_BREAK';
+   274→        break;
+   275→      case 'IDLE':
+   276→        action = 'IDLE';
+   277→        status = 'IDLE';
+   278→        break;
+   279→      case 'OFFLINE':
+   280→        action = 'LOGOUT';
+   281→        status = 'OFFLINE';
+   282→        break;
+   283→      case 'ACTIVE':
+   284→        // If currently on break, end the break first
+   285→        if (recruiter.status === 'ON_BREAK') {
+   286→          try {
+   287→            await authFetch('/api/activity', {
+   288→              method: 'POST',
+   289→              headers: { 'Content-Type': 'application/json' },
+   290→              body: JSON.stringify({
+   291→                action: 'BREAK_END',
+   292→                status: 'ACTIVE',
+   293→                metadata: { targetUserId: recruiter.userId },
+   294→              }),
+   295→            });
+   296→          } catch { /* ignore */ }
+   297→        }
+   298→        action = 'LUNCH';
+   299→        status = 'LUNCH';
+   300→        break;
+   301→      default:
+   302→        setTogglingUserId(null);
+   303→        return;
+   304→    }
+   305→
+   306→    try {
+   307→      const res = await authFetch('/api/activity', {
+   308→        method: 'POST',
+   309→        headers: { 'Content-Type': 'application/json' },
+   310→        body: JSON.stringify({
+   311→          action,
+   312→          status,
+   313→          metadata: { targetUserId: recruiter.userId },
+   314→        }),
+   315→      });
+   316→
+   317→      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+   318→
+   319→      // Optimistic update
+   320→      setStatuses((prev) =>
+   321→        prev.map((s) =>
+   322→          s.userId === recruiter.userId
+   323→            ? { ...s, status: newStatus as StatusKey }
+   324→            : s,
+   325→        ),
+   326→      );
+   327→    } catch (err) {
+   328→      console.error(`Failed to set status to ${newStatus}:`, err);
+   329→      // Revert optimistic update on error
+   330→      fetchStatuses();
+   331→    } finally {
+   332→      setTogglingUserId(null);
+   333→    }
+   334→  };
+   335→
+   336→  // -----------------------------------------------------------------------
+   337→  // Summary counts
+   338→  // -----------------------------------------------------------------------
+   339→
+   340→  const counts = statuses.reduce(
+   341→    (acc, s) => {
+   342→      acc[s.status] = (acc[s.status] ?? 0) + 1;
+   343→      return acc;
+   344→    },
+   345→    {} as Partial<Record<StatusKey, number>>,
+   346→  );
+   347→
+   348→  const summaryCards: { key: StatusKey; label: string; icon: typeof Monitor }[] = [
+   349→    { key: 'ACTIVE', label: 'Active', icon: Activity },
+   350→    { key: 'LUNCH', label: 'Lunch', icon: Coffee },
+   351→    { key: 'ON_CALL', label: 'On Call', icon: Phone },
+   352→    { key: 'ON_BREAK', label: 'Break', icon: Coffee },
+   353→    { key: 'IDLE', label: 'Idle', icon: Clock },
+   354→    { key: 'OFFLINE', label: 'Offline', icon: UserX },
+   355→  ];
+   356→
+   357→  // -----------------------------------------------------------------------
+   358→  // Render helpers
+   359→  // -----------------------------------------------------------------------
+   360→
+   361→  const isOffline = (status: StatusKey) => status === 'OFFLINE';
+   362→
+   363→  // =========================================================================
+   364→  // RENDER
+   365→  // =========================================================================
+   366→
+   367→  return (
+   368→    <div className="space-y-6">
+   369→      {/* ── Header ─────────────────────────────────────────────────────── */}
+   370→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   371→        <div className="flex items-center gap-3">
+   372→          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950">
+   373→            <Monitor className="h-5 w-5 text-emerald-600" />
+   374→          </div>
+   375→          <div>
+   376→            <h2 className="text-xl font-semibold tracking-tight">Team Monitoring</h2>
+   377→            <p className="text-sm text-muted-foreground">Real-time recruiter activity tracking</p>
+   378→          </div>
+   379→        </div>
+   380→
+   381→        {/* Tab switcher */}
+   382→        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+   383→          <button
+   384→            onClick={() => setActiveTab('live')}
+   385→            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+   386→              activeTab === 'live'
+   387→                ? 'bg-background shadow-sm text-foreground'
+   388→                : 'text-muted-foreground hover:text-foreground'
+   389→            }`}
+   390→          >
+   391→            <Activity className="h-3.5 w-3.5" />
+   392→            <span className="hidden sm:inline">Live Status</span>
+   393→            <span className="sm:hidden">Live</span>
+   394→          </button>
+   395→          <button
+   396→            onClick={() => setActiveTab('reports')}
+   397→            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+   398→              activeTab === 'reports'
+   399→                ? 'bg-background shadow-sm text-foreground'
+   400→                : 'text-muted-foreground hover:text-foreground'
+   401→            }`}
+   402→          >
+   403→            <FileSpreadsheet className="h-3.5 w-3.5" />
+   404→            <span className="hidden sm:inline">Export Reports</span>
+   405→            <span className="sm:hidden">Reports</span>
+   406→          </button>
+   407→        </div>
+   408→
+   409→        <div className="flex items-center gap-3">
+   410→          {lastRefresh && (
+   411→            <span className="text-xs text-muted-foreground hidden sm:inline-flex items-center gap-1">
+   412→              <Timer className="h-3 w-3" />
+   413→              Updated {relativeTime(lastRefresh.toISOString())}
+   414→            </span>
+   415→          )}
+   416→          <Button
+   417→            variant="outline"
+   418→            size="sm"
+   419→            onClick={() => {
+   420→              setLoading(true);
+   421→              fetchStatuses();
+   422→            }}
+   423→            disabled={loading}
+   424→            className="gap-1.5"
+   425→          >
+   426→            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+   427→            Refresh
+   428→          </Button>
+   429→        </div>
+   430→      </div>
+   431→
+   432→      {/* ── Reports Tab ──────────────────────────────────────────────── */}
+   433→      {activeTab === 'reports' && <RecruiterReport />}
+   434→
+   435→      {/* ── Live Status Tab ────────────────────────────────────────────── */}
+   436→      {activeTab === 'live' && <>
+   437→      {/* ── Summary cards ─────────────────────────────────────────────── */}
+   438→      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   439→        {summaryCards.map(({ key, label, icon: Icon }) => {
+   440→          const cfg = STATUS_CONFIG[key];
+   441→          return (
+   442→            <Card key={key} className={`${cfg.bgClass} border-0`}>
+   443→              <CardContent className="p-4">
+   444→                <div className="flex items-center gap-2">
+   445→                  <Icon className={`h-4 w-4 ${cfg.textClass}`} />
+   446→                  <span className={`text-sm font-medium ${cfg.textClass}`}>{label}</span>
+   447→                </div>
+   448→                <p className="text-2xl font-bold mt-1">{counts[key] ?? 0}</p>
+   449→              </CardContent>
+   450→            </Card>
+   451→          );
+   452→        })}
+   453→      </div>
+   454→
+   455→      {/* ── Error state ────────────────────────────────────────────────── */}
+   456→      {error && (
+   457→        <Card className="border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950">
+   458→          <CardContent className="p-4 flex items-center justify-between">
+   459→            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+   460→            <Button variant="outline" size="sm" onClick={fetchStatuses}>
+   461→              Retry
+   462→            </Button>
+   463→          </CardContent>
+   464→        </Card>
+   465→      )}
+   466→
+   467→      {/* ── Loading state ──────────────────────────────────────────────── */}
+   468→      {loading && (
+   469→        <>
+   470→          <MobileCardSkeleton />
+   471→          <div className="hidden lg:block">
+   472→            <Card>
+   473→              <CardContent className="p-6">
+   474→                <TableSkeleton />
+   475→              </CardContent>
+   476→            </Card>
+   477→          </div>
+   478→        </>
+   479→      )}
+   480→
+   481→      {/* ── Empty state ────────────────────────────────────────────────── */}
+   482→      {!loading && statuses.length === 0 && (
+   483→        <Card>
+   484→          <CardContent className="py-16 flex flex-col items-center justify-center text-center">
+   485→            <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
+   486→            <h3 className="text-lg font-medium text-muted-foreground">No team members found</h3>
+   487→            <p className="text-sm text-muted-foreground mt-1">
+   488→              Recruiters will appear here once they log in.
+   489→            </p>
+   490→          </CardContent>
+   491→        </Card>
+   492→      )}
+   493→
+   494→      {/* ── Mobile cards (visible on < lg) ────────────────────────────── */}
+   495→      {!loading && statuses.length > 0 && (
+   496→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-4">
+   497→          {statuses.map((recruiter) => {
+   498→            const cfg = STATUS_CONFIG[recruiter.status];
+   499→            const StatusIcon = cfg.icon;
+   500→            const offline = isOffline(recruiter.status);
+   501→            const toggling = togglingUserId === recruiter.userId;
+   502→
+   503→            return (
+   504→              <Card key={recruiter.userId} className="overflow-hidden">
+   505→                {/* Status bar */}
+   506→                <div className={`h-1 ${cfg.bgClass}`} />
+   507→                <CardContent className="p-4">
+   508→                  <div className="flex items-start justify-between gap-3">
+   509→                    {/* Left: avatar + name */}
+   510→                    <div className="flex items-center gap-3 min-w-0">
+   511→                      <div className="relative shrink-0">
+   512→                        <div
+   513→                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${cfg.bgClass} ${cfg.textClass}`}
+   514→                        >
+   515→                          {recruiter.name
+   516→                            .split(' ')
+   517→                            .map((n) => n[0])
+   518→                            .join('')
+   519→                            .toUpperCase()
+   520→                            .slice(0, 2)}
+   521→                        </div>
+   522→                        <span className="absolute -bottom-0.5 -right-0.5 text-xs leading-none">
+   523→                          {cfg.emoji}
+   524→                        </span>
+   525→                      </div>
+   526→                      <div className="min-w-0">
+   527→                        <p className="font-medium truncate">{recruiter.name}</p>
+   528→                        <div className={`inline-flex items-center gap-1 text-xs ${cfg.textClass}`}>
+   529→                          <StatusIcon className="h-3 w-3" />
+   530→                          {cfg.label}
+   531→                        </div>
+   532→                      </div>
+   533→                    </div>
+   534→
+   535→                    {/* Action dropdown */}
+   536→                    {!offline ? (
+   537→                      toggling ? (
+   538→                        <Button size="sm" variant="outline" disabled className="shrink-0">
+   539→                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+   540→                        </Button>
+   541→                      ) : (
+   542→                        <DropdownMenu>
+   543→                          <DropdownMenuTrigger asChild>
+   544→                            <Button size="sm" variant="outline" className="shrink-0 gap-1">
+   545→                              <ChevronDown className="h-3.5 w-3.5" />
+   546→                              Action
+   547→                            </Button>
+   548→                          </DropdownMenuTrigger>
+   549→                          <DropdownMenuContent align="end" className="w-40">
+   550→                            {recruiter.status === 'ON_BREAK' && (
+   551→                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+   552→                                <Play className="h-4 w-4 mr-2 text-emerald-600" />
+   553→                                Resume
+   554→                              </DropdownMenuItem>
+   555→                            )}
+   556→                            {recruiter.status !== 'ACTIVE' && (
+   557→                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+   558→                                <Activity className="h-4 w-4 mr-2 text-emerald-600" />
+   559→                                Set Active
+   560→                              </DropdownMenuItem>
+   561→                            )}
+   562→                            {recruiter.status !== 'ON_BREAK' && (
+   563→                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ON_BREAK')}>
+   564→                                <Coffee className="h-4 w-4 mr-2 text-amber-600" />
+   565→                                Set Break
+   566→                              </DropdownMenuItem>
+   567→                            )}
+   568→                            {recruiter.status !== 'IDLE' && (
+   569→                              <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'IDLE')}>
+   570→                                <Moon className="h-4 w-4 mr-2 text-slate-500" />
+   571→                                Set Idle
+   572→                              </DropdownMenuItem>
+   573→                            )}
+   574→                            <DropdownMenuSeparator />
+   575→                            <DropdownMenuItem
+   576→                              onClick={() => handleSetStatus(recruiter, 'OFFLINE')}
+   577→                              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+   578→                            >
+   579→                              <LogOut className="h-4 w-4 mr-2" />
+   580→                              Set Offline
+   581→                            </DropdownMenuItem>
+   582→                          </DropdownMenuContent>
+   583→                        </DropdownMenu>
+   584→                      )
+   585→                    ) : (
+   586→                      <span className="text-xs text-muted-foreground">—</span>
+   587→                    )}
+   588→                  </div>
+   589→
+   590→                  {/* Stats row */}
+   591→                  <div className="mt-4 grid grid-cols-2 gap-2.5 text-xs">
+   592→                    <div className="flex items-center gap-1.5 text-muted-foreground">
+   593→                      <Clock className="h-3 w-3 shrink-0" />
+   594→                      <span>In: {formatLoginTime(recruiter.loginTime)}</span>
+   595→                    </div>
+   596→                    <div className="flex items-center gap-1.5 text-muted-foreground">
+   597→                      <Timer className="h-3 w-3 shrink-0" />
+   598→                      <span>Hours: {formatHours(recruiter.totalHoursToday)}</span>
+   599→                    </div>
+   600→                    <div className="flex items-center gap-1.5">
+   601→                      <Moon className="h-3 w-3 shrink-0 text-slate-500" />
+   602→                      <span className="text-slate-600 dark:text-slate-400 font-mono">Idle: {formatDuration(recruiter.totalIdleDurationToday)}</span>
+   603→                    </div>
+   604→                    <div className="flex items-center gap-1.5">
+   605→                      <Pause className="h-3 w-3 shrink-0 text-amber-500" />
+   606→                      <span className="text-amber-600 dark:text-amber-400 font-mono">Break: {formatDuration(recruiter.totalBreakDurationToday)}</span>
+   607→                    </div>
+   608→                    <div className="col-span-2 flex items-center gap-1.5">
+   609→                      <Play className="h-3 w-3 shrink-0 text-emerald-500" />
+   610→                      <span className="text-emerald-600 dark:text-emerald-400 font-mono font-semibold">Active: {formatDuration(recruiter.totalActiveDurationToday)}</span>
+   611→                    </div>
+   612→                  </div>
+   613→                </CardContent>
+   614→              </Card>
+   615→            );
+   616→          })}
+   617→        </div>
+   618→      )}
+   619→
+   620→      {/* ── Desktop table (visible on lg+) ───────────────────────────── */}
+   621→      {!loading && statuses.length > 0 && (
+   622→        <Card className="hidden lg:block">
+   623→          <CardContent className="p-0">
+   624→            {/* Table header */}
+   625→            <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_minmax(90px,0.9fr)_minmax(90px,auto)] items-center gap-3 border-b px-5 py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+   626→              <span>Recruiter</span>
+   627→              <span>Status</span>
+   628→              <span className="text-center">Login</span>
+   629→              <span className="text-center">Hours</span>
+   630→              <span className="flex items-center gap-1 justify-center"><Moon className="h-2.5 w-2.5" /> Idle</span>
+   631→              <span className="flex items-center gap-1 justify-center"><Pause className="h-2.5 w-2.5" /> Break</span>
+   632→              <span className="flex items-center gap-1 justify-center"><Play className="h-2.5 w-2.5" /> Active</span>
+   633→              <span>Last Activity</span>
+   634→              <span className="text-right">Action</span>
+   635→            </div>
+   636→
+   637→            {/* Table body with scroll */}
+   638→            <div className="max-h-[520px] overflow-y-auto">
+   639→              {statuses.map((recruiter, idx) => {
+   640→                const cfg = STATUS_CONFIG[recruiter.status];
+   641→                const StatusIcon = cfg.icon;
+   642→                const offline = isOffline(recruiter.status);
+   643→                const toggling = togglingUserId === recruiter.userId;
+   644→
+   645→                return (
+   646→                  <div
+   647→                    key={recruiter.userId}
+   648→                    className={`grid grid-cols-[1.5fr_0.8fr_0.8fr_0.6fr_0.8fr_0.8fr_0.8fr_minmax(90px,0.9fr)_minmax(90px,auto)] items-center gap-3 px-5 py-3 text-sm ${
+   649→                      idx !== statuses.length - 1 ? 'border-b' : ''
+   650→                    } hover:bg-muted/50 transition-colors`}
+   651→                  >
+   652→                    {/* Recruiter name */}
+   653→                    <div className="flex items-center gap-2.5 min-w-0">
+   654→                      <div className="relative shrink-0">
+   655→                        <div
+   656→                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${cfg.bgClass} ${cfg.textClass}`}
+   657→                        >
+   658→                          {recruiter.name
+   659→                            .split(' ')
+   660→                            .map((n) => n[0])
+   661→                            .join('')
+   662→                            .toUpperCase()
+   663→                            .slice(0, 2)}
+   664→                        </div>
+   665→                        <span className="absolute -bottom-0.5 -right-0.5 text-[10px] leading-none">
+   666→                          {cfg.emoji}
+   667→                        </span>
+   668→                      </div>
+   669→                      <span className="font-medium truncate text-sm">{recruiter.name}</span>
+   670→                    </div>
+   671→
+   672→                    {/* Status badge */}
+   673→                    <div>
+   674→                      <Badge
+   675→                        variant={getStatusBadgeVariant(recruiter.status)}
+   676→                        className={`${cfg.bgClass} ${cfg.textClass} border-0 gap-1 text-xs`}
+   677→                      >
+   678→                        <StatusIcon className="h-3 w-3" />
+   679→                        {cfg.label}
+   680→                      </Badge>
+   681→                    </div>
+   682→
+   683→                    {/* Login time */}
+   684→                    <span className="text-muted-foreground text-xs text-center">
+   685→                      {formatLoginTime(recruiter.loginTime)}
+   686→                    </span>
+   687→
+   688→                    {/* Hours today */}
+   689→                    <span className="text-muted-foreground text-xs text-center inline-flex items-center justify-center gap-1">
+   690→                      <Timer className="h-3 w-3 shrink-0" />
+   691→                      {formatHours(recruiter.totalHoursToday)}
+   692→                    </span>
+   693→
+   694→                    {/* Idle Time */}
+   695→                    <span className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
+   696→                      {formatDuration(recruiter.totalIdleDurationToday)}
+   697→                    </span>
+   698→
+   699→                    {/* Break Total */}
+   700→                    <span className="text-center font-mono text-xs text-amber-600 dark:text-amber-400">
+   701→                      {formatDuration(recruiter.totalBreakDurationToday)}
+   702→                    </span>
+   703→
+   704→                    {/* Active Time */}
+   705→                    <span className="text-center font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+   706→                      {formatDuration(recruiter.totalActiveDurationToday)}
+   707→                    </span>
+   708→
+   709→                    {/* Last activity */}
+   710→                    <span className="text-muted-foreground text-xs inline-flex items-center gap-1">
+   711→                      <Activity className="h-3 w-3 shrink-0" />
+   712→                      {relativeTime(recruiter.lastActivity)}
+   713→                    </span>
+   714→
+   715→                    {/* Action dropdown */}
+   716→                    <div className="text-right shrink-0">
+   717→                      {!offline ? (
+   718→                        toggling ? (
+   719→                          <Button size="sm" variant="outline" disabled className="h-7 text-xs">
+   720→                            <RefreshCw className="h-3 w-3 animate-spin" />
+   721→                          </Button>
+   722→                        ) : (
+   723→                          <DropdownMenu>
+   724→                            <DropdownMenuTrigger asChild>
+   725→                              <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+   726→                                <ChevronDown className="h-3 w-3" />
+   727→                                Action
+   728→                              </Button>
+   729→                            </DropdownMenuTrigger>
+   730→                            <DropdownMenuContent align="end" className="w-40">
+   731→                              {recruiter.status === 'ON_BREAK' && (
+   732→                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+   733→                                  <Play className="h-4 w-4 mr-2 text-emerald-600" />
+   734→                                  Resume
+   735→                                </DropdownMenuItem>
+   736→                              )}
+   737→                              {recruiter.status !== 'ACTIVE' && (
+   738→                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ACTIVE')}>
+   739→                                  <Activity className="h-4 w-4 mr-2 text-emerald-600" />
+   740→                                  Set Active
+   741→                                </DropdownMenuItem>
+   742→                              )}
+   743→                              {recruiter.status !== 'ON_BREAK' && (
+   744→                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'ON_BREAK')}>
+   745→                                  <Coffee className="h-4 w-4 mr-2 text-amber-600" />
+   746→                                  Set Break
+   747→                                </DropdownMenuItem>
+   748→                              )}
+   749→                              {recruiter.status !== 'IDLE' && (
+   750→                                <DropdownMenuItem onClick={() => handleSetStatus(recruiter, 'IDLE')}>
+   751→                                  <Moon className="h-4 w-4 mr-2 text-slate-500" />
+   752→                                  Set Idle
+   753→                                </DropdownMenuItem>
+   754→                              )}
+   755→                              <DropdownMenuSeparator />
+   756→                              <DropdownMenuItem
+   757→                                onClick={() => handleSetStatus(recruiter, 'OFFLINE')}
+   758→                                className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950"
+   759→                              >
+   760→                                <LogOut className="h-4 w-4 mr-2" />
+   761→                                Set Offline
+   762→                              </DropdownMenuItem>
+   763→                            </DropdownMenuContent>
+   764→                          </DropdownMenu>
+   765→                        )
+   766→                      ) : (
+   767→                        <span className="text-xs text-muted-foreground">—</span>
+   768→                      )}
+   769→                    </div>
+   770→                  </div>
+   771→                );
+   772→              })}
+   773→            </div>
+   774→          </CardContent>
+   775→        </Card>
+   776→      )}
+   777→      </>}
+   778→    </div>
+   779→  );
+   780→}
+   781→

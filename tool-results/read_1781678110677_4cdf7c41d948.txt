@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import React, { useEffect, useState, useCallback, useRef } from 'react'
+     4→import { useAuthStore } from '@/stores/auth-store'
+     5→import { useIsMobile } from '@/hooks/use-mobile'
+     6→import {
+     7→  Phone,
+     8→  PhoneOff,
+     9→  PhoneCall,
+    10→  SkipForward,
+    11→  ChevronRight,
+    12→  ChevronLeft,
+    13→  Clock,
+    14→  MapPin,
+    15→  Briefcase,
+    16→  User,
+    17→  ListChecks,
+    18→  MessageSquare,
+    19→  CalendarClock,
+    20→  Send,
+    21→  Check,
+    22→  Loader2,
+    23→  AlertCircle,
+    24→  Mic,
+    25→  MicOff,
+    26→  ArrowRight,
+    27→  PhoneIncoming,
+    28→  ClipboardCheck,
+    29→  X,
+    30→  ChevronDown,
+    31→} from 'lucide-react'
+    32→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    33→import { Button } from '@/components/ui/button'
+    34→import { Badge } from '@/components/ui/badge'
+    35→import { Textarea } from '@/components/ui/textarea'
+    36→import { Label } from '@/components/ui/label'
+    37→import { Progress } from '@/components/ui/progress'
+    38→import { Separator } from '@/components/ui/separator'
+    39→import { Skeleton } from '@/components/ui/skeleton'
+    40→// Select replaced with native <select> for Android WebView compatibility
+    41→import {
+    42→  Dialog,
+    43→  DialogContent,
+    44→  DialogHeader,
+    45→  DialogTitle,
+    46→  DialogDescription,
+    47→  DialogFooter,
+    48→} from '@/components/ui/dialog'
+    49→// Calendar replaced with native <input type="date"> for Android WebView compatibility
+    50→// Popover replaced with CSS bottom-sheet for Android WebView compatibility
+    51→import { toast } from 'sonner'
+    52→import { authFetch } from '@/stores/auth-store'
+    53→import { cn, formatPhoneForWhatsApp } from '@/lib/utils'
+    54→import { recordCallActivity } from '@/lib/call-activity-tracker'
+    55→// format removed — scheduledDate is now a YYYY-MM-DD string, formatted natively
+    56→
+    57→interface AutoDialerProps {
+    58→  userId: string
+    59→  onNavigate: (page: string) => void
+    60→}
+    61→
+    62→/* ---------- Types ---------- */
+    63→interface Candidate {
+    64→  id: string
+    65→  name: string
+    66→  phone: string
+    67→  role: string | null
+    68→  location: string | null
+    69→  company: string | null
+    70→  status: string
+    71→}
+    72→
+    73→interface CallListInfo {
+    74→  id: string
+    75→  name: string
+    76→  description: string | null
+    77→  candidates: Candidate[]
+    78→  assignments: { id: string; recruiterId: string; callListId: string }[]
+    79→}
+    80→
+    81→interface Disposition {
+    82→  id: string
+    83→  heading: string
+    84→  type: string
+    85→  isActive: boolean
+    86→}
+    87→
+    88→interface MessageTemplate {
+    89→  id: string
+    90→  name: string
+    91→  type: string
+    92→  content: string
+    93→  isActive: boolean
+    94→}
+    95→
+    96→interface Client {
+    97→  id: string
+    98→  name: string
+    99→}
+   100→
+   101→type DialerScreen = 'select-list' | 'list-summary' | 'calling'
+   102→
+   103→/* ---------- Helper ---------- */
+   104→function formatDuration(seconds: number): string {
+   105→  const m = Math.floor(seconds / 60)
+   106→  const s = seconds % 60
+   107→  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+   108→}
+   109→
+   110→function cleanPhone(phone: string): string {
+   111→  // Keep only digits
+   112→  return phone.replace(/[^0-9]/g, '')
+   113→}
+   114→
+   115→/* ---------- Component ---------- */
+   116→export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
+   117→  const [screen, setScreen] = useState<DialerScreen>('select-list')
+   118→  const [callLists, setCallLists] = useState<CallListInfo[]>([])
+   119→  const [selectedList, setSelectedList] = useState<CallListInfo | null>(null)
+   120→  const [candidates, setCandidates] = useState<Candidate[]>([])
+   121→  const [currentIndex, setCurrentIndex] = useState(0)
+   122→  const [currentCandidate, setCurrentCandidate] = useState<Candidate | null>(null)
+   123→  const [dispositions, setDispositions] = useState<Disposition[]>([])
+   124→  const [clients, setClients] = useState<Client[]>([])
+   125→  const [loading, setLoading] = useState(false)
+   126→  const [callTimer, setCallTimer] = useState(0)
+   127→  const [includeDispositionTime, setIncludeDispositionTime] = useState(true)
+   128→  const [callInitiated, setCallInitiated] = useState(false)
+   129→  const [callGap, setCallGap] = useState(() => {
+   130→    if (typeof window === 'undefined') return 3
+   131→    const saved = localStorage.getItem('recruiter-call-delay')
+   132→    return saved ? parseInt(saved, 10) || 3 : 3
+   133→  })
+   134→  const [callGapCountdown, setCallGapCountdown] = useState<number | null>(null)
+   135→  const [preCallCountdown, setPreCallCountdown] = useState<number | null>(null)
+   136→  const [completedCount, setCompletedCount] = useState(0)
+   137→
+   138→  // Post-call disposition modal state
+   139→  const [isDispositionModalOpen, setIsDispositionModalOpen] = useState(false)
+   140→  const [selectedDisposition, setSelectedDisposition] = useState('')
+   141→  const [selectedClient, setSelectedClient] = useState('')
+   142→  const [customClientName, setCustomClientName] = useState('')
+   143→  const [notes, setNotes] = useState('')
+   144→  const [scheduledDate, setScheduledDate] = useState<string>('') // YYYY-MM-DD for native input
+   145→  const [f2fInterviewDate, setF2fInterviewDate] = useState<string>('') // YYYY-MM-DD
+   146→  const [savingRecord, setSavingRecord] = useState(false)
+   147→
+   148→  // Template state
+   149→  const [templates, setTemplates] = useState<MessageTemplate[]>([])
+   150→  const [templateSheetOpen, setTemplateSheetOpen] = useState<'sms' | 'whatsapp' | null>(null)
+   151→  const [selectedSmsTemplate, setSelectedSmsTemplate] = useState('')
+   152→  const [selectedWaTemplate, setSelectedWaTemplate] = useState('')
+   153→  const [selectedSmsText, setSelectedSmsText] = useState('')
+   154→  const [selectedWaText, setSelectedWaText] = useState('')
+   155→
+   156→  // Voice input state
+   157→  const [isListening, setIsListening] = useState(false)
+   158→  const recognitionRef = useRef<ReturnType<typeof createRecognition> | null>(null)
+   159→
+   160→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   161→  const gapTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   162→  const preCallTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   163→  const notesRef = useRef<HTMLTextAreaElement>(null)
+   164→  const callInitiatedRef = useRef(false)
+   165→  const includeDispositionTimeRef = useRef(true)
+   166→
+   167→  // Dynamically measure the actual viewport height for the bottom-sheet.
+   168→  // CSS dvh/vh units are UNRELIABLE in Android WebView — they don't account for
+   169→  // the status bar, navigation bar, or browser chrome. window.innerHeight gives
+   170→  // the real pixel count of the visible area.
+   171→  const isMobile = useIsMobile()
+   172→  const [sheetHeight, setSheetHeight] = useState(0)
+   173→  useEffect(() => {
+   174→    const measure = () => {
+   175→      const h = window.innerHeight || window.visualViewport?.height || 600
+   176→      // Use 85% of actual visible height, leave 15% for the overlay to show behind
+   177→      setSheetHeight(Math.round(h * 0.85))
+   178→    }
+   179→    measure()
+   180→    // Re-measure when viewport changes (keyboard open, rotation, etc.)
+   181→    window.addEventListener('resize', measure)
+   182→    window.visualViewport?.addEventListener('resize', measure)
+   183→    window.addEventListener('orientationchange', measure)
+   184→    return () => {
+   185→      window.removeEventListener('resize', measure)
+   186→      window.visualViewport?.removeEventListener('resize', measure)
+   187→      window.removeEventListener('orientationchange', measure)
+   188→    }
+   189→  }, [])
+   190→
+   191→  // Fetch call lists assigned to this user
+   192→  const fetchCallLists = useCallback(async () => {
+   193→    setLoading(true)
+   194→    try {
+   195→      const res = await authFetch('/api/call-lists')
+   196→      if (!res.ok) throw new Error()
+   197→      const data = await res.json()
+   198→      const all: CallListInfo[] = data.callLists || []
+   199→      const assigned = all.filter((l) => l.assignments.some((a) => a.recruiterId === userId))
+   200→      setCallLists(assigned)
+   201→
+   202→      // Auto-select list if redirected from "Start Dialing" button
+   203→      try {
+   204→        const autoListId = sessionStorage.getItem('auto_select_list_id')
+   205→        if (autoListId) {
+   206→          sessionStorage.removeItem('auto_select_list_id')
+   207→          const targetList = assigned.find((l) => l.id === autoListId)
+   208→          if (targetList) {
+   209→            const pendingCount = targetList.candidates.filter(
+   210→              (c) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+   211→            ).length
+   212→            if (pendingCount > 0) {
+   213→              setSelectedList(targetList)
+   214→              setScreen('list-summary')
+   215→              // Load candidates for auto-selected list
+   216→              const candRes = await authFetch(`/api/call-lists/${targetList.id}/candidates`)
+   217→              if (candRes.ok) {
+   218→                const candData = await candRes.json()
+   219→                const pending = (candData.candidates || []).filter(
+   220→                  (c: Candidate) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+   221→                )
+   222→                setCandidates(pending)
+   223→              }
+   224→            } else {
+   225→              toast.info('This list has no pending candidates.', { duration: 3000 })
+   226→            }
+   227→          }
+   228→        }
+   229→      } catch { /* ignore sessionStorage errors */ }
+   230→    } catch {
+   231→      toast.error('Failed to load calling lists')
+   232→    }
+   233→    setLoading(false)
+   234→  }, [userId])
+   235→
+   236→  // Fetch dispositions, clients & templates
+   237→  const fetchDispositions = useCallback(async () => {
+   238→    try {
+   239→      const [dispRes, cliRes, tmplRes] = await Promise.all([
+   240→        authFetch('/api/dispositions'),
+   241→        authFetch('/api/clients'),
+   242→        authFetch('/api/message-templates'),
+   243→      ])
+   244→      if (dispRes.ok) {
+   245→        const d = await dispRes.json()
+   246→        const active = (d.dispositions || []).filter((disp: Disposition) => disp.isActive)
+   247→        // Deduplicate by heading (case-insensitive) — keep first occurrence
+   248→        const seen = new Set<string>()
+   249→        const unique = active.filter((disp: Disposition) => {
+   250→          const key = disp.heading.toLowerCase().trim()
+   251→          if (seen.has(key)) return false
+   252→          seen.add(key)
+   253→          return true
+   254→        })
+   255→        setDispositions(unique)
+   256→      }
+   257→      if (cliRes.ok) {
+   258→        const c = await cliRes.json()
+   259→        setClients(c.clients || [])
+   260→      }
+   261→      if (tmplRes.ok) {
+   262→        const t = await tmplRes.json()
+   263→        const activeTemplates = (t.templates || []).filter((tmpl: MessageTemplate) => tmpl.isActive)
+   264→        setTemplates(activeTemplates)
+   265→        console.log('[AutoDialer] Loaded', activeTemplates.length, 'message templates')
+   266→      } else {
+   267→        console.error('[AutoDialer] Failed to fetch templates:', tmplRes.status)
+   268→      }
+   269→    } catch (err) {
+   270→      console.error('[AutoDialer] fetchDispositions error:', err)
+   271→    }
+   272→  }, [])
+   273→
+   274→  const user = useAuthStore((s) => s.user)
+   275→
+   276→  // Fetch call timer config (includeDispositionTime) from platform settings
+   277→  useEffect(() => {
+   278→    authFetch('/api/settings/call-timer-config')
+   279→      .then((res) => {
+   280→        if (res.ok) return res.json()
+   281→        return { includeDispositionTime: true }
+   282→      })
+   283→      .then((data) => {
+   284→        const val = data.includeDispositionTime ?? true
+   285→        setIncludeDispositionTime(val)
+   286→        includeDispositionTimeRef.current = val
+   287→        console.log('[AutoDialer] includeDispositionTime:', val)
+   288→      })
+   289→      .catch(() => { /* non-blocking — default true */ })
+   290→  }, [])
+   291→
+   292→  useEffect(() => {
+   293→    fetchCallLists()
+   294→    fetchDispositions()
+   295→    // Sync current status from API to localStorage (in case user navigated here directly)
+   296→    authFetch('/api/user-status')
+   297→      .then((res) => {
+   298→        if (res.ok) return res.json()
+   299→      })
+   300→      .then((data) => {
+   301→        if (data?.status) {
+   302→          try { localStorage.setItem('recruiter_current_status', data.status) } catch { /* ignore */ }
+   303→        }
+   304→      })
+   305→      .catch(() => { /* non-blocking */ })
+   306→  }, [fetchCallLists, fetchDispositions])
+   307→
+   308→  // Cleanup timers & voice recognition
+   309→  useEffect(() => {
+   310→    return () => {
+   311→      if (timerRef.current) clearInterval(timerRef.current)
+   312→      if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+   313→      if (preCallTimerRef.current) clearInterval(preCallTimerRef.current)
+   314→      if (recognitionRef.current) {
+   315→        try { recognitionRef.current.stop() } catch { /* ignore */ }
+   316→      }
+   317→    }
+   318→  }, [])
+   319→
+   320→  /* ==================== DETECT RETURN FROM PHONE DIALER ==================== */
+   321→  // Uses sessionStorage to persist call state across page reloads (Android WebView may reload)
+   322→  // Also listens to visibilitychange, focus, and pageshow events
+   323→  // Exposes window.showPostCallDisposition() for Android evaluateJavascript
+   324→
+   325→  const CALL_STATE_KEY = 'recruiter_call_in_progress'
+   326→
+   327→  const saveCallState = useCallback((candidate: Candidate) => {
+   328→    try {
+   329→      sessionStorage.setItem(CALL_STATE_KEY, JSON.stringify({
+   330→        phone: candidate.phone,
+   331→        name: candidate.name,
+   332→        candidateId: candidate.id,
+   333→        role: candidate.role,
+   334→        location: candidate.location,
+   335→        company: candidate.company,
+   336→        timestamp: Date.now(),
+   337→      }))
+   338→      console.log('[AutoDialer] Call state saved to sessionStorage')
+   339→    } catch (e) {
+   340→      console.error('[AutoDialer] Failed to save call state:', e)
+   341→    }
+   342→  }, [])
+   343→
+   344→  const clearCallState = useCallback(() => {
+   345→    try {
+   346→      sessionStorage.removeItem(CALL_STATE_KEY)
+   347→    } catch (e) { /* ignore */ }
+   348→  }, [])
+   349→
+   350→  const checkPendingCall = useCallback(() => {
+   351→    try {
+   352→      const raw = sessionStorage.getItem(CALL_STATE_KEY)
+   353→      if (!raw) return false
+   354→      const data = JSON.parse(raw)
+   355→      // Only trigger if call was initiated in the last 30 minutes
+   356→      if (Date.now() - data.timestamp > 30 * 60 * 1000) {
+   357→        sessionStorage.removeItem(CALL_STATE_KEY)
+   358→        return false
+   359→      }
+   360→      // Found a pending call — user returned from dialer
+   361→      console.log('[AutoDialer] Pending call detected on return:', data.phone)
+   362→      sessionStorage.removeItem(CALL_STATE_KEY)
+   363→      return data
+   364→    } catch {
+   365→      return false
+   366→    }
+   367→  }, [])
+   368→
+   369→  // Guard flag to prevent duplicate disposition popup triggers from multiple events
+   370→  // firing at once (visibilitychange + focus + pageshow)
+   371→  const dispositionShownRef = useRef(false)
+   372→
+   373→  // Restore call state and show disposition when returning from dialer
+   374→  const handleReturnFromDialer = useCallback((storedData?: { candidateId: string; phone: string; name: string; role: string | null; location: string | null; company: string | null; timestamp: number }) => {
+   375→    // Prevent duplicate triggers from multiple simultaneous events
+   376→    if (dispositionShownRef.current) {
+   377→      console.log('[AutoDialer] Disposition already shown, skipping duplicate trigger')
+   378→      return
+   379→    }
+   380→    dispositionShownRef.current = true
+   381→
+   382→    if (storedData) {
+   383→      // Restore candidate info from sessionStorage if we lost it on reload
+   384→      const restored: Candidate = {
+   385→        id: storedData.candidateId,
+   386→        phone: storedData.phone,
+   387→        name: storedData.name,
+   388→        role: storedData.role,
+   389→        location: storedData.location,
+   390→        company: storedData.company,
+   391→        status: 'PENDING',
+   392→      }
+   393→      setCurrentCandidate(restored)
+   394→      setCurrentIndex((prev) => {
+   395→        // Use functional update to avoid stale closure on candidates array
+   396→        return prev // Keep current index for now — will be corrected below
+   397→      })
+   398→    }
+   399→    callInitiatedRef.current = false
+   400→    setCallInitiated(false)
+   401→    // Only stop the timer if disposition time is NOT included
+   402→    // When includeDispositionTime is ON, timer continues until disposition submit
+   403→    if (!includeDispositionTimeRef.current) {
+   404→      stopCallTimer()
+   405→    }
+   406→    // Small delay to ensure UI is ready before showing the popup
+   407→    setTimeout(() => {
+   408→      setIsDispositionModalOpen(true)
+   409→      console.log('[AutoDialer] Disposition popup shown')
+   410→    }, 500)
+   411→  }, []) // Empty deps — uses refs and functional state updates to avoid stale closures
+   412→
+   413→  useEffect(() => {
+   414→    // Listen for visibility change (tab/WebView becomes visible again)
+   415→    const handleVisibilityChange = () => {
+   416→      console.log('[AutoDialer] visibilitychange:', document.visibilityState, 'callInitiated:', callInitiatedRef.current)
+   417→      if (document.visibilityState === 'visible') {
+   418→        if (callInitiatedRef.current) {
+   419→          handleReturnFromDialer()
+   420→        } else {
+   421→          // Also check sessionStorage in case ref was lost (page reload)
+   422→          const pendingData = checkPendingCall()
+   423→          if (pendingData) {
+   424→            handleReturnFromDialer(pendingData)
+   425→          }
+   426→        }
+   427→      }
+   428→    }
+   429→
+   430→    // Listen for window focus (WebView regains focus)
+   431→    const handleFocus = () => {
+   432→      console.log('[AutoDialer] window focus event, callInitiated:', callInitiatedRef.current)
+   433→      if (callInitiatedRef.current) {
+   434→        handleReturnFromDialer()
+   435→      } else {
+   436→        const pendingData = checkPendingCall()
+   437→        if (pendingData) {
+   438→          handleReturnFromDialer(pendingData)
+   439→        }
+   440→      }
+   441→    }
+   442→
+   443→    // Listen for pageshow (page restored from bfcache or back navigation)
+   444→    const handlePageShow = (e: PageTransitionEvent) => {
+   445→      console.log('[AutoDialer] pageshow, persisted:', e.persisted)
+   446→      if (e.persisted) {
+   447→        const pendingData = checkPendingCall()
+   448→        if (pendingData) {
+   449→          handleReturnFromDialer(pendingData)
+   450→        }
+   451→      }
+   452→    }
+   453→
+   454→    document.addEventListener('visibilitychange', handleVisibilityChange)
+   455→    window.addEventListener('focus', handleFocus)
+   456→    window.addEventListener('pageshow', handlePageShow as EventListener)
+   457→
+   458→    // Listen for global event dispatched by Android bridge (from page.tsx)
+   459→    const handleGlobalDisposition = (e: Event) => {
+   460→      console.log('[AutoDialer] Global disposition event received')
+   461→      handleReturnFromDialer()
+   462→    }
+   463→    window.addEventListener('show-disposition-from-dialer', handleGlobalDisposition)
+   464→
+   465→    // Also check on mount — in case we navigated here via page.tsx auto-redirect
+   466→    const pendingData = checkPendingCall()
+   467→    if (pendingData) {
+   468→      setTimeout(() => handleReturnFromDialer(pendingData), 800)
+   469→    }
+   470→
+   471→    return () => {
+   472→      document.removeEventListener('visibilitychange', handleVisibilityChange)
+   473→      window.removeEventListener('focus', handleFocus)
+   474→      window.removeEventListener('pageshow', handlePageShow as EventListener)
+   475→      window.removeEventListener('show-disposition-from-dialer', handleGlobalDisposition)
+   476→    }
+   477→  }, [checkPendingCall, handleReturnFromDialer])
+   478→
+   479→  // Expose global function for Android evaluateJavascript
+   480→  // Android WebView can call: webView.evaluateJavascript("showPostCallDisposition('7458898305')", null)
+   481→  useEffect(() => {
+   482→    (window as unknown as Record<string, unknown>).showPostCallDisposition = (phoneNumber: string) => {
+   483→      console.log('[AutoDialer] showPostCallDisposition called from Android:', phoneNumber)
+   484→      // Prevent duplicate triggers
+   485→      if (dispositionShownRef.current) {
+   486→        console.log('[AutoDialer] Disposition already shown, skipping Android bridge trigger')
+   487→        return
+   488→      }
+   489→      callInitiatedRef.current = false
+   490→      setCallInitiated(false)
+   491→      // Only stop the timer if disposition time is NOT included
+   492→      if (!includeDispositionTimeRef.current) {
+   493→        stopCallTimer()
+   494→      }
+   495→      // Read and restore candidate from sessionStorage BEFORE clearing
+   496→      const stored = checkPendingCall()
+   497→      clearCallState()
+   498→      if (stored) {
+   499→        // handleReturnFromDialer will set the guard
+   500→        handleReturnFromDialer(stored)
+   501→      } else {
+   502→        // No stored data — open the modal directly (set guard manually)
+   503→        dispositionShownRef.current = true
+   504→        setTimeout(() => {
+   505→          setIsDispositionModalOpen(true)
+   506→        }, 500)
+   507→      }
+   508→    }
+   509→    return () => {
+   510→      delete (window as unknown as Record<string, unknown>).showPostCallDisposition
+   511→    }
+   512→  }, [clearCallState, checkPendingCall, handleReturnFromDialer])
+   513→
+   514→  // ==================== CALL TIMER HELPERS ====================
+   515→  const startCallTimer = () => {
+   516→    if (timerRef.current) clearInterval(timerRef.current)
+   517→    setCallTimer(1) // Start from 1 second immediately (no delay)
+   518→    timerRef.current = setInterval(() => {
+   519→      setCallTimer((prev) => prev + 1)
+   520→    }, 1000)
+   521→  }
+   522→
+   523→  const stopCallTimer = () => {
+   524→    if (timerRef.current) {
+   525→      clearInterval(timerRef.current)
+   526→      timerRef.current = null
+   527→    }
+   528→  }
+   529→
+   530→  // ==================== PRE-CALL DELAY TIMER ====================
+   531→  // Shows a countdown overlay before automatically placing the call.
+   532→  // When countdown reaches 0, it programmatically opens the phone dialer.
+   533→  const cancelPreCallTimer = () => {
+   534→    if (preCallTimerRef.current) {
+   535→      clearInterval(preCallTimerRef.current)
+   536→      preCallTimerRef.current = null
+   537→    }
+   538→    setPreCallCountdown(null)
+   539→  }
+   540→
+   541→  // Execute the actual call — programmatically trigger tel: link
+   542→  // First tries Android native bridge (ACTION_CALL = direct dial), falls back to tel: link (ACTION_DIAL = open dialer)
+   543→  const executeCall = () => {
+   544→    if (!currentCandidate?.phone) {
+   545→      toast.error('No phone number available')
+   546→      return
+   547→    }
+   548→    const phone = cleanPhone(currentCandidate.phone)
+   549→    if (!phone || phone.length < 7) {
+   550→      toast.error('Invalid phone number')
+   551→      return
+   552→    }
+   553→
+   554→    // ===== STATUS CHECK: Only allow calls when status is ACTIVE =====
+   555→    try {
+   556→      const rawStatus = localStorage.getItem('recruiter_current_status')
+   557→      const allowedStatuses = ['ACTIVE']
+   558→      if (!rawStatus || !allowedStatuses.includes(rawStatus)) {
+   559→        const statusLabel = rawStatus || 'not set'
+   560→        toast.error(`⚠️ Status is ${statusLabel}. Please set your status to Active before making calls.`, { duration: 4000 })
+   561→        stopCallTimer()
+   562→        callInitiatedRef.current = false
+   563→        setCallInitiated(false)
+   564→        clearCallState()
+   565→        return
+   566→      }
+   567→    } catch {
+   568→      // If localStorage read fails, block the call (safer default)
+   569→      toast.error('⚠️ Could not verify your status. Please go to Dashboard and set your status to Active.', { duration: 4000 })
+   570→      stopCallTimer()
+   571→      callInitiatedRef.current = false
+   572→      setCallInitiated(false)
+   573→      clearCallState()
+   574→      return
+   575→    }
+   576→
+   577→    // Mark call as initiated
+   578→    callInitiatedRef.current = true
+   579→    setCallInitiated(true)
+   580→    // Note: startCallTimer() is already called in startPreCallTimer() or prepareCall()
+   581→    // to ensure timer starts immediately when Call button is clicked (no delay)
+   582→    // Only start here if timer isn't already running
+   583→    if (!timerRef.current) {
+   584→      startCallTimer()
+   585→    }
+   586→    recordCallActivity() // Reset auto-idle timer on call initiation
+   587→
+   588→    // Persist to sessionStorage — survives if WebView reloads the page
+   589→    saveCallState(currentCandidate!)
+   590→
+   591→    console.log('[AutoDialer] executeCall for:', phone)
+   592→
+   593→    // ===== ANDROID WEBVIEW: Use native bridge to place call directly (ACTION_CALL) =====
+   594→    // This bypasses the phone dialer UI and calls the number directly.
+   595→    // The Android app must implement: AndroidBridge.makeCall(phoneNumber)
+   596→    //   → Intent(Intent.ACTION_CALL, Uri.parse("tel:" + phoneNumber))
+   597→    //   → Requires CALL_PHONE permission in AndroidManifest.xml
+   598→    try {
+   599→      const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
+   600→        { makeCall: (phoneNumber: string) => void } | undefined
+   601→      if (bridge?.makeCall) {
+   602→        console.log('[AutoDialer] Using AndroidBridge.makeCall for direct dial:', phone)
+   603→        bridge.makeCall(phone)
+   604→        return
+   605→      }
+   606→    } catch {
+   607→      // Bridge not available — fall through to tel: link
+   608→    }
+   609→
+   610→    // ===== ENHANCED: Try window._autoDial bridge (custom WebView injection) =====
+   611→    // Some WebView implementations inject a custom global function for direct calling
+   612→    try {
+   613→      const autoDial = (window as unknown as Record<string, unknown>)._autoDial as
+   614→        ((phoneNumber: string) => void) | undefined
+   615→      if (typeof autoDial === 'function') {
+   616→        console.log('[AutoDialer] Using window._autoDial for direct dial:', phone)
+   617→        autoDial(phone)
+   618→        return
+   619→      }
+   620→    } catch {
+   621→      // Not available — fall through
+   622→    }
+   623→
+   624→    // ===== FALLBACK: tel: link (ACTION_DIAL) — opens phone dialer with number pasted =====
+   625→    // This is the standard web behavior; requires user to press Call in the dialer.
+   626→    console.log('[AutoDialer] AndroidBridge.makeCall not available, falling back to tel: link')
+   627→    triggerNativeLink(`tel:${phone}`)
+   628→    toast.info('Opening dialer... Please press Call to connect.', { duration: 2000 })
+   629→  }
+   630→
+   631→  // Helper: check if current status allows calling
+   632→  const canMakeCalls = (): boolean => {
+   633→    try {
+   634→      const rawStatus = localStorage.getItem('recruiter_current_status')
+   635→      return !!rawStatus && rawStatus === 'ACTIVE'
+   636→    } catch {
+   637→      return false
+   638→    }
+   639→  }
+   640→
+   641→  // Start pre-call countdown — when it reaches 0, executeCall is called
+   642→  const startPreCallTimer = () => {
+   643→    if (!currentCandidate?.phone) {
+   644→      toast.error('No phone number available')
+   645→      return
+   646→    }
+   647→    const phone = cleanPhone(currentCandidate.phone)
+   648→    if (!phone || phone.length < 7) {
+   649→      toast.error('Invalid phone number')
+   650→      return
+   651→    }
+   652→
+   653→    // Status check BEFORE starting countdown
+   654→    if (!canMakeCalls()) {
+   655→      toast.error('⚠️ Please set your status to Active before making calls.', { duration: 4000 })
+   656→      return
+   657→    }
+   658→
+   659→    setPreCallCountdown(callGap)
+   660→    // START TIMER IMMEDIATELY when Call button is clicked (before countdown)
+   661→    // This eliminates the ~3s delay — timer starts from 00:00:01 right away
+   662→    startCallTimer()
+   663→    if (preCallTimerRef.current) clearInterval(preCallTimerRef.current)
+   664→    preCallTimerRef.current = setInterval(() => {
+   665→      setPreCallCountdown((prev) => {
+   666→        if (prev === null || prev <= 1) {
+   667→          if (preCallTimerRef.current) clearInterval(preCallTimerRef.current)
+   668→          preCallTimerRef.current = null
+   669→          setPreCallCountdown(null)
+   670→          // Automatically place the call
+   671→          executeCall()
+   672→          return null
+   673→        }
+   674→        return prev - 1
+   675→      })
+   676→    }, 1000)
+   677→  }
+   678→
+   679→  // Skip pre-call countdown and call immediately
+   680→  const skipPreCallAndDial = () => {
+   681→    // Status check before calling
+   682→    if (!canMakeCalls()) {
+   683→      cancelPreCallTimer()
+   684→      toast.error('⚠️ Please set your status to Active before making calls.', { duration: 4000 })
+   685→      return
+   686→    }
+   687→    cancelPreCallTimer()
+   688→    executeCall()
+   689→  }
+   690→
+   691→  // ==================== ANDROID BACK BUTTON + CLOSE ALL MODALS ====================
+   692→  // Listen for 'close-all-modals' event (dispatched by page.tsx on back button)
+   693→  // Also push a history entry when disposition opens so back button works
+   694→  useEffect(() => {
+   695→    const handleCloseAllModals = () => {
+   696→      console.log('[AutoDialer] close-all-modals event received')
+   697→      if (isDispositionModalOpen && !savingRecord) {
+   698→        setIsDispositionModalOpen(false)
+   699→        clearCallState()
+   700→        setCallInitiated(false)
+   701→        callInitiatedRef.current = false
+   702→        stopCallTimer()
+   703→      }
+   704→      // Close gap timer if open
+   705→      if (callGapCountdown !== null && gapTimerRef.current) {
+   706→        clearInterval(gapTimerRef.current)
+   707→        gapTimerRef.current = null
+   708→        setCallGapCountdown(null)
+   709→      }
+   710→      // Cancel pre-call timer if open
+   711→      cancelPreCallTimer()
+   712→      // Close client/template sheets
+   713→      setTemplateSheetOpen(null)
+   714→    }
+   715→    window.addEventListener('close-all-modals', handleCloseAllModals)
+   716→
+   717→    return () => {
+   718→      window.removeEventListener('close-all-modals', handleCloseAllModals)
+   719→    }
+   720→  }, [isDispositionModalOpen, savingRecord, clearCallState, stopCallTimer, templateSheetOpen])
+   721→
+   722→  // Push history entry when disposition opens (enables Android back button)
+   723→  useEffect(() => {
+   724→    if (isDispositionModalOpen) {
+   725→      try {
+   726→        const pushHistory = (window as unknown as Record<string, unknown>).__pushModalHistory
+   727→        if (typeof pushHistory === 'function') pushHistory()
+   728→      } catch { /* ignore */ }
+   729→    }
+   730→  }, [isDispositionModalOpen])
+   731→
+   732→  // Web Speech API helper — also checks for Android WebView support
+   733→  const createRecognition = () => {
+   734→    if (typeof window === 'undefined') return null
+   735→    const hasSupport = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+   736→    if (!hasSupport) return null
+   737→    const SpeechRecognitionCtor = (window as unknown as Record<string, unknown>).webkitSpeechRecognition || (window as unknown as Record<string, unknown>).SpeechRecognition
+   738→    const recognition = new (SpeechRecognitionCtor as new () => unknown)() as {
+   739→      lang: string; continuous: boolean; interimResults: boolean
+   740→      onresult: ((event: { results: { [0]: { [0]: { transcript: string } } } }) => void) | null
+   741→      onerror: ((event: { error: string }) => void) | null
+   742→      onend: (() => void) | null; onaudiostart: (() => void) | null
+   743→      start: () => void; stop: () => void
+   744→    }
+   745→    recognition.lang = 'en-US'
+   746→    recognition.continuous = false
+   747→    recognition.interimResults = false
+   748→    return recognition
+   749→  }
+   750→
+   751→  // Detect Android bridge on mount — poll for it since WebView injects bridge after page load.
+   752→  // The voice button is always shown; the toggleVoiceInput function re-checks at click-time.
+   753→  useEffect(() => {
+   754→    let attempts = 0
+   755→    const maxAttempts = 10 // 500ms × 10 = 5 seconds
+   756→    const pollInterval = setInterval(() => {
+   757→      attempts++
+   758→      const bridgeFound = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).AndroidBridge
+   759→      if (bridgeFound) {
+   760→        clearInterval(pollInterval)
+   761→      } else if (attempts >= maxAttempts) {
+   762→        clearInterval(pollInterval)
+   763→      }
+   764→    }, 500)
+   765→    return () => clearInterval(pollInterval)
+   766→  }, [])
+   767→
+   768→  // Cleanup Android bridge callback on unmount
+   769→  useEffect(() => {
+   770→    return () => {
+   771→      try { delete (window as unknown as Record<string, unknown>).__onSpeechResult } catch { /* ignore */ }
+   772→    }
+   773→  }, [])
+   774→
+   775→  const toggleVoiceInput = async () => {
+   776→    if (isListening) {
+   777→      if (recognitionRef.current) {
+   778→        try { recognitionRef.current.stop() } catch { /* ignore */ }
+   779→      }
+   780→      recognitionRef.current = null
+   781→      setIsListening(false)
+   782→      return
+   783→    }
+   784→
+   785→    // ===== ANDROID WEBVIEW: Native speech recognition via Java bridge =====
+   786→    // Web Speech API (webkitSpeechRecognition) is NOT available inside Android WebView.
+   787→    // Instead, we call the Android Java bridge which launches the system SpeechRecognizer
+   788→    // and returns results via window.__onSpeechResult callback.
+   789→    // Re-check bridge at click-time (it may have loaded after mount)
+   790→    const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
+   791→      { startSpeechRecognition: () => void } | undefined
+   792→    if (bridge?.startSpeechRecognition) {
+   793→      ;(window as unknown as Record<string, unknown>).__onSpeechResult = (
+   794→        transcript: string | null, error: string | null
+   795→      ) => {
+   796→        if (error === 'not_available') {
+   797→          toast.error('Speech recognition not available on this device')
+   798→        }
+   799→        // error === 'cancelled' means user dismissed — silent
+   800→        if (transcript) {
+   801→          setNotes((prev) => (prev ? prev + ' ' : '') + transcript)
+   802→          toast.success('Voice added to notes')
+   803→        }
+   804→        setIsListening(false)
+   805→      }
+   806→      setIsListening(true)
+   807→      bridge.startSpeechRecognition()
+   808→      return
+   809→    }
+   810→
+   811→    // ===== BROWSER: Web Speech API fallback (Chrome desktop, etc.) =====
+   812→    // Re-check at click-time in case Web Speech API became available
+   813→    const recognition = createRecognition()
+   814→    if (!recognition) {
+   815→      toast.error('Voice input is not supported in this app. Use the Android app for voice features.')
+   816→      return
+   817→    }
+   818→
+   819→    // Request mic permission via getUserMedia (needed for SpeechRecognition to work in some browsers)
+   820→    try {
+   821→      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+   822→      // Release the mic stream immediately — we only needed the permission grant
+   823→      micStream.getTracks().forEach(t => t.stop())
+   824→    } catch (micErr) {
+   825→      console.warn('[Voice] getUserMedia failed (mic may still work):', micErr)
+   826→    }
+   827→
+   828→    recognitionRef.current = recognition
+   829→
+   830→    recognition.onresult = (event: { results: { [0]: { [0]: { transcript: string } } } }) => {
+   831→      const transcript = event.results[0]?.[0]?.transcript || ''
+   832→      if (transcript) {
+   833→        setNotes((prev) => (prev ? prev + ' ' : '') + transcript)
+   834→        toast.success('Voice added to notes')
+   835→      }
+   836→      setIsListening(false)
+   837→      recognitionRef.current = null
+   838→    }
+   839→
+   840→    recognition.onerror = (event: { error: string }) => {
+   841→      console.error('[AutoDialer] Speech recognition error:', event?.error)
+   842→      if (event?.error === 'not-allowed') {
+   843→        toast.error('Microphone permission denied. Please allow microphone access in your device settings.')
+   844→      } else {
+   845→        toast.error('Voice input failed. Please try again.')
+   846→      }
+   847→      setIsListening(false)
+   848→      recognitionRef.current = null
+   849→    }
+   850→
+   851→    recognition.onend = () => {
+   852→      setIsListening(false)
+   853→      recognitionRef.current = null
+   854→    }
+   855→
+   856→    try {
+   857→      recognition.start()
+   858→      setIsListening(true)
+   859→    } catch (recErr) {
+   860→      console.error('[Voice] Failed to start recognition:', recErr)
+   861→      toast.error('Failed to start voice input')
+   862→    }
+   863→  }
+   864→
+   865→  // Template helper: replace placeholders
+   866→  const fillTemplate = (content: string) => {
+   867→    if (!currentCandidate) return content
+   868→    return content
+   869→      .replace(/\{\{candidate_name\}\}/g, currentCandidate.name)
+   870→      .replace(/\{\{phone\}\}/g, currentCandidate.phone)
+   871→      .replace(/\{\{role\}\}/g, currentCandidate.role || '')
+   872→      .replace(/\{\{location\}\}/g, currentCandidate.location || '')
+   873→      .replace(/\{\{company\}\}/g, currentCandidate.company || '')
+   874→      .replace(/\{\{recruiter_name\}\}/g, user?.name || 'Recruiter')
+   875→  }
+   876→
+   877→  // All templates are available for both SMS and WhatsApp sending
+   878→  // DB type values: NOT_ANSWERED, SHORTLISTED, CUSTOM (not SMS/WHATSAPP)
+   879→
+   880→  // Helper: programmatically trigger a native link click.
+   881→  // This is the MOST reliable way to open tel:/sms:/https: links in Android WebView
+   882→  // because it simulates a real user tap — which always fires shouldOverrideUrlLoading.
+   883→  // window.open() does NOT reliably trigger it (especially with _blank target).
+   884→  const triggerNativeLink = (url: string) => {
+   885→    // Method 1: Hidden anchor click (triggers WebView shouldOverrideUrlLoading)
+   886→    try {
+   887→      const a = document.createElement('a')
+   888→      a.href = url
+   889→      a.style.display = 'none'
+   890→      document.body.appendChild(a)
+   891→      a.click()
+   892→      setTimeout(() => { try { document.body.removeChild(a) } catch { /* ignore */ } }, 300)
+   893→    } catch {
+   894→      // Method 2: Direct navigation fallback
+   895→      try { window.location.href = url } catch { /* ignore */ }
+   896→    }
+   897→  }
+   898→
+   899→  const handleSendSms = () => {
+   900→    const tmpl = templates.find((t) => t.id === selectedSmsTemplate)
+   901→    const msg = tmpl ? fillTemplate(tmpl.content) : ''
+   902→    if (!msg) { toast.error('No message to send'); return }
+   903→    const phone = cleanPhone(currentCandidate?.phone || '')
+   904→    setSelectedSmsText(msg)
+   905→    try { window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}` } catch { triggerNativeLink(`sms:${phone}?body=${encodeURIComponent(msg)}`) }
+   906→    setTemplateSheetOpen(null)
+   907→    toast.success('Opening SMS app...')
+   908→  }
+   909→
+   910→  const handleSendWhatsApp = () => {
+   911→    const tmpl = templates.find((t) => t.id === selectedWaTemplate)
+   912→    const msg = tmpl ? fillTemplate(tmpl.content) : ''
+   913→    if (!msg) { toast.error('No message to send'); return }
+   914→    const phone = formatPhoneForWhatsApp(currentCandidate?.phone || '')
+   915→    setSelectedWaText(msg)
+   916→    try { window.location.href = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` } catch { triggerNativeLink(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`) }
+   917→    setTemplateSheetOpen(null)
+   918→    toast.success('Opening WhatsApp...')
+   919→  }
+   920→
+   921→  // Load candidates for a list
+   922→  const loadCandidates = useCallback(async (listId: string) => {
+   923→    setLoading(true)
+   924→    try {
+   925→      const res = await authFetch(`/api/call-lists/${listId}/candidates`)
+   926→      if (!res.ok) throw new Error()
+   927→      const data = await res.json()
+   928→      const pending = (data.candidates || []).filter(
+   929→        (c: Candidate) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+   930→      )
+   931→      setCandidates(pending)
+   932→    } catch {
+   933→      toast.error('Failed to load candidates')
+   934→    }
+   935→    setLoading(false)
+   936→  }, [])
+   937→
+   938→  // Select a call list and go to summary
+   939→  const handleSelectList = (list: CallListInfo) => {
+   940→    setSelectedList(list)
+   941→    loadCandidates(list.id)
+   942→    setScreen('list-summary')
+   943→  }
+   944→
+   945→  // Start calling
+   946→  const handleStartCalling = () => {
+   947→    if (candidates.length === 0) {
+   948→      toast.error('No candidates to call')
+   949→      return
+   950→    }
+   951→    // Status check before entering calling mode
+   952→    if (!canMakeCalls()) {
+   953→      toast.error('⚠️ Please set your status to Active on the Dashboard before making calls.', { duration: 4000 })
+   954→      return
+   955→    }
+   956→    setCurrentIndex(0)
+   957→    setCompletedCount(0)
+   958→    setScreen('calling')
+   959→    advanceToCandidate(0)
+   960→  }
+   961→
+   962→  /* ==================== PREPARE CALL STATE (before native tel: link activates) ====================
+   963→   * IMPORTANT: The Call button is a REAL <a href="tel:..."> link.
+   964→   * This is the ONLY method that reliably triggers Android WebView's shouldOverrideUrlLoading.
+   965→   * This function runs on onTouchStart/onMouseDown — BEFORE the native click completes.
+   966→   * The native <a> click then sends the tel: URL to Android, which opens the phone dialer.
+   967→   */
+   968→  const prepareCall = (e: React.TouchEvent | React.MouseEvent) => {
+   969→    if (!currentCandidate?.phone) {
+   970→      e.preventDefault()
+   971→      toast.error('No phone number available')
+   972→      return
+   973→    }
+   974→    const phone = cleanPhone(currentCandidate.phone)
+   975→    if (!phone || phone.length < 7) {
+   976→      e.preventDefault()
+   977→      toast.error('Invalid phone number')
+   978→      return
+   979→    }
+   980→
+   981→    // Mark call as initiated — these run BEFORE the native <a> click navigates
+   982→    callInitiatedRef.current = true
+   983→    setCallInitiated(true)
+   984→    startCallTimer()
+   985→    recordCallActivity() // Reset auto-idle timer on call initiation
+   986→
+   987→    // Persist to sessionStorage — survives if WebView reloads the page
+   988→    saveCallState(currentCandidate!)
+   989→
+   990→    console.log('[AutoDialer] prepareCall ready for:', phone, '— native tel: link will handle the rest')
+   991→
+   992→    // Do NOT call e.preventDefault() here!
+   993→    // Let the native <a href="tel:..."> click proceed so Android WebView intercepts it.
+   994→  }
+   995→
+   996→  // Advance to a specific candidate index
+   997→  const advanceToCandidate = (idx: number) => {
+   998→    if (idx >= candidates.length) {
+   999→      toast.success('All calls completed!')
+  1000→      setScreen('select-list')
+  1001→      return
+  1002→    }
+  1003→    const candidate = candidates[idx]
+  1004→    setCurrentCandidate(candidate)
+  1005→    setCurrentIndex(idx)
+  1006→    setCallTimer(0)
+  1007→    setCallInitiated(false)
+  1008→    callInitiatedRef.current = false
+  1009→    setSelectedDisposition('')
+  1010→    setSelectedClient('')
+  1011→    setCustomClientName('')
+  1012→    setNotes('')
+  1013→    setScheduledDate('')
+  1014→    setF2fInterviewDate('')
+  1015→    setSelectedSmsTemplate('')
+  1016→    setSelectedWaTemplate('')
+  1017→    setSelectedSmsText('')
+  1018→    setSelectedWaText('')
+  1019→    setTemplateSheetOpen(null)
+  1020→    setIsListening(false)
+  1021→    setIsDispositionModalOpen(false)
+  1022→    // Reset the disposition shown guard for the next call
+  1023→    dispositionShownRef.current = false
+  1024→    // Clear pre-call timer
+  1025→    cancelPreCallTimer()
+  1026→    if (recognitionRef.current) {
+  1027→      try { recognitionRef.current.stop() } catch { /* ignore */ }
+  1028→      recognitionRef.current = null
+  1029→    }
+  1030→    if (timerRef.current) {
+  1031→      clearInterval(timerRef.current)
+  1032→      timerRef.current = null
+  1033→    }
+  1034→  }
+  1035→
+  1036→  // Cancel current call
+  1037→  const handleCancelCall = () => {
+  1038→    stopCallTimer()
+  1039→    cancelPreCallTimer()
+  1040→    callInitiatedRef.current = false
+  1041→    setCallInitiated(false)
+  1042→    clearCallState()
+  1043→    toast.info('Call cancelled')
+  1044→    setScreen('list-summary')
+  1045→  }
+  1046→
+  1047→  // Skip current candidate
+  1048→  const handleSkip = () => {
+  1049→    stopCallTimer()
+  1050→    cancelPreCallTimer()
+  1051→    callInitiatedRef.current = false
+  1052→    setCallInitiated(false)
+  1053→    clearCallState()
+  1054→    toast.info('Candidate skipped')
+  1055→    setCompletedCount((prev) => prev + 1)
+  1056→    startGapTimer(currentIndex + 1)
+  1057→  }
+  1058→
+  1059→  // Manually open disposition (user clicks "End Call & Log" button)
+  1060→  const handleManualEndCall = () => {
+  1061→    // Only stop the timer if disposition time is NOT included
+  1062→    if (!includeDispositionTimeRef.current) {
+  1063→      stopCallTimer()
+  1064→    }
+  1065→    callInitiatedRef.current = false
+  1066→    setCallInitiated(false)
+  1067→    clearCallState()
+  1068→    setIsDispositionModalOpen(true)
+  1069→  }
+  1070→
+  1071→  // Gap timer between calls
+  1072→  const startGapTimer = (nextIdx: number) => {
+  1073→    setCallGapCountdown(callGap)
+  1074→    if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+  1075→    gapTimerRef.current = setInterval(() => {
+  1076→      setCallGapCountdown((prev) => {
+  1077→        if (prev === null || prev <= 1) {
+  1078→          if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+  1079→          gapTimerRef.current = null
+  1080→          setCallGapCountdown(null)
+  1081→          advanceToCandidate(nextIdx)
+  1082→          setScreen('calling')
+  1083→          return null
+  1084→        }
+  1085→        return prev - 1
+  1086→      })
+  1087→    }, 1000)
+  1088→  }
+  1089→
+  1090→  /* ==================== SAVE HELPERS ==================== */
+  1091→  const buildSaveBody = () => {
+  1092→    const isScheduled = !!scheduledDate
+  1093→
+  1094→    const body: Record<string, unknown> = {
+  1095→      candidateId: currentCandidate!.id,
+  1096→      recruiterId: userId,
+  1097→      dispositionId: selectedDisposition,
+  1098→      notes: notes || null,
+  1099→      callDuration: callTimer,
+  1100→      callStatus: isScheduled ? 'SCHEDULED' : 'COMPLETED',
+  1101→      scheduledAt: isScheduled ? new Date(scheduledDate).toISOString() : null,
+  1102→      f2fInterviewDate: f2fInterviewDate ? new Date(f2fInterviewDate).toISOString() : null,
+  1103→    }
+  1104→
+  1105→    // Always save client if selected (not just for shortlisted)
+  1106→    if (selectedClient === '__other__') {
+  1107→      body.customClientName = customClientName || null
+  1108→    } else if (selectedClient) {
+  1109→      body.clientId = selectedClient
+  1110→    }
+  1111→
+  1112→    return { body }
+  1113→  }
+  1114→
+  1115→  const validateSave = (): string | null => {
+  1116→    if (!currentCandidate || !selectedDisposition) {
+  1117→      return 'Please select a disposition'
+  1118→    }
+  1119→    // Client is optional for all dispositions — no mandatory check
+  1120→    return null
+  1121→  }
+  1122→
+  1123→  /* ==================== SAVE & NEXT CALL ==================== */
+  1124→  const handleSaveAndNext = async () => {
+  1125→    const validationError = validateSave()
+  1126→    if (validationError) {
+  1127→      toast.error(validationError)
+  1128→      return
+  1129→    }
+  1130→
+  1131→    setSavingRecord(true)
+  1132→    try {
+  1133→      const { body } = buildSaveBody()
+  1134→      console.log('[AutoDialer] Saving call record:', JSON.stringify(body))
+  1135→
+  1136→      const res = await authFetch('/api/call-records', {
+  1137→        method: 'POST',
+  1138→        headers: { 'Content-Type': 'application/json' },
+  1139→        body: JSON.stringify(body),
+  1140→      })
+  1141→
+  1142→      if (!res.ok) {
+  1143→        // Read the actual error message from the API
+  1144→        let errorMsg = 'Failed to save call record'
+  1145→        try {
+  1146→          const errData = await res.json()
+  1147→          errorMsg = errData.error || errorMsg
+  1148→          console.error('[AutoDialer] Save failed:', res.status, errData)
+  1149→        } catch {
+  1150→          console.error('[AutoDialer] Save failed:', res.status, '(could not parse error body)')
+  1151→        }
+  1152→        toast.error(errorMsg)
+  1153→        return
+  1154→      }
+  1155→
+  1156→      const result = await res.json()
+  1157→      console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
+  1158→      recordCallActivity() // Reset auto-idle timer on call record save
+  1159→
+  1160→      // STOP TIMER NOW — disposition submitted, capture final duration
+  1161→      stopCallTimer()
+  1162→
+  1163→      toast.success('Call record saved! Moving to next contact...')
+  1164→      setIsDispositionModalOpen(false)
+  1165→      clearCallState()
+  1166→      // Reset the duplicate trigger guard for the next call
+  1167→      dispositionShownRef.current = false
+  1168→      setCompletedCount((prev) => prev + 1)
+  1169→
+  1170→      // Check if there's a next candidate
+  1171→      const nextIdx = currentIndex + 1
+  1172→      if (nextIdx < candidates.length) {
+  1173→        // Show gap timer then advance to next
+  1174→        startGapTimer(nextIdx)
+  1175→      } else {
+  1176→        toast.success('All calls completed!')
+  1177→        setScreen('select-list')
+  1178→      }
+  1179→    } catch (err) {
+  1180→      console.error('[AutoDialer] Save error:', err)
+  1181→      toast.error('Failed to save call record. Please try again.')
+  1182→    }
+  1183→    setSavingRecord(false)
+  1184→  }
+  1185→
+  1186→  // Save without advancing (just save current record)
+  1187→  const handleSaveOnly = async () => {
+  1188→    const validationError = validateSave()
+  1189→    if (validationError) {
+  1190→      toast.error(validationError)
+  1191→      return
+  1192→    }
+  1193→
+  1194→    setSavingRecord(true)
+  1195→    try {
+  1196→      const { body } = buildSaveBody()
+  1197→      console.log('[AutoDialer] Saving call record:', JSON.stringify(body))
+  1198→
+  1199→      const res = await authFetch('/api/call-records', {
+  1200→        method: 'POST',
+  1201→        headers: { 'Content-Type': 'application/json' },
+  1202→        body: JSON.stringify(body),
+  1203→      })
+  1204→
+  1205→      if (!res.ok) {
+  1206→        // Read the actual error message from the API
+  1207→        let errorMsg = 'Failed to save call record'
+  1208→        try {
+  1209→          const errData = await res.json()
+  1210→          errorMsg = errData.error || errorMsg
+  1211→          console.error('[AutoDialer] Save failed:', res.status, errData)
+  1212→        } catch {
+  1213→          console.error('[AutoDialer] Save failed:', res.status, '(could not parse error body)')
+  1214→        }
+  1215→        toast.error(errorMsg)
+  1216→        return
+  1217→      }
+  1218→
+  1219→      const result = await res.json()
+  1220→      console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
+  1221→      recordCallActivity() // Reset auto-idle timer on call record save
+  1222→
+  1223→      // STOP TIMER NOW — disposition submitted, capture final duration
+  1224→      stopCallTimer()
+  1225→
+  1226→      toast.success('Call record saved')
+  1227→      setIsDispositionModalOpen(false)
+  1228→      clearCallState()
+  1229→      // Reset the duplicate trigger guard for the next call
+  1230→      dispositionShownRef.current = false
+  1231→      setCompletedCount((prev) => prev + 1)
+  1232→      setScreen('select-list')
+  1233→    } catch (err) {
+  1234→      console.error('[AutoDialer] Save error:', err)
+  1235→      toast.error('Failed to save call record. Please try again.')
+  1236→    }
+  1237→    setSavingRecord(false)
+  1238→  }
+  1239→
+  1240→  const pendingCandidates = candidates.length - completedCount
+  1241→
+  1242→  /* ==================== SCREEN: Select Call List ==================== */
+  1243→  if (screen === 'select-list') {
+  1244→    return (
+  1245→      <div className="p-4 sm:p-6 space-y-6">
+  1246→        <div className="flex items-center gap-3">
+  1247→          <Button variant="ghost" size="sm" onClick={() => onNavigate('home')}>
+  1248→            <ChevronLeft className="h-4 w-4" />
+  1249→          </Button>
+  1250→          <div>
+  1251→            <h1 className="text-xl sm:text-2xl font-bold">Auto Dialer</h1>
+  1252→            <p className="text-sm text-muted-foreground">Select a calling list to begin calling</p>
+  1253→          </div>
+  1254→        </div>
+  1255→
+  1256→        {loading ? (
+  1257→          <div className="space-y-3">
+  1258→            {[...Array(3)].map((_, i) => (
+  1259→              <Skeleton key={i} className="h-24 rounded-xl" />
+  1260→            ))}
+  1261→          </div>
+  1262→        ) : callLists.length === 0 ? (
+  1263→          <Card>
+  1264→            <CardContent className="p-8 text-center">
+  1265→              <AlertCircle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+  1266→              <p className="font-medium">No Calling Lists Assigned</p>
+  1267→              <p className="text-sm text-muted-foreground mt-1">Contact your admin to get assigned a list.</p>
+  1268→            </CardContent>
+  1269→          </Card>
+  1270→        ) : (
+  1271→          <div className="space-y-3">
+  1272→            {callLists.map((list) => {
+  1273→              const total = list.candidates.length
+  1274→              const pending = list.candidates.filter(
+  1275→                (c) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+  1276→              ).length
+  1277→              const done = list.candidates.filter((c) => c.status === 'DONE').length
+  1278→              const progress = total > 0 ? Math.round((done / total) * 100) : 0
+  1279→              return (
+  1280→                <Card
+  1281→                  key={list.id}
+  1282→                  className="cursor-pointer transition-all hover:shadow-md hover:border-emerald-200"
+  1283→                  onClick={() => handleSelectList(list)}
+  1284→                >
+  1285→                  <CardContent className="p-4 sm:p-6">
+  1286→                    <div className="flex items-center justify-between gap-4">
+  1287→                      <div className="min-w-0 flex-1">
+  1288→                        <h3 className="font-semibold text-sm sm:text-base truncate">{list.name}</h3>
+  1289→                        {list.description && (
+  1290→                          <p className="text-xs text-muted-foreground mt-1 truncate">{list.description}</p>
+  1291→                        )}
+  1292→                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+  1293→                          <span className="flex items-center gap-1">
+  1294→                            <ListChecks className="h-3 w-3" />
+  1295→                            {total} total
+  1296→                          </span>
+  1297→                          <span className="text-amber-600 font-medium">{pending} pending</span>
+  1298→                          <span className="text-emerald-600 font-medium">{done} done</span>
+  1299→                        </div>
+  1300→                      </div>
+  1301→                      <div className="flex flex-col items-end gap-2 shrink-0">
+  1302→                        <Badge variant="secondary" className="text-[10px]">{progress}%</Badge>
+  1303→                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+  1304→                          Select
+  1305→                          <ChevronRight className="h-3 w-3 ml-1" />
+  1306→                        </Button>
+  1307→                      </div>
+  1308→                    </div>
+  1309→                  </CardContent>
+  1310→                </Card>
+  1311→              )
+  1312→            })}
+  1313→          </div>
+  1314→        )}
+  1315→      </div>
+  1316→    )
+  1317→  }
+  1318→
+  1319→  /* ==================== SCREEN: List Summary ==================== */
+  1320→  if (screen === 'list-summary') {
+  1321→    const totalCandidates = candidates.length
+  1322→    const estimatedMinutes = totalCandidates * 5 // rough estimate
+  1323→    return (
+  1324→      <div className="p-4 sm:p-6 space-y-6">
+  1325→        <div className="flex items-center gap-3">
+  1326→          <Button variant="ghost" size="sm" onClick={() => setScreen('select-list')}>
+  1327→            <ChevronLeft className="h-4 w-4" />
+  1328→          </Button>
+  1329→          <div>
+  1330→            <h1 className="text-xl sm:text-2xl font-bold">List Summary</h1>
+  1331→            <p className="text-sm text-muted-foreground">{selectedList?.name}</p>
+  1332→          </div>
+  1333→        </div>
+  1334→
+  1335→        {loading ? (
+  1336→          <Skeleton className="h-64 rounded-xl" />
+  1337→        ) : (
+  1338→          <Card>
+  1339→            <CardContent className="p-6 space-y-6">
+  1340→              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+  1341→                <div className="text-center p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/50">
+  1342→                  <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">{totalCandidates}</p>
+  1343→                  <p className="text-sm text-emerald-600 mt-1 dark:text-emerald-400">Candidates to Call</p>
+  1344→                </div>
+  1345→                <div className="text-center p-4 rounded-xl bg-blue-50 dark:bg-blue-950/50">
+  1346→                  <p className="text-3xl font-bold text-blue-700 dark:text-blue-400">~{estimatedMinutes}m</p>
+  1347→                  <p className="text-sm text-blue-600 mt-1 dark:text-blue-400">Est. Time</p>
+  1348→                </div>
+  1349→                <div className="text-center p-4 rounded-xl bg-purple-50 col-span-2 sm:col-span-1 dark:bg-purple-950/50">
+  1350→                  <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">{callGap}s</p>
+  1351→                  <p className="text-sm text-purple-600 mt-1 dark:text-purple-400">Call Gap</p>
+  1352→                </div>
+  1353→              </div>
+  1354→
+  1355→              {totalCandidates === 0 ? (
+  1356→                <div className="text-center py-8">
+  1357→                  <Check className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+  1358→                  <p className="font-medium">All Done!</p>
+  1359→                  <p className="text-sm text-muted-foreground mt-1">No pending candidates in this list.</p>
+  1360→                </div>
+  1361→              ) : (
+  1362→                <>
+  1363→                  {!canMakeCalls() && (
+  1364→                    <div className="w-full p-3 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800">
+  1365→                      <p className="text-sm text-amber-700 dark:text-amber-400 font-medium flex items-center gap-2">
+  1366→                        <AlertCircle className="h-4 w-4 shrink-0" />
+  1367→                        Calling is disabled — Please set your status to <strong>Active</strong> on the Dashboard before making calls.
+  1368→                      </p>
+  1369→                    </div>
+  1370→                  )}
+  1371→                  <Button
+  1372→                    size="lg"
+  1373→                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-14 text-base"
+  1374→                    onClick={handleStartCalling}
+  1375→                  >
+  1376→                    <Phone className="h-5 w-5 mr-2" />
+  1377→                    Start Calling ({totalCandidates} candidates)
+  1378→                  </Button>
+  1379→                </>
+  1380→              )}
+  1381→            </CardContent>
+  1382→          </Card>
+  1383→        )}
+  1384→      </div>
+  1385→    )
+  1386→  }
+  1387→
+  1388→  /* ==================== SCREEN: Calling (Candidate Card + Call Button) ==================== */
+  1389→  if (screen === 'calling' && currentCandidate) {
+  1390→
+  1391→    return (
+  1392→      <div className="p-4 sm:p-6 space-y-4 max-w-lg mx-auto">
+  1393→        {/* ===== TOP HEADER: Back button + progress ===== */}
+  1394→        <div className="flex items-center gap-3">
+  1395→          <Button
+  1396→            variant="ghost"
+  1397→            size="sm"
+  1398→            className="h-11 w-11 p-0 rounded-full shrink-0"
+  1399→            onClick={() => {
+  1400→              // Stop any in-progress call state
+  1401→              stopCallTimer()
+  1402→              callInitiatedRef.current = false
+  1403→              setCallInitiated(false)
+  1404→              clearCallState()
+  1405→              setIsDispositionModalOpen(false)
+  1406→              if (gapTimerRef.current) {
+  1407→                clearInterval(gapTimerRef.current)
+  1408→                gapTimerRef.current = null
+  1409→                setCallGapCountdown(null)
+  1410→              }
+  1411→              setScreen('list-summary')
+  1412→            }}
+  1413→            aria-label="Go back"
+  1414→          >
+  1415→            <ChevronLeft className="h-5 w-5" />
+  1416→          </Button>
+  1417→          <div className="flex-1 min-w-0">
+  1418→            <div className="flex items-center justify-between text-sm">
+  1419→              <span className="text-muted-foreground truncate">
+  1420→                {completedCount}/{candidates.length} completed
+  1421→              </span>
+  1422→              <span className="font-medium shrink-0 ml-2">{pendingCandidates} left</span>
+  1423→            </div>
+  1424→            <Progress value={(completedCount / candidates.length) * 100} className="h-2 mt-1" />
+  1425→          </div>
+  1426→        </div>
+  1427→
+  1428→        {/* Candidate info card */}
+  1429→        <Card>
+  1430→          <CardContent className="p-4 sm:p-6 space-y-4">
+  1431→            {/* Candidate details */}
+  1432→            <div className="space-y-3">
+  1433→              <div className="flex items-center gap-3">
+  1434→                <div className="flex items-center justify-center h-12 w-12 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+  1435→                  <User className="h-6 w-6" />
+  1436→                </div>
+  1437→                <div className="min-w-0 flex-1">
+  1438→                  <p className="font-semibold text-lg truncate">{currentCandidate.name}</p>
+  1439→                  {currentCandidate.company && (
+  1440→                    <p className="text-sm text-muted-foreground truncate">{currentCandidate.company}</p>
+  1441→                  )}
+  1442→                </div>
+  1443→                {callInitiated && (
+  1444→                  <Badge variant="outline" className="text-[10px] shrink-0 text-emerald-600 border-emerald-300">
+  1445→                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
+  1446→                    {formatDuration(callTimer)}
+  1447→                  </Badge>
+  1448→                )}
+  1449→              </div>
+  1450→              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+  1451→                {currentCandidate.role && (
+  1452→                  <span className="flex items-center gap-1">
+  1453→                    <Briefcase className="h-3.5 w-3.5" />
+  1454→                    {currentCandidate.role}
+  1455→                  </span>
+  1456→                )}
+  1457→                {currentCandidate.location && (
+  1458→                  <span className="flex items-center gap-1">
+  1459→                    <MapPin className="h-3.5 w-3.5" />
+  1460→                    {currentCandidate.location}
+  1461→                  </span>
+  1462→                )}
+  1463→              </div>
+  1464→              <p className="text-xl font-mono font-bold tracking-wider text-foreground">
+  1465→                {currentCandidate.phone}
+  1466→              </p>
+  1467→            </div>
+  1468→
+  1469→            <Separator />
+  1470→
+  1471→            {/* Call timer (only visible after Call button pressed) */}
+  1472→            {callInitiated && (
+  1473→              <div className="text-center py-1">
+  1474→                <div className="flex items-center justify-center gap-2">
+  1475→                  <Clock className="h-4 w-4 text-muted-foreground" />
+  1476→                  <span className="text-2xl font-mono font-bold tabular-nums">
+  1477→                    {formatDuration(callTimer)}
+  1478→                  </span>
+  1479→                </div>
+  1480→                <p className="text-xs text-muted-foreground mt-1">Call in progress — return after finishing</p>
+  1481→              </div>
+  1482→            )}
+  1483→
+  1484→            {/* ===== CALL BUTTON — starts pre-call delay timer ===== */}
+  1485→            <Button
+  1486→              onClick={startPreCallTimer}
+  1487→              onTouchEnd={(e) => { e.preventDefault(); startPreCallTimer() }}
+  1488→              disabled={callInitiated || preCallCountdown !== null}
+  1489→              className={cn(
+  1490→                'flex items-center justify-center gap-2 w-full h-16 rounded-lg text-white font-semibold text-base no-underline',
+  1491→                'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800',
+  1492→                (callInitiated || preCallCountdown !== null) && 'opacity-50 pointer-events-none'
+  1493→              )}
+  1494→              style={{ touchAction: 'manipulation' }}
+  1495→            >
+  1496→              <PhoneCall className="h-6 w-6" />
+  1497→              <span>Call {currentCandidate.phone}</span>
+  1498→            </Button>
+  1499→
+  1500→            <div className="grid grid-cols-2 gap-3">
+  1501→              <Button
+  1502→                variant="outline"
+  1503→                className="h-12 flex items-center justify-center gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+  1504→                onClick={handleSkip}
+  1505→              >
+  1506→                <SkipForward className="h-4 w-4" />
+  1507→                <span className="text-sm font-medium">Skip</span>
+  1508→              </Button>
+  1509→              <Button
+  1510→                className="h-12 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+  1511→                onClick={handleManualEndCall}
+  1512→              >
+  1513→                <ClipboardCheck className="h-4 w-4" />
+  1514→                <span className="text-sm font-medium">End Call &amp; Log</span>
+  1515→              </Button>
+  1516→            </div>
+  1517→
+  1518→            {/* Next Call + Cancel row */}
+  1519→            <div className="grid grid-cols-2 gap-3">
+  1520→              <Button
+  1521→                variant="outline"
+  1522→                className="h-12 flex items-center justify-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+  1523→                onClick={handleCancelCall}
+  1524→              >
+  1525→                <PhoneOff className="h-4 w-4" />
+  1526→                <span className="text-sm font-medium">Cancel Session</span>
+  1527→              </Button>
+  1528→              <Button
+  1529→                variant="outline"
+  1530→                className="h-12 flex items-center justify-center gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+  1531→                disabled={completedCount === 0 || callInitiated || callGapCountdown !== null || preCallCountdown !== null}
+  1532→                onClick={() => {
+  1533→                  // Next Call: skip gap timer, jump to the next pending candidate
+  1534→                  if (gapTimerRef.current) {
+  1535→                    clearInterval(gapTimerRef.current)
+  1536→                    gapTimerRef.current = null
+  1537→                    setCallGapCountdown(null)
+  1538→                  }
+  1539→                  cancelPreCallTimer()
+  1540→                  const nextIdx = currentIndex + 1
+  1541→                  if (nextIdx < candidates.length) {
+  1542→                    advanceToCandidate(nextIdx)
+  1543→                    setScreen('calling')
+  1544→                    toast.success(`Moving to candidate ${nextIdx + 1}`)
+  1545→                  } else {
+  1546→                    toast.success('All calls completed!')
+  1547→                    setScreen('select-list')
+  1548→                  }
+  1549→                }}
+  1550→                title={completedCount === 0 ? 'Complete or skip current call first' : `Go to next call (${currentIndex + 2}/${candidates.length})`}
+  1551→              >
+  1552→                <ChevronRight className="h-4 w-4" />
+  1553→                <span className="text-sm font-medium">Next Call</span>
+  1554→              </Button>
+  1555→            </div>
+  1556→          </CardContent>
+  1557→        </Card>
+  1558→
+  1559→        {/* ==================== PRE-CALL DELAY TIMER OVERLAY ==================== */}
+  1560→        {preCallCountdown !== null && (
+  1561→          <>
+  1562→            {/* Mobile: Custom CSS overlay */}
+  1563→            {isMobile && <div>
+  1564→              <div
+  1565→                className="fixed inset-0 bg-black/50 flex items-center justify-center"
+  1566→                data-dialer-overlay="timer"
+  1567→                style={{ touchAction: 'manipulation' }}
+  1568→              >
+  1569→                <div
+  1570→                  className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
+  1571→                  data-dialer-sheet="timer"
+  1572→                  style={{ touchAction: 'manipulation' }}
+  1573→                >
+  1574→                  {/* Close button */}
+  1575→                  <button
+  1576→                    type="button"
+  1577→                    onClick={cancelPreCallTimer}
+  1578→                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 shadow-md"
+  1579→                    style={{ touchAction: 'manipulation' }}
+  1580→                    aria-label="Cancel"
+  1581→                  >
+  1582→                    <X className="h-5 w-5" />
+  1583→                  </button>
+  1584→                  <div className="py-4 space-y-3">
+  1585→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1586→                      <PhoneCall className="h-7 w-7 animate-pulse" />
+  1587→                    </div>
+  1588→                    <p className="text-sm font-medium text-foreground">Calling in...</p>
+  1589→                    <p className="text-3xl font-mono font-bold">{preCallCountdown}s</p>
+  1590→                    <p className="text-xs text-muted-foreground">
+  1591→                      <span className="font-medium">{currentCandidate.name}</span>
+  1592→                    </p>
+  1593→                    <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1594→                    <Button
+  1595→                      className="mt-3 h-11 w-full bg-emerald-600 hover:bg-emerald-700"
+  1596→                      onClick={skipPreCallAndDial}
+  1597→                      style={{ touchAction: 'manipulation' }}
+  1598→                    >
+  1599→                      <Phone className="h-4 w-4 mr-1.5" />
+  1600→                      Call Now
+  1601→                    </Button>
+  1602→                  </div>
+  1603→                </div>
+  1604→              </div>
+  1605→            </div>}
+  1606→            {/* Desktop: Dialog */}
+  1607→            {!isMobile && (
+  1608→              <Dialog open>
+  1609→                <DialogContent className="sm:max-w-xs text-center" showCloseButton={false}>
+  1610→                  <div className="py-6 space-y-3">
+  1611→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1612→                      <PhoneCall className="h-7 w-7 animate-pulse" />
+  1613→                    </div>
+  1614→                    <p className="text-sm font-medium text-foreground">Calling in...</p>
+  1615→                    <p className="text-2xl font-mono font-bold">{preCallCountdown}s</p>
+  1616→                    <p className="text-xs text-muted-foreground">
+  1617→                      <span className="font-medium">{currentCandidate.name}</span>
+  1618→                    </p>
+  1619→                    <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1620→                    <Button
+  1621→                      className="mt-2 bg-emerald-600 hover:bg-emerald-700"
+  1622→                      onClick={skipPreCallAndDial}
+  1623→                    >
+  1624→                      <Phone className="h-4 w-4 mr-1.5" />
+  1625→                      Call Now
+  1626→                    </Button>
+  1627→                  </div>
+  1628→                </DialogContent>
+  1629→              </Dialog>
+  1630→            )}
+  1631→          </>
+  1632→        )}
+  1633→
+  1634→        {/* ==================== GAP TIMER OVERLAY ==================== */}
+  1635→        {callGapCountdown !== null && (
+  1636→          <>
+  1637→            {/* Mobile: Custom CSS overlay — NO Radix Dialog Portal (freezes WebView) */}
+  1638→            {isMobile && <div>
+  1639→              <div
+  1640→                className="fixed inset-0 bg-black/50 flex items-center justify-center"
+  1641→                data-dialer-overlay="timer"
+  1642→                style={{ touchAction: 'manipulation' }}
+  1643→              >
+  1644→                <div
+  1645→                  className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
+  1646→                  data-dialer-sheet="timer"
+  1647→                  style={{ touchAction: 'manipulation' }}
+  1648→                >
+  1649→                  {/* Close button */}
+  1650→                  <button
+  1651→                    type="button"
+  1652→                    onClick={() => {
+  1653→                      if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+  1654→                      gapTimerRef.current = null
+  1655→                      setCallGapCountdown(null)
+  1656→                      setScreen('list-summary')
+  1657→                    }}
+  1658→                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors shadow-md"
+  1659→                    style={{ touchAction: 'manipulation' }}
+  1660→                    aria-label="Close"
+  1661→                  >
+  1662→                    <X className="h-5 w-5" />
+  1663→                  </button>
+  1664→                  <div className="py-4 space-y-3">
+  1665→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1666→                      <Clock className="h-7 w-7 animate-pulse" />
+  1667→                    </div>
+  1668→                    <p className="text-3xl font-mono font-bold">{callGapCountdown}s</p>
+  1669→                    <p className="text-sm text-muted-foreground">Next call starting...</p>
+  1670→                    <p className="text-xs text-muted-foreground">
+  1671→                      Up next: <span className="font-medium">{candidates[currentIndex + 1]?.name}</span>
+  1672→                    </p>
+  1673→                    <Button
+  1674→                      variant="outline"
+  1675→                      className="mt-3 h-11 w-full"
+  1676→                      onClick={() => {
+  1677→                        if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+  1678→                        gapTimerRef.current = null
+  1679→                        setCallGapCountdown(null)
+  1680→                        advanceToCandidate(currentIndex + 1)
+  1681→                        setScreen('calling')
+  1682→                      }}
+  1683→                      style={{ touchAction: 'manipulation' }}
+  1684→                    >
+  1685→                      Call Now
+  1686→                    </Button>
+  1687→                  </div>
+  1688→                </div>
+  1689→              </div>
+  1690→            </div>}
+  1691→            {!isMobile && (
+  1692→              <Dialog open>
+  1693→                <DialogContent className="sm:max-w-xs text-center" showCloseButton={false}>
+  1694→                  <div className="py-6 space-y-3">
+  1695→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1696→                      <Clock className="h-7 w-7 animate-pulse" />
+  1697→                    </div>
+  1698→                    <p className="text-2xl font-mono font-bold">{callGapCountdown}s</p>
+  1699→                    <p className="text-sm text-muted-foreground">Next call starting...</p>
+  1700→                    <p className="text-xs text-muted-foreground">
+  1701→                      Up next: <span className="font-medium">{candidates[currentIndex + 1]?.name}</span>
+  1702→                    </p>
+  1703→                    <Button
+  1704→                      variant="outline"
+  1705→                      className="mt-2"
+  1706→                      onClick={() => {
+  1707→                        if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+  1708→                        gapTimerRef.current = null
+  1709→                        setCallGapCountdown(null)
+  1710→                        advanceToCandidate(currentIndex + 1)
+  1711→                        setScreen('calling')
+  1712→                      }}
+  1713→                    >
+  1714→                      Call Now
+  1715→                    </Button>
+  1716→                  </div>
+  1717→                </DialogContent>
+  1718→              </Dialog>
+  1719→            )}
+  1720→          </>
+  1721→        )}
+  1722→
+  1723→        {/* ==================== POST-CALL DISPOSITION MODAL ==================== */}
+  1724→        {/* Mobile: Simple CSS bottom-sheet (NO vaul Drawer — freezes Android WebView) */}
+  1725→        {isDispositionModalOpen && isMobile && (
+  1726→          <div>
+  1727→            {/* Overlay — clickable to close popup */}
+  1728→            <div
+  1729→              className="fixed inset-0 bg-black/40"
+  1730→              data-dialer-overlay="disposition"
+  1731→              style={{ touchAction: 'none' }}
+  1732→              onClick={() => {
+  1733→                if (!savingRecord) {
+  1734→                  setIsDispositionModalOpen(false)
+  1735→                  clearCallState()
+  1736→                  setCallInitiated(false)
+  1737→                  callInitiatedRef.current = false
+  1738→                  stopCallTimer()
+  1739→                }
+  1740→              }}
+  1741→              aria-hidden="true"
+  1742→            />
+  1743→            {/* Bottom sheet — pure CSS, no body scroll lock, no portal
+  1744→                CRITICAL: Do NOT set touchAction: manipulation on this container!
+  1745→                That kills scroll inside Android WebView. Only set it on buttons.
+  1746→                Height is calculated from window.innerHeight (JS), NOT CSS dvh/vh units. */}
+  1747→            <div
+  1748→              className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
+  1749→              data-dialer-sheet="disposition"
+  1750→              style={{
+  1751→                bottom: 0,
+  1752→                /* Use JS-measured height — reliable in all Android WebView versions */
+  1753→                height: sheetHeight > 100 ? `${sheetHeight}px` : '85vh',
+  1754→                display: 'flex',
+  1755→                flexDirection: 'column',
+  1756→                overflow: 'hidden',
+  1757→              }}
+  1758→            >
+  1759→              {/* Header: drag handle + close button (44px touch target) */}
+  1760→              <div
+  1761→                className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative"
+  1762→                style={{ touchAction: 'manipulation' }}
+  1763→              >
+  1764→                <div className="h-1 w-8 rounded-full bg-muted-foreground/25 mx-auto absolute left-0 right-0 top-2" />
+  1765→                <div className="w-11" />
+  1766→                <button
+  1767→                  type="button"
+  1768→                  onClick={() => {
+  1769→                    if (!savingRecord) {
+  1770→                      setIsDispositionModalOpen(false)
+  1771→                      clearCallState()
+  1772→                      setCallInitiated(false)
+  1773→                      callInitiatedRef.current = false
+  1774→                      stopCallTimer()
+  1775→                    }
+  1776→                  }}
+  1777→                  disabled={savingRecord}
+  1778→                  className="h-11 w-11 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-red-100 hover:text-red-600 active:bg-red-200 active:opacity-70"
+  1779→                  style={{ touchAction: 'manipulation', pointerEvents: 'auto', position: 'relative', zIndex: 10 }}
+  1780→                  aria-label="Close disposition"
+  1781→                >
+  1782→                  <X className="h-5 w-5" strokeWidth={2.5} />
+  1783→                  <span className="sr-only">Close</span>
+  1784→                </button>
+  1785→              </div>
+  1786→              <div className="px-4 pb-2 shrink-0">
+  1787→                <p className="flex items-center gap-2 text-base font-semibold text-foreground">
+  1788→                  <PhoneIncoming className="h-4 w-4 text-emerald-600" />
+  1789→                  Post-Call Disposition
+  1790→                </p>
+  1791→                <p className="text-sm text-muted-foreground mt-0.5">
+  1792→                  Log the call outcome for {currentCandidate.name}
+  1793→                </p>
+  1794→              </div>
+  1795→
+  1796→              {/* Scrollable body — MUST allow native scroll in Android WebView */}
+  1797→              <div
+  1798→                className="overflow-y-auto overflow-x-hidden flex-1 px-4"
+  1799→                style={{
+  1800→                  WebkitOverflowScrolling: 'touch',
+  1801→                  overscrollBehavior: 'contain',
+  1802→                  /* Restore default touch behavior so scroll works */
+  1803→                  touchAction: 'pan-y',
+  1804→                  minHeight: 0,
+  1805→                }}
+  1806→              >
+  1807→                <div className="space-y-4 pb-4">
+  1808→                  {/* Candidate summary — compact */}
+  1809→                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+  1810→                    <div className="flex items-center gap-2">
+  1811→                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+  1812→                        <User className="h-4 w-4" />
+  1813→                      </div>
+  1814→                      <div className="min-w-0 flex-1">
+  1815→                        <p className="font-medium text-sm truncate">{currentCandidate.name}</p>
+  1816→                        <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1817→                      </div>
+  1818→                      <Badge variant="outline" className="text-[10px] shrink-0 tabular-nums">
+  1819→                        {includeDispositionTime && timerRef.current && (
+  1820→                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
+  1821→                        )}
+  1822→                        {formatDuration(callTimer)}
+  1823→                      </Badge>
+  1824→                    </div>
+  1825→                    {includeDispositionTime && timerRef.current && (
+  1826→                      <p className="text-[10px] text-amber-600 font-medium pl-10">⏱ Timer running — stops on disposition submit</p>
+  1827→                    )}
+  1828→                    <div className="flex gap-4 text-xs pl-10 text-muted-foreground">
+  1829→                      {currentCandidate.role && (
+  1830→                        <span className="flex items-center gap-1 truncate">
+  1831→                          <Briefcase className="h-3 w-3 shrink-0 text-emerald-500" />
+  1832→                          <span className="truncate">{currentCandidate.role}</span>
+  1833→                        </span>
+  1834→                      )}
+  1835→                      {currentCandidate.location && (
+  1836→                        <span className="flex items-center gap-1 truncate">
+  1837→                          <MapPin className="h-3 w-3 shrink-0 text-emerald-500" />
+  1838→                          <span className="truncate">{currentCandidate.location}</span>
+  1839→                        </span>
+  1840→                      )}
+  1841→                    </div>
+  1842→                  </div>
+  1843→
+  1844→                  {/* Disposition selector */}
+  1845→                  <div className="space-y-2">
+  1846→                    <Label className="text-sm font-medium">Call Disposition <span className="text-red-500">*</span></Label>
+  1847→                    <div className="grid grid-cols-2 gap-2">
+  1848→                      {dispositions.map((d) => (
+  1849→                        <button
+  1850→                          key={d.id}
+  1851→                          type="button"
+  1852→                          onClick={() => setSelectedDisposition(d.id)}
+  1853→                          style={{ touchAction: 'manipulation' }}
+  1854→                          className={cn(
+  1855→                            'px-3 py-2.5 rounded-lg text-xs font-medium border text-left min-h-[44px] flex items-center',
+  1856→                            selectedDisposition === d.id
+  1857→                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500'
+  1858→                              : 'border-border text-muted-foreground'
+  1859→                          )}
+  1860→                        >
+  1861→                          {d.heading}
+  1862→                        </button>
+  1863→                      ))}
+  1864→                    </div>
+  1865→                    {dispositions.length === 0 && (
+  1866→                      <p className="text-xs text-muted-foreground">No dispositions configured. Ask your admin.</p>
+  1867→                    )}
+  1868→                  </div>
+  1869→
+  1870→                  {/* Client dropdown — native <select> for Android WebView compatibility.
+  1871→                      Position:absolute dropdowns get clipped by overflow:hidden parent
+  1872→                      and break touch scroll in Android WebView. Native <select> renders as
+  1873→                      a system dialog — immune to scroll and overflow issues. */}
+  1874→                  <div className="space-y-2">
+  1875→                      <Label className="text-sm font-medium">Client</Label>
+  1876→                      <div className="relative">
+  1877→                        <select
+  1878→                          value={selectedClient || ''}
+  1879→                          onChange={(e) => setSelectedClient(e.target.value)}
+  1880→                          className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm appearance-none pr-10"
+  1881→                          style={{ touchAction: 'manipulation' }}
+  1882→                        >
+  1883→                          <option value="">Select client...</option>
+  1884→                          {clients.map((c) => (
+  1885→                            <option key={c.id} value={c.id}>{c.name}</option>
+  1886→                          ))}
+  1887→                          <option value="__other__">+ Other (enter manually)</option>
+  1888→                        </select>
+  1889→                        {/* Custom chevron icon overlaid on the native select */}
+  1890→                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+  1891→                          <ChevronDown className="h-4 w-4 opacity-50" />
+  1892→                        </div>
+  1893→                      </div>
+  1894→                      {selectedClient === '__other__' && (
+  1895→                        <input
+  1896→                          type="text"
+  1897→                          placeholder="Enter client name..."
+  1898→                          value={customClientName}
+  1899→                          onChange={(e) => setCustomClientName(e.target.value)}
+  1900→                          className="w-full h-11 px-3 mt-2 rounded-lg border border-border bg-background text-sm"
+  1901→                          style={{ touchAction: 'manipulation' }}
+  1902→                        />
+  1903→                      )}
+  1904→
+  1905→                      {/* F2F Interview Date — always shown */}
+  1906→                      <div className="space-y-2">
+  1907→                        <Label className="text-sm font-medium">F2F Interview Date</Label>
+  1908→                        <input
+  1909→                          type="date"
+  1910→                          value={f2fInterviewDate}
+  1911→                          onChange={(e) => setF2fInterviewDate(e.target.value)}
+  1912→                          min={new Date().toISOString().split('T')[0]}
+  1913→                          className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm"
+  1914→                          style={{ touchAction: 'manipulation' }}
+  1915→                        />
+  1916→                      </div>
+  1917→                    </div>
+  1918→
+  1919→                  {/* Notes with voice input */}
+  1920→                  <div className="space-y-2">
+  1921→                    <div className="flex items-center justify-between">
+  1922→                      <Label className="text-sm font-medium">Notes</Label>
+  1923→                      <Button
+  1924→                        type="button"
+  1925→                        variant={isListening ? 'destructive' : 'outline'}
+  1926→                        size="sm"
+  1927→                        className={cn('h-10 text-xs gap-1.5 min-w-[88px]', isListening && 'animate-pulse')}
+  1928→                        onClick={toggleVoiceInput}
+  1929→                        style={{ touchAction: 'manipulation' }}
+  1930→                      >
+  1931→                        {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+  1932→                        {isListening ? 'Stop' : 'Voice'}
+  1933→                      </Button>
+  1934→                    </div>
+  1935→                    <div className="relative">
+  1936→                      <Textarea
+  1937→                        ref={notesRef}
+  1938→                        placeholder={isListening ? 'Listening...' : 'Add call notes (optional)...'}
+  1939→                        value={notes}
+  1940→                        onChange={(e) => setNotes(e.target.value)}
+  1941→                        rows={2}
+  1942→                        className={cn('resize-none pr-10', isListening && 'ring-2 ring-red-300 border-red-300')}
+  1943→                      />
+  1944→                      {isListening && (
+  1945→                        <div className="absolute top-2.5 right-2.5">
+  1946→                          <div className="h-3 w-3 rounded-full bg-red-500 animate-ping" />
+  1947→                        </div>
+  1948→                      )}
+  1949→                    </div>
+  1950→                    {isListening && (
+  1951→                      <p className="text-xs text-red-500 flex items-center gap-1">
+  1952→                        <Mic className="h-3 w-3" /> Listening — speak now
+  1953→                      </p>
+  1954→                    )}
+  1955→                  </div>
+  1956→
+  1957→                  {/* Quick Actions: SMS, WhatsApp — show pre-filled text preview */}
+  1958→                  <div className="space-y-2">
+  1959→                    <div className="flex flex-wrap gap-2">
+  1960→                      <Button
+  1961→                        variant="outline"
+  1962→                        size="sm"
+  1963→                        className="h-11 min-w-[100px]"
+  1964→                        style={{ touchAction: 'manipulation', flex: 1 }}
+  1965→                        onClick={() => {
+  1966→                          setSelectedSmsTemplate('')
+  1967→                          setSelectedSmsText('')
+  1968→                          setTemplateSheetOpen('sms')
+  1969→                        }}
+  1970→                      >
+  1971→                        <Send className="h-3.5 w-3.5 mr-1.5" />
+  1972→                        SMS
+  1973→                        {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+  1974→                      </Button>
+  1975→                      <Button
+  1976→                        variant="outline"
+  1977→                        size="sm"
+  1978→                        className="h-11 min-w-[100px]"
+  1979→                        style={{ touchAction: 'manipulation', flex: 1 }}
+  1980→                        onClick={() => {
+  1981→                          setSelectedWaTemplate('')
+  1982→                          setSelectedWaText('')
+  1983→                          setTemplateSheetOpen('whatsapp')
+  1984→                        }}
+  1985→                      >
+  1986→                        <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+  1987→                        WhatsApp
+  1988→                        {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+  1989→                      </Button>
+  1990→                    </div>
+  1991→                    {/* Show selected template preview */}
+  1992→                    {selectedSmsText && (
+  1993→                      <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
+  1994→                        <Send className="h-3 w-3 mt-0.5 shrink-0" />
+  1995→                        <span className="line-clamp-2">SMS: {selectedSmsText}</span>
+  1996→                      </div>
+  1997→                    )}
+  1998→                    {selectedWaText && (
+  1999→                      <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/30 text-xs text-green-700 dark:text-green-300 flex items-start gap-2">
+  2000→                        <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
+
+[showing lines 1-2000 of 2494; use offset=2001 with limit to continue reading]

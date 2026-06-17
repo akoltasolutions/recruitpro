@@ -1,0 +1,1469 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+     4→import { toast } from 'sonner'
+     5→import {
+     6→  GitBranch, Search, Download, Filter, Loader2, ChevronDown,
+     7→  Phone, Mail, Building2, Briefcase, User, Calendar, StickyNote,
+     8→  Edit2, Eye, X, Check, MessageSquare, FileSpreadsheet, BarChart3
+     9→} from 'lucide-react'
+    10→import { Button } from '@/components/ui/button'
+    11→import { Input } from '@/components/ui/input'
+    12→import { Label } from '@/components/ui/label'
+    13→import { Badge } from '@/components/ui/badge'
+    14→import { Textarea } from '@/components/ui/textarea'
+    15→import { Skeleton } from '@/components/ui/skeleton'
+    16→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    17→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    18→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+    19→import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+    20→import { Card, CardContent } from '@/components/ui/card'
+    21→import { Separator } from '@/components/ui/separator'
+    22→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    23→import { EmptyState } from '@/components/shared/empty-state'
+    24→import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
+    25→import { authFetch } from '@/stores/auth-store'
+    26→import { useAuthStore, type UserRole } from '@/stores/auth-store'
+    27→import { cn } from '@/lib/utils'
+    28→import { format } from 'date-fns'
+    29→import { navigateTo } from '@/components/app-router'
+    30→
+    31→// ─── Types ──────────────────────────────────────────────────────────────────
+    32→
+    33→type PipelineStage = 'SHORTLISTED' | 'FOLLOW_UP' | 'INTERVIEWED' | 'JOINED' | 'BACKOUT' | 'ALL'
+    34→type CandidateStatus = 'PENDING' | 'DONE' | 'SCHEDULED' | 'SKIPPED'
+    35→
+    36→interface PipelineNote {
+    37→  id: string
+    38→  note: string
+    39→  authorName: string
+    40→  createdAt: string
+    41→}
+    42→
+    43→interface AdminCandidate {
+    44→  id: string
+    45→  name: string
+    46→  phone: string
+    47→  email: string | null
+    48→  location: string | null
+    49→  role: string | null
+    50→  notes: string | null
+    51→  remarks: string | null
+    52→  pipelineStage: PipelineStage
+    53→  status: CandidateStatus
+    54→  followUpDate: string | null
+    55→  interviewDate: string | null
+    56→  joinedDate: string | null
+    57→  lastDisposition: string | null
+    58→  clientName: string | null
+    59→  recruiterName: string | null
+    60→  recruiterId: string | null
+    61→  organizationName: string | null
+    62→  organizationId: string | null
+    63→}
+    64→
+    65→interface AdminPipelineResponse {
+    66→  candidates: AdminCandidate[]
+    67→  counts: Record<string, number>
+    68→  totalCount: number
+    69→  page: number
+    70→  totalPages: number
+    71→}
+    72→
+    73→interface RecruiterOption {
+    74→  id: string
+    75→  name: string
+    76→}
+    77→
+    78→interface OrganizationOption {
+    79→  id: string
+    80→  name: string
+    81→}
+    82→
+    83→// ─── Constants ──────────────────────────────────────────────────────────────
+    84→
+    85→const STAGES: PipelineStage[] = ['SHORTLISTED', 'FOLLOW_UP', 'INTERVIEWED', 'JOINED', 'BACKOUT']
+    86→
+    87→const STAGE_META: Record<string, { label: string; badgeClass: string }> = {
+    88→  SHORTLISTED: { label: 'Shortlisted', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800' },
+    89→  FOLLOW_UP: { label: 'Follow-ups', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800' },
+    90→  INTERVIEWED: { label: 'Interviewed', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800' },
+    91→  JOINED: { label: 'Joined', badgeClass: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800' },
+    92→  BACKOUT: { label: 'Backout', badgeClass: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800' },
+    93→}
+    94→
+    95→const STATUS_OPTIONS: { value: CandidateStatus; label: string }[] = [
+    96→  { value: 'PENDING', label: 'Pending' },
+    97→  { value: 'DONE', label: 'Done' },
+    98→  { value: 'SCHEDULED', label: 'Scheduled' },
+    99→  { value: 'SKIPPED', label: 'Skipped' },
+   100→]
+   101→
+   102→const ALL_STAGE_OPTIONS: { value: PipelineStage; label: string }[] = [
+   103→  { value: 'SHORTLISTED', label: 'Shortlisted' },
+   104→  { value: 'FOLLOW_UP', label: 'Follow Up' },
+   105→  { value: 'INTERVIEWED', label: 'Interviewed' },
+   106→  { value: 'JOINED', label: 'Joined' },
+   107→  { value: 'BACKOUT', label: 'Backout' },
+   108→]
+   109→
+   110→const QUICK_DATES = [
+   111→  { label: 'Today', value: 'today' },
+   112→  { label: 'Yesterday', value: 'yesterday' },
+   113→  { label: 'Last 7 Days', value: '7d' },
+   114→  { label: 'Last 15 Days', value: '15d' },
+   115→  { label: 'Last 30 Days', value: '30d' },
+   116→  { label: 'This Month', value: 'month' },
+   117→  { label: 'Custom', value: 'custom' },
+   118→]
+   119→
+   120→// ─── Date Helpers ───────────────────────────────────────────────────────────
+   121→
+   122→function getDateRange(filterValue: string): { from?: string; to?: string } {
+   123→  const now = new Date()
+   124→  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+   125→
+   126→  switch (filterValue) {
+   127→    case 'today':
+   128→      return { from: today.toISOString(), to: now.toISOString() }
+   129→    case 'yesterday': {
+   130→      const yesterday = new Date(today)
+   131→      yesterday.setDate(yesterday.getDate() - 1)
+   132→      return { from: yesterday.toISOString(), to: today.toISOString() }
+   133→    }
+   134→    case '7d': {
+   135→      const start = new Date(today)
+   136→      start.setDate(start.getDate() - 7)
+   137→      return { from: start.toISOString(), to: now.toISOString() }
+   138→    }
+   139→    case '15d': {
+   140→      const start = new Date(today)
+   141→      start.setDate(start.getDate() - 15)
+   142→      return { from: start.toISOString(), to: now.toISOString() }
+   143→    }
+   144→    case '30d': {
+   145→      const start = new Date(today)
+   146→      start.setDate(start.getDate() - 30)
+   147→      return { from: start.toISOString(), to: now.toISOString() }
+   148→    }
+   149→    case 'month': {
+   150→      const start = new Date(now.getFullYear(), now.getMonth(), 1)
+   151→      return { from: start.toISOString(), to: now.toISOString() }
+   152→    }
+   153→    default:
+   154→      return {}
+   155→  }
+   156→}
+   157→
+   158→function formatDate(dateStr: string | null): string {
+   159→  if (!dateStr) return '—'
+   160→  try {
+   161→    return format(new Date(dateStr), 'MMM d, yyyy')
+   162→  } catch {
+   163→    return '—'
+   164→  }
+   165→}
+   166→
+   167→function formatDateTime(dateStr: string | null): string {
+   168→  if (!dateStr) return ''
+   169→  try {
+   170→    return format(new Date(dateStr), 'MMM d, yyyy h:mm a')
+   171→  } catch {
+   172→    return ''
+   173→  }
+   174→}
+   175→
+   176→// ─── Component ──────────────────────────────────────────────────────────────
+   177→
+   178→export function AdminPipeline() {
+   179→  const { user, organization } = useAuthStore()
+   180→  const userRole: UserRole = user?.role || 'USER'
+   181→  const isSuperAdmin = userRole === 'SUPER_ADMIN'
+   182→
+   183→  // ── Data State ──
+   184→  const [candidates, setCandidates] = useState<AdminCandidate[]>([])
+   185→  const [counts, setCounts] = useState<Record<string, number>>({})
+   186→  const [loading, setLoading] = useState(true)
+   187→  const [exporting, setExporting] = useState(false)
+   188→
+   189→  // ── Pagination State ──
+   190→  const [totalCount, setTotalCount] = useState(0)
+   191→  const [currentPage, setCurrentPage] = useState(1)
+   192→  const [totalPages, setTotalPages] = useState(0)
+   193→  const [pageSize, setPageSize] = useState(50)
+   194→  const [loadingMore, setLoadingMore] = useState(false)
+   195→  const sentinelRef = useRef<HTMLDivElement | null>(null)
+   196→
+   197→  // ── Filter State ──
+   198→  const [activeStage, setActiveStage] = useState<PipelineStage>('ALL')
+   199→  const [searchQuery, setSearchQuery] = useState('')
+   200→  const [dateFilter, setDateFilter] = useState('today')
+   201→  const [customDateFrom, setCustomDateFrom] = useState('')
+   202→  const [customDateTo, setCustomDateTo] = useState('')
+   203→  const [recruiterFilter, setRecruiterFilter] = useState('all')
+   204→  const [organizationFilter, setOrganizationFilter] = useState('all')
+   205→
+   206→  // ── Dropdown Data ──
+   207→  const [recruiters, setRecruiters] = useState<RecruiterOption[]>([])
+   208→  const [organizations, setOrganizations] = useState<OrganizationOption[]>([])
+   209→
+   210→  // ── Edit Dialog ──
+   211→  const [editOpen, setEditOpen] = useState(false)
+   212→  const [editCandidate, setEditCandidate] = useState<AdminCandidate | null>(null)
+   213→  const [editStatus, setEditStatus] = useState<CandidateStatus>('PENDING')
+   214→  const [editStage, setEditStage] = useState<PipelineStage>('SHORTLISTED')
+   215→  const [editFollowUpDate, setEditFollowUpDate] = useState('')
+   216→  const [editInterviewDate, setEditInterviewDate] = useState('')
+   217→  const [editJoinedDate, setEditJoinedDate] = useState('')
+   218→  const [editNotes, setEditNotes] = useState('')
+   219→  const [editRemarks, setEditRemarks] = useState('')
+   220→  const [editRecruiterId, setEditRecruiterId] = useState('')
+   221→  const [saving, setSaving] = useState(false)
+   222→
+   223→  // ── Notes Dialog ──
+   224→  const [notesOpen, setNotesOpen] = useState(false)
+   225→  const [notesCandidate, setNotesCandidate] = useState<AdminCandidate | null>(null)
+   226→  const [notesHistory, setNotesHistory] = useState<PipelineNote[]>([])
+   227→  const [newNoteText, setNewNoteText] = useState('')
+   228→  const [savingNote, setSavingNote] = useState(false)
+   229→  const [loadingNotes, setLoadingNotes] = useState(false)
+   230→
+   231→  // ── Search debounce ──
+   232→  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+   233→  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
+   234→
+   235→  useEffect(() => {
+   236→    if (searchTimer.current) clearTimeout(searchTimer.current)
+   237→    searchTimer.current = setTimeout(() => {
+   238→      setDebouncedSearch(searchQuery)
+   239→      setCurrentPage(1)
+   240→    }, 300)
+   241→    return () => {
+   242→      if (searchTimer.current) clearTimeout(searchTimer.current)
+   243→    }
+   244→  }, [searchQuery])
+   245→
+   246→  // ── Fetch dropdown data ──
+   247→  const fetchDropdownData = useCallback(async () => {
+   248→    try {
+   249→      const params = new URLSearchParams()
+   250→      params.set('limit', '200')
+   251→      const res = await authFetch(`/api/users?${params.toString()}`)
+   252→      if (res.ok) {
+   253→        const data = await res.json()
+   254→        const users: RecruiterOption[] = (data.users || []).map((u: { id: string; name: string }) => ({
+   255→          id: u.id,
+   256→          name: u.name,
+   257→        }))
+   258→        setRecruiters(users)
+   259→      }
+   260→    } catch {
+   261→      // Silently fail — dropdowns will just be empty
+   262→    }
+   263→
+   264→    // Fetch organizations only for SUPER_ADMIN
+   265→    if (isSuperAdmin) {
+   266→      try {
+   267→        const res = await authFetch('/api/super-admin/organizations?limit=200')
+   268→        if (res.ok) {
+   269→          const data = await res.json()
+   270→          const orgs: OrganizationOption[] = (data.organizations || []).map((o: { id: string; name: string }) => ({
+   271→            id: o.id,
+   272→            name: o.name,
+   273→          }))
+   274→          setOrganizations(orgs)
+   275→        }
+   276→      } catch {
+   277→        // Silently fail
+   278→      }
+   279→    }
+   280→  }, [isSuperAdmin])
+   281→
+   282→  useEffect(() => {
+   283→    fetchDropdownData()
+   284→  }, [fetchDropdownData])
+   285→
+   286→  // ── Fetch candidates ──
+   287→  const fetchCandidates = useCallback(async () => {
+   288→    setLoading(true)
+   289→    setCurrentPage(1)
+   290→    try {
+   291→      const params = new URLSearchParams()
+   292→
+   293→      if (activeStage !== 'ALL') {
+   294→        params.set('stage', activeStage)
+   295→      }
+   296→
+   297→      if (debouncedSearch.trim()) {
+   298→        params.set('search', debouncedSearch.trim())
+   299→      }
+   300→
+   301→      // Date range
+   302→      const { from, to } = getDateRange(dateFilter)
+   303→      if (dateFilter === 'custom' && customDateFrom) {
+   304→        params.set('from', new Date(customDateFrom).toISOString())
+   305→        if (customDateTo) {
+   306→          params.set('to', new Date(customDateTo + 'T23:59:59').toISOString())
+   307→        }
+   308→      } else if (from && to) {
+   309→        params.set('from', from)
+   310→        params.set('to', to)
+   311→      }
+   312→
+   313→      // Recruiter filter
+   314→      if (recruiterFilter && recruiterFilter !== 'all') {
+   315→        params.set('recruiterId', recruiterFilter)
+   316→      }
+   317→
+   318→      // Organization filter
+   319→      if (isSuperAdmin) {
+   320→        if (organizationFilter && organizationFilter !== 'all') {
+   321→          params.set('organizationId', organizationFilter)
+   322→        }
+   323→      } else if (organization?.id) {
+   324→        params.set('organizationId', organization.id)
+   325→      }
+   326→
+   327→      // Pagination params
+   328→      params.set('page', '1')
+   329→      params.set('limit', String(pageSize))
+   330→
+   331→      const res = await authFetch(`/api/admin/pipeline?${params.toString()}`)
+   332→      if (!res.ok) throw new Error('Failed to fetch pipeline data')
+   333→      const data: AdminPipelineResponse = await res.json()
+   334→      setCandidates(data.candidates || [])
+   335→      setCounts(data.counts || {})
+   336→      setTotalCount(data.totalCount || 0)
+   337→      setCurrentPage(data.page || 1)
+   338→      setTotalPages(data.totalPages || 0)
+   339→    } catch {
+   340→      toast.error('Failed to load pipeline data')
+   341→      setCandidates([])
+   342→      setCounts({})
+   343→    } finally {
+   344→      setLoading(false)
+   345→    }
+   346→  }, [activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization, pageSize])
+   347→
+   348→  // Fetch candidates when filters change
+   349→  useEffect(() => {
+   350→    fetchCandidates()
+   351→  }, [activeStage, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization?.id, pageSize])
+   352→
+   353→  // Fetch candidates when debounced search changes
+   354→  useEffect(() => {
+   355→    fetchCandidates()
+   356→  }, [debouncedSearch])
+   357→
+   358→  // ── Load More ──
+   359→  const loadMore = useCallback(async () => {
+   360→    if (loadingMore || currentPage >= totalPages) return
+   361→    setLoadingMore(true)
+   362→    try {
+   363→      const nextPage = currentPage + 1
+   364→      const params = new URLSearchParams()
+   365→
+   366→      if (activeStage !== 'ALL') {
+   367→        params.set('stage', activeStage)
+   368→      }
+   369→
+   370→      if (debouncedSearch.trim()) {
+   371→        params.set('search', debouncedSearch.trim())
+   372→      }
+   373→
+   374→      // Date range
+   375→      const { from, to } = getDateRange(dateFilter)
+   376→      if (dateFilter === 'custom' && customDateFrom) {
+   377→        params.set('from', new Date(customDateFrom).toISOString())
+   378→        if (customDateTo) {
+   379→          params.set('to', new Date(customDateTo + 'T23:59:59').toISOString())
+   380→        }
+   381→      } else if (from && to) {
+   382→        params.set('from', from)
+   383→        params.set('to', to)
+   384→      }
+   385→
+   386→      // Recruiter filter
+   387→      if (recruiterFilter && recruiterFilter !== 'all') {
+   388→        params.set('recruiterId', recruiterFilter)
+   389→      }
+   390→
+   391→      // Organization filter
+   392→      if (isSuperAdmin) {
+   393→        if (organizationFilter && organizationFilter !== 'all') {
+   394→          params.set('organizationId', organizationFilter)
+   395→        }
+   396→      } else if (organization?.id) {
+   397→        params.set('organizationId', organization.id)
+   398→      }
+   399→
+   400→      params.set('page', String(nextPage))
+   401→      params.set('limit', String(pageSize))
+   402→
+   403→      const res = await authFetch(`/api/admin/pipeline?${params.toString()}`)
+   404→      if (!res.ok) throw new Error('Failed')
+   405→      const data = await res.json()
+   406→      setCandidates(prev => [...prev, ...(data.candidates || [])])
+   407→      setCurrentPage(data.page)
+   408→      setTotalCount(data.totalCount)
+   409→      setTotalPages(data.totalPages)
+   410→    } catch {
+   411→      toast.error('Failed to load more records')
+   412→    } finally {
+   413→      setLoadingMore(false)
+   414→    }
+   415→  }, [loadingMore, currentPage, totalPages, activeStage, debouncedSearch, dateFilter, customDateFrom, customDateTo, recruiterFilter, organizationFilter, isSuperAdmin, organization, pageSize])
+   416→
+   417→  // ── Page Size Change ──
+   418→  const handlePageSizeChange = (newSize: number) => {
+   419→    setPageSize(newSize)
+   420→    setCurrentPage(1)
+   421→  }
+   422→
+   423→  // ── Infinite Scroll Observer ──
+   424→  useEffect(() => {
+   425→    const sentinel = sentinelRef.current
+   426→    if (!sentinel || currentPage >= totalPages || loadingMore) return
+   427→    const observer = new IntersectionObserver(
+   428→      (entries) => {
+   429→        if (entries[0].isIntersecting && currentPage < totalPages && !loadingMore) {
+   430→          loadMore()
+   431→        }
+   432→      },
+   433→      { rootMargin: '200px', threshold: 0 }
+   434→    )
+   435→    observer.observe(sentinel)
+   436→    return () => observer.disconnect()
+   437→  }, [currentPage, totalPages, loadingMore, loadMore])
+   438→
+   439→  // ── Export ──
+   440→  const handleExport = async (format: 'csv' | 'xlsx') => {
+   441→    setExporting(true)
+   442→    try {
+   443→      const params = new URLSearchParams()
+   444→      params.set('export', format)
+   445→
+   446→      if (activeStage !== 'ALL') {
+   447→        params.set('stage', activeStage)
+   448→      }
+   449→      if (debouncedSearch.trim()) {
+   450→        params.set('search', debouncedSearch.trim())
+   451→      }
+   452→      const { from, to } = getDateRange(dateFilter)
+   453→      if (dateFilter === 'custom' && customDateFrom) {
+   454→        params.set('from', new Date(customDateFrom).toISOString())
+   455→        if (customDateTo) {
+   456→          params.set('to', new Date(customDateTo + 'T23:59:59').toISOString())
+   457→        }
+   458→      } else if (from && to) {
+   459→        params.set('from', from)
+   460→        params.set('to', to)
+   461→      }
+   462→      if (recruiterFilter && recruiterFilter !== 'all') {
+   463→        params.set('recruiterId', recruiterFilter)
+   464→      }
+   465→      if (isSuperAdmin && organizationFilter && organizationFilter !== 'all') {
+   466→        params.set('organizationId', organizationFilter)
+   467→      }
+   468→
+   469→      const res = await authFetch(`/api/admin/pipeline?${params.toString()}`)
+   470→      if (!res.ok) throw new Error('Export failed')
+   471→      const blob = await res.blob()
+   472→
+   473→      const url = window.URL.createObjectURL(blob)
+   474→      const a = document.createElement('a')
+   475→      a.href = url
+   476→      a.download = `pipeline-export-${Date.now()}.${format}`
+   477→      document.body.appendChild(a)
+   478→      a.click()
+   479→      setTimeout(() => {
+   480→        document.body.removeChild(a)
+   481→        window.URL.revokeObjectURL(url)
+   482→      }, 300)
+   483→
+   484→      toast.success(`Exported as ${format.toUpperCase()} successfully`)
+   485→    } catch {
+   486→      toast.error('Failed to export data')
+   487→    } finally {
+   488→      setExporting(false)
+   489→    }
+   490→  }
+   491→
+   492→  // ── Edit Dialog ──
+   493→  const openEditDialog = (candidate: AdminCandidate) => {
+   494→    setEditCandidate(candidate)
+   495→    setEditStatus(candidate.status || 'PENDING')
+   496→    setEditStage(candidate.pipelineStage)
+   497→    setEditFollowUpDate(candidate.followUpDate ? candidate.followUpDate.slice(0, 10) : '')
+   498→    setEditInterviewDate(candidate.interviewDate ? candidate.interviewDate.slice(0, 10) : '')
+   499→    setEditJoinedDate(candidate.joinedDate ? candidate.joinedDate.slice(0, 10) : '')
+   500→    setEditNotes(candidate.notes || '')
+   501→    setEditRemarks(candidate.remarks || '')
+   502→    setEditRecruiterId(candidate.recruiterId || '')
+   503→    setEditOpen(true)
+   504→  }
+   505→
+   506→  const handleSaveEdit = async () => {
+   507→    if (!editCandidate) return
+   508→    setSaving(true)
+   509→    try {
+   510→      const payload: Record<string, unknown> = {
+   511→        candidateId: editCandidate.id,
+   512→        status: editStatus,
+   513→        pipelineStage: editStage,
+   514→        notes: editNotes,
+   515→        remarks: editRemarks,
+   516→      }
+   517→      if (editFollowUpDate) payload.followUpDate = editFollowUpDate
+   518→      if (editInterviewDate) payload.interviewDate = editInterviewDate
+   519→      if (editJoinedDate) payload.joinedDate = editJoinedDate
+   520→      if (isSuperAdmin && editRecruiterId) payload.recruiterId = editRecruiterId
+   521→
+   522→      const res = await authFetch('/api/admin/pipeline', {
+   523→        method: 'PATCH',
+   524→        body: JSON.stringify(payload),
+   525→      })
+   526→      if (!res.ok) throw new Error('Failed to save')
+   527→      toast.success('Candidate updated successfully')
+   528→      setEditOpen(false)
+   529→      fetchCandidates()
+   530→    } catch {
+   531→      toast.error('Failed to save changes')
+   532→    } finally {
+   533→      setSaving(false)
+   534→    }
+   535→  }
+   536→
+   537→  // ── Notes Dialog ──
+   538→  const openNotesDialog = async (candidate: AdminCandidate) => {
+   539→    setNotesCandidate(candidate)
+   540→    setNewNoteText('')
+   541→    setNotesHistory([])
+   542→    setNotesOpen(true)
+   543→    setLoadingNotes(true)
+   544→
+   545→    try {
+   546→      const params = new URLSearchParams()
+   547→      params.set('candidateId', candidate.id)
+   548→      params.set('limit', '50')
+   549→      const res = await authFetch(`/api/admin/pipeline/notes?${params.toString()}`)
+   550→      if (res.ok) {
+   551→        const data = await res.json()
+   552→        setNotesHistory(data.notes || [])
+   553→      }
+   554→    } catch {
+   555→      toast.error('Failed to load notes history')
+   556→    } finally {
+   557→      setLoadingNotes(false)
+   558→    }
+   559→  }
+   560→
+   561→  const handleAddNote = async () => {
+   562→    if (!notesCandidate || !newNoteText.trim()) return
+   563→    setSavingNote(true)
+   564→    try {
+   565→      const res = await authFetch('/api/admin/pipeline/notes', {
+   566→        method: 'POST',
+   567→        body: JSON.stringify({
+   568→          candidateId: notesCandidate.id,
+   569→          note: newNoteText.trim(),
+   570→        }),
+   571→      })
+   572→      if (!res.ok) throw new Error('Failed to add note')
+   573→      toast.success('Note added successfully')
+   574→      setNewNoteText('')
+   575→
+   576→      // Refresh notes
+   577→      try {
+   578→        const params = new URLSearchParams()
+   579→        params.set('candidateId', notesCandidate.id)
+   580→        params.set('limit', '50')
+   581→        const notesRes = await authFetch(`/api/admin/pipeline/notes?${params.toString()}`)
+   582→        if (notesRes.ok) {
+   583→          const data = await notesRes.json()
+   584→          setNotesHistory(data.notes || [])
+   585→        }
+   586→      } catch {
+   587→        // Silently fail refresh
+   588→      }
+   589→
+   590→      // Refresh candidate data too
+   591→      fetchCandidates()
+   592→    } catch {
+   593→      toast.error('Failed to add note')
+   594→    } finally {
+   595→      setSavingNote(false)
+   596→    }
+   597→  }
+   598→
+   599→  // ── Computed values ──
+   600→  const allStagesCount = useMemo(() => {
+   601→    return Object.values(counts).reduce((sum, c) => sum + c, 0)
+   602→  }, [counts])
+   603→
+   604→  const activeCount = useMemo(() => {
+   605→    if (activeStage === 'ALL') return allStagesCount
+   606→    return counts[activeStage] || 0
+   607→  }, [activeStage, counts, allStagesCount])
+   608→
+   609→  // ─── Render: Pagination Section ──────────────────────────────────────────
+   610→
+   611→  const renderPaginationSection = () => (
+   612→    <>
+   613→      <PaginationControls
+   614→        totalCount={totalCount}
+   615→        displayedCount={candidates.length}
+   616→        currentPage={currentPage}
+   617→        totalPages={totalPages}
+   618→        pageSize={pageSize}
+   619→        onPageSizeChange={handlePageSizeChange}
+   620→        onLoadMore={loadMore}
+   621→        loadingMore={loadingMore}
+   622→        loading={loading}
+   623→        hasMore={currentPage < totalPages}
+   624→      />
+   625→      <InfiniteScrollLoader
+   626→        loadingMore={loadingMore}
+   627→        isEnd={currentPage >= totalPages && totalCount > 0}
+   628→      />
+   629→    </>
+   630→  )
+   631→
+   632→  // ─── Render: Filters Section ─────────────────────────────────────────────
+   633→
+   634→  const renderFilters = () => (
+   635→    <div className="space-y-3">
+   636→      {/* Quick date filters */}
+   637→      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+   638→        <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+   639→        <div className="flex items-center gap-1.5 flex-nowrap">
+   640→          {QUICK_DATES.map((d) => (
+   641→            <button
+   642→              key={d.value}
+   643→              type="button"
+   644→              onClick={() => {
+   645→                setDateFilter(d.value)
+   646→                setCurrentPage(1)
+   647→                if (d.value !== 'custom') {
+   648→                  setCustomDateFrom('')
+   649→                  setCustomDateTo('')
+   650→                }
+   651→              }}
+   652→              className={cn(
+   653→                'inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
+   654→                dateFilter === d.value
+   655→                  ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700'
+   656→                  : 'border-input bg-background hover:bg-muted text-foreground'
+   657→              )}
+   658→            >
+   659→              {d.label}
+   660→            </button>
+   661→          ))}
+   662→        </div>
+   663→      </div>
+   664→
+   665→      {/* Custom date range */}
+   666→      {dateFilter === 'custom' && (
+   667→        <div className="flex items-center gap-2 flex-wrap">
+   668→          <div className="flex items-center gap-2">
+   669→            <Label className="text-xs font-medium whitespace-nowrap">From</Label>
+   670→            <Input
+   671→              type="date"
+   672→              value={customDateFrom}
+   673→              onChange={(e) => setCustomDateFrom(e.target.value)}
+   674→              className="h-9 text-sm w-[160px]"
+   675→            />
+   676→          </div>
+   677→          <div className="flex items-center gap-2">
+   678→            <Label className="text-xs font-medium whitespace-nowrap">To</Label>
+   679→            <Input
+   680→              type="date"
+   681→              value={customDateTo}
+   682→              onChange={(e) => setCustomDateTo(e.target.value)}
+   683→              className="h-9 text-sm w-[160px]"
+   684→            />
+   685→          </div>
+   686→          {(customDateFrom || customDateTo) && (
+   687→            <Button
+   688→              variant="ghost"
+   689→              size="sm"
+   690→              className="h-9 text-xs"
+   691→              onClick={() => {
+   692→                setCustomDateFrom('')
+   693→                setCustomDateTo('')
+   694→                fetchCandidates()
+   695→              }}
+   696→            >
+   697→              Clear
+   698→            </Button>
+   699→          )}
+   700→        </div>
+   701→      )}
+   702→
+   703→      {/* Recruiter & Organization filters + Search */}
+   704→      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+   705→        <div className="flex-1 relative">
+   706→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+   707→          <Input
+   708→            placeholder="Search by name, phone, email, notes..."
+   709→            value={searchQuery}
+   710→            onChange={(e) => setSearchQuery(e.target.value)}
+   711→            className="pl-9 h-9 text-sm"
+   712→          />
+   713→        </div>
+   714→
+   715→        {/* Recruiter filter */}
+   716→        <Select value={recruiterFilter} onValueChange={(v) => { setRecruiterFilter(v); setCurrentPage(1) }}>
+   717→          <SelectTrigger className="h-9 text-sm w-full sm:w-[180px]">
+   718→            <User className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+   719→            <SelectValue placeholder="All Recruiters" />
+   720→          </SelectTrigger>
+   721→          <SelectContent>
+   722→            <SelectItem value="all">All Recruiters</SelectItem>
+   723→            {recruiters.map((r) => (
+   724→              <SelectItem key={r.id} value={r.id}>
+   725→                {r.name}
+   726→              </SelectItem>
+   727→            ))}
+   728→          </SelectContent>
+   729→        </Select>
+   730→
+   731→        {/* Organization filter — only for SUPER_ADMIN */}
+   732→        {isSuperAdmin && (
+   733→          <Select value={organizationFilter} onValueChange={(v) => { setOrganizationFilter(v); setCurrentPage(1) }}>
+   734→            <SelectTrigger className="h-9 text-sm w-full sm:w-[180px]">
+   735→              <Building2 className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+   736→              <SelectValue placeholder="All Organizations" />
+   737→            </SelectTrigger>
+   738→            <SelectContent>
+   739→              <SelectItem value="all">All Organizations</SelectItem>
+   740→              {organizations.map((o) => (
+   741→                <SelectItem key={o.id} value={o.id}>
+   742→                  {o.name}
+   743→                </SelectItem>
+   744→              ))}
+   745→            </SelectContent>
+   746→          </Select>
+   747→        )}
+   748→      </div>
+   749→    </div>
+   750→  )
+   751→
+   752→  // ─── Render: Desktop Table ────────────────────────────────────────────────
+   753→
+   754→  const DesktopTable = () => {
+   755→    if (candidates.length === 0) {
+   756→      return (
+   757→        <div className="hidden md:block">
+   758→          <EmptyState
+   759→            icon={GitBranch}
+   760→            title="No Candidates Found"
+   761→            description={searchQuery || dateFilter !== 'today' ? 'Try adjusting your filters or search query.' : 'No candidates in this stage yet.'}
+   762→          />
+   763→        </div>
+   764→      )
+   765→    }
+   766→
+   767→    return (
+   768→      <div className="hidden md:block rounded-xl border overflow-hidden">
+   769→        <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
+   770→          <Table>
+   771→            <TableHeader>
+   772→              <TableRow className="bg-muted/50 hover:bg-muted/50">
+   773→                <TableHead className="font-semibold min-w-[180px]">Candidate</TableHead>
+   774→                <TableHead className="font-semibold min-w-[120px]">Phone</TableHead>
+   775→                <TableHead className="font-semibold min-w-[100px]">Role</TableHead>
+   776→                <TableHead className="font-semibold min-w-[100px]">Disposition</TableHead>
+   777→                <TableHead className="font-semibold min-w-[100px]">Client</TableHead>
+   778→                <TableHead className="font-semibold min-w-[120px]">Recruiter</TableHead>
+   779→                <TableHead className="font-semibold min-w-[120px]">Organization</TableHead>
+   780→                <TableHead className="font-semibold min-w-[100px]">Stage</TableHead>
+   781→                <TableHead className="font-semibold min-w-[140px]">Notes</TableHead>
+   782→                <TableHead className="font-semibold text-right min-w-[80px]">Actions</TableHead>
+   783→              </TableRow>
+   784→            </TableHeader>
+   785→            <TableBody>
+   786→              {candidates.map((c) => {
+   787→                const meta = STAGE_META[c.pipelineStage]
+   788→                return (
+   789→                  <TableRow key={c.id} className="group">
+   790→                    {/* Candidate */}
+   791→                    <TableCell>
+   792→                      <div className="min-w-0">
+   793→                        <p className="font-medium text-sm truncate">{c.name}</p>
+   794→                        {c.location && (
+   795→                          <p className="text-xs text-muted-foreground truncate">{c.location}</p>
+   796→                        )}
+   797→                      </div>
+   798→                    </TableCell>
+   799→
+   800→                    {/* Phone */}
+   801→                    <TableCell>
+   802→                      <a
+   803→                        href={`tel:${c.phone}`}
+   804→                        className="font-mono text-sm hover:text-emerald-600 transition-colors"
+   805→                      >
+   806→                        {c.phone}
+   807→                      </a>
+   808→                    </TableCell>
+   809→
+   810→                    {/* Role */}
+   811→                    <TableCell className="text-sm truncate">{c.role || '—'}</TableCell>
+   812→
+   813→                    {/* Disposition */}
+   814→                    <TableCell className="text-sm truncate">{c.lastDisposition || '—'}</TableCell>
+   815→
+   816→                    {/* Client */}
+   817→                    <TableCell className="text-sm truncate">{c.clientName || '—'}</TableCell>
+   818→
+   819→                    {/* Recruiter */}
+   820→                    <TableCell className="text-sm truncate">{c.recruiterName || '—'}</TableCell>
+   821→
+   822→                    {/* Organization */}
+   823→                    <TableCell className="text-sm truncate">{c.organizationName || '—'}</TableCell>
+   824→
+   825→                    {/* Stage */}
+   826→                    <TableCell>
+   827→                      <Badge variant="outline" className={cn('text-[11px]', meta?.badgeClass)}>
+   828→                        {meta?.label || c.pipelineStage}
+   829→                      </Badge>
+   830→                    </TableCell>
+   831→
+   832→                    {/* Notes */}
+   833→                    <TableCell>
+   834→                      <p className="text-xs text-muted-foreground truncate max-w-[180px]">
+   835→                        {c.notes || '—'}
+   836→                      </p>
+   837→                    </TableCell>
+   838→
+   839→                    {/* Actions */}
+   840→                    <TableCell className="text-right">
+   841→                      <div className="flex items-center justify-end gap-1">
+   842→                        <button
+   843→                          type="button"
+   844→                          onClick={() => openEditDialog(c)}
+   845→                          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+   846→                          title="Edit candidate"
+   847→                        >
+   848→                          <Edit2 className="h-4 w-4" />
+   849→                        </button>
+   850→                        <button
+   851→                          type="button"
+   852→                          onClick={() => openNotesDialog(c)}
+   853→                          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+   854→                          title="Notes history"
+   855→                        >
+   856→                          <StickyNote className="h-4 w-4" />
+   857→                        </button>
+   858→                      </div>
+   859→                    </TableCell>
+   860→                  </TableRow>
+   861→                )
+   862→              })}
+   863→            </TableBody>
+   864→          </Table>
+   865→        </div>
+   866→      </div>
+   867→    )
+   868→  }
+   869→
+   870→  // ─── Render: Mobile Card ──────────────────────────────────────────────────
+   871→
+   872→  const MobileCard = ({ c }: { c: AdminCandidate }) => {
+   873→    const meta = STAGE_META[c.pipelineStage]
+   874→    return (
+   875→      <Card className="overflow-hidden py-0">
+   876→        <CardContent className="p-4 space-y-3">
+   877→          {/* Header */}
+   878→          <div className="flex items-start justify-between gap-2">
+   879→            <div className="min-w-0 flex-1">
+   880→              <p className="font-semibold text-sm truncate">{c.name}</p>
+   881→              <div className="flex items-center gap-2 mt-0.5">
+   882→                {c.location && (
+   883→                  <span className="text-xs text-muted-foreground truncate">{c.location}</span>
+   884→                )}
+   885→              </div>
+   886→            </div>
+   887→            <Badge
+   888→              variant="outline"
+   889→              className={cn('text-[10px] shrink-0', meta?.badgeClass)}
+   890→            >
+   891→              {meta?.label || c.pipelineStage}
+   892→            </Badge>
+   893→          </div>
+   894→
+   895→          {/* Contact */}
+   896→          <div className="space-y-0.5">
+   897→            <a
+   898→              href={`tel:${c.phone}`}
+   899→              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
+   900→            >
+   901→              <Phone className="h-3 w-3 shrink-0" />
+   902→              <span className="truncate">{c.phone}</span>
+   903→            </a>
+   904→            {c.email && (
+   905→              <a
+   906→                href={`mailto:${c.email}`}
+   907→                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors"
+   908→              >
+   909→                <Mail className="h-3 w-3 shrink-0" />
+   910→                <span className="truncate">{c.email}</span>
+   911→              </a>
+   912→            )}
+   913→          </div>
+   914→
+   915→          {/* Info */}
+   916→          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   917→            {c.role && (
+   918→              <span className="flex items-center gap-1">
+   919→                <Briefcase className="h-3 w-3 shrink-0" />
+   920→                <span className="truncate">{c.role}</span>
+   921→              </span>
+   922→            )}
+   923→            {c.clientName && (
+   924→              <span className="flex items-center gap-1">
+   925→                <Building2 className="h-3 w-3 shrink-0" />
+   926→                <span className="truncate">{c.clientName}</span>
+   927→              </span>
+   928→            )}
+   929→            {c.recruiterName && (
+   930→              <span className="flex items-center gap-1">
+   931→                <User className="h-3 w-3 shrink-0" />
+   932→                <span className="truncate">{c.recruiterName}</span>
+   933→              </span>
+   934→            )}
+   935→          </div>
+   936→
+   937→          {/* Notes preview */}
+   938→          {c.notes && (
+   939→            <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 line-clamp-2">
+   940→              {c.notes}
+   941→            </p>
+   942→          )}
+   943→
+   944→          {/* Actions */}
+   945→          <div className="flex items-center gap-2 pt-1 border-t">
+   946→            <Button
+   947→              variant="outline"
+   948→              size="sm"
+   949→              onClick={() => openEditDialog(c)}
+   950→              className="flex-1 gap-1.5 text-xs h-9"
+   951→            >
+   952→              <Edit2 className="h-3.5 w-3.5" />
+   953→              Edit
+   954→            </Button>
+   955→            <Button
+   956→              variant="outline"
+   957→              size="sm"
+   958→              onClick={() => openNotesDialog(c)}
+   959→              className="flex-1 gap-1.5 text-xs h-9"
+   960→            >
+   961→              <StickyNote className="h-3.5 w-3.5" />
+   962→              Notes
+   963→            </Button>
+   964→          </div>
+   965→        </CardContent>
+   966→      </Card>
+   967→    )
+   968→  }
+   969→
+   970→  // ─── Render: Stage Tabs ──────────────────────────────────────────────────
+   971→
+   972→  const renderStageTabs = () => {
+   973→    const allCount = allStagesCount
+   974→    return (
+   975→      <Tabs
+   976→        value={activeStage}
+   977→        onValueChange={(v) => { setActiveStage(v as PipelineStage); setCurrentPage(1) }}
+   978→      >
+   979→        <TabsList className="w-full overflow-x-auto flex-nowrap scrollbar-none h-10">
+   980→          <TabsTrigger
+   981→            value="ALL"
+   982→            className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
+   983→          >
+   984→            <GitBranch className="h-3.5 w-3.5" />
+   985→            <span>All</span>
+   986→            {allCount > 0 && (
+   987→              <Badge
+   988→                variant="secondary"
+   989→                className="h-5 min-w-[20px] text-[10px] px-1.5 flex items-center justify-center"
+   990→              >
+   991→                {allCount}
+   992→              </Badge>
+   993→            )}
+   994→          </TabsTrigger>
+   995→          {STAGES.map((stage) => {
+   996→            const meta = STAGE_META[stage]
+   997→            const count = counts[stage] || 0
+   998→            return (
+   999→              <TabsTrigger
+  1000→                key={stage}
+  1001→                value={stage}
+  1002→                className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
+  1003→              >
+  1004→                <span className="hidden sm:inline">{meta.label}</span>
+  1005→                <span className="sm:hidden">
+  1006→                  {meta.label.length > 6 ? meta.label.slice(0, 4) + '…' : meta.label}
+  1007→                </span>
+  1008→                {count > 0 && (
+  1009→                  <Badge
+  1010→                    variant="secondary"
+  1011→                    className="h-5 min-w-[20px] text-[10px] px-1.5 flex items-center justify-center"
+  1012→                  >
+  1013→                    {count}
+  1014→                  </Badge>
+  1015→                )}
+  1016→              </TabsTrigger>
+  1017→            )
+  1018→          })}
+  1019→        </TabsList>
+  1020→
+  1021→        {/* All tab content */}
+  1022→        <TabsContent value="ALL">
+  1023→          {loading ? (
+  1024→            <LoadingSkeleton />
+  1025→          ) : (
+  1026→            <>
+  1027→              <div className="md:hidden space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto">
+  1028→                {candidates.length === 0 ? (
+  1029→                  <EmptyState
+  1030→                    icon={GitBranch}
+  1031→                    title="No Candidates Found"
+  1032→                    description="Try adjusting your filters or search query."
+  1033→                  />
+  1034→                ) : (
+  1035→                  candidates.map((c) => <MobileCard key={c.id} c={c} />)
+  1036→                )}
+  1037→              </div>
+  1038→              <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto">
+  1039→                <DesktopTable />
+  1040→              </div>
+  1041→              {candidates.length > 0 && renderPaginationSection()}
+  1042→            </>
+  1043→          )}
+  1044→        </TabsContent>
+  1045→
+  1046→        {/* Per-stage tab content */}
+  1047→        {STAGES.map((stage) => (
+  1048→          <TabsContent key={stage} value={stage}>
+  1049→            {loading ? (
+  1050→              <LoadingSkeleton />
+  1051→            ) : (
+  1052→              <>
+  1053→                <div className="md:hidden space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto">
+  1054→                  {candidates.length === 0 ? (
+  1055→                    <EmptyState
+  1056→                      icon={GitBranch}
+  1057→                      title={`No ${STAGE_META[stage].label} Candidates`}
+  1058→                      description="No candidates in this stage match your filters."
+  1059→                    />
+  1060→                  ) : (
+  1061→                    candidates.map((c) => <MobileCard key={c.id} c={c} />)
+  1062→                  )}
+  1063→                </div>
+  1064→                <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto">
+  1065→                  <DesktopTable />
+  1066→                </div>
+  1067→                {candidates.length > 0 && renderPaginationSection()}
+  1068→              </>
+  1069→            )}
+  1070→          </TabsContent>
+  1071→        ))}
+  1072→      </Tabs>
+  1073→    )
+  1074→  }
+  1075→
+  1076→  // ─── Loading Skeleton ────────────────────────────────────────────────────
+  1077→
+  1078→  const LoadingSkeleton = () => (
+  1079→    <div className="space-y-3">
+  1080→      {/* Desktop skeleton */}
+  1081→      <div className="hidden md:block space-y-2">
+  1082→        <Skeleton className="h-10 w-full rounded-lg" />
+  1083→        {[1, 2, 3, 4, 5].map((i) => (
+  1084→          <Skeleton key={i} className="h-12 w-full rounded-lg" />
+  1085→        ))}
+  1086→      </div>
+  1087→      {/* Mobile skeleton */}
+  1088→      <div className="md:hidden space-y-3">
+  1089→        {[1, 2, 3].map((i) => (
+  1090→          <Skeleton key={i} className="h-48 rounded-xl" />
+  1091→        ))}
+  1092→      </div>
+  1093→    </div>
+  1094→  )
+  1095→
+  1096→  // ─── Edit Dialog ─────────────────────────────────────────────────────────
+  1097→
+  1098→  const renderEditDialog = () => (
+  1099→    <Dialog open={editOpen} onOpenChange={setEditOpen}>
+  1100→      <DialogContent className="sm:max-w-lg">
+  1101→        <DialogHeader>
+  1102→          <DialogTitle>Edit Candidate</DialogTitle>
+  1103→          <DialogDescription>
+  1104→            Update pipeline information for {editCandidate?.name}
+  1105→          </DialogDescription>
+  1106→        </DialogHeader>
+  1107→
+  1108→        <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4">
+  1109→          {/* Candidate info (read-only) */}
+  1110→          <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+  1111→            <div className="grid grid-cols-2 gap-2 text-sm">
+  1112→              <div>
+  1113→                <span className="text-muted-foreground">Name:</span>{' '}
+  1114→                <span className="font-medium">{editCandidate?.name}</span>
+  1115→              </div>
+  1116→              <div>
+  1117→                <span className="text-muted-foreground">Phone:</span>{' '}
+  1118→                <span className="font-mono">{editCandidate?.phone}</span>
+  1119→              </div>
+  1120→              {editCandidate?.email && (
+  1121→                <div className="col-span-2">
+  1122→                  <span className="text-muted-foreground">Email:</span>{' '}
+  1123→                  <span>{editCandidate.email}</span>
+  1124→                </div>
+  1125→              )}
+  1126→            </div>
+  1127→          </div>
+  1128→
+  1129→          {/* Status */}
+  1130→          <div className="space-y-1.5">
+  1131→            <Label className="text-sm font-medium">Status</Label>
+  1132→            <Select value={editStatus} onValueChange={(v) => setEditStatus(v as CandidateStatus)}>
+  1133→              <SelectTrigger className="h-9 text-sm">
+  1134→                <SelectValue />
+  1135→              </SelectTrigger>
+  1136→              <SelectContent>
+  1137→                {STATUS_OPTIONS.map((s) => (
+  1138→                  <SelectItem key={s.value} value={s.value}>
+  1139→                    {s.label}
+  1140→                  </SelectItem>
+  1141→                ))}
+  1142→              </SelectContent>
+  1143→            </Select>
+  1144→          </div>
+  1145→
+  1146→          {/* Pipeline Stage */}
+  1147→          <div className="space-y-1.5">
+  1148→            <Label className="text-sm font-medium">Pipeline Stage</Label>
+  1149→            <Select value={editStage} onValueChange={(v) => setEditStage(v as PipelineStage)}>
+  1150→              <SelectTrigger className="h-9 text-sm">
+  1151→                <SelectValue />
+  1152→              </SelectTrigger>
+  1153→              <SelectContent>
+  1154→                {ALL_STAGE_OPTIONS.map((s) => (
+  1155→                  <SelectItem key={s.value} value={s.value}>
+  1156→                    {s.label}
+  1157→                  </SelectItem>
+  1158→                ))}
+  1159→              </SelectContent>
+  1160→            </Select>
+  1161→          </div>
+  1162→
+  1163→          {/* Disposition (read-only) */}
+  1164→          <div className="space-y-1.5">
+  1165→            <Label className="text-sm font-medium">Latest Disposition</Label>
+  1166→            <div className="h-9 rounded-md border border-input bg-muted/50 px-3 flex items-center text-sm text-muted-foreground">
+  1167→              {editCandidate?.lastDisposition || '—'}
+  1168→            </div>
+  1169→          </div>
+  1170→
+  1171→          {/* Date fields */}
+  1172→          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+  1173→            <div className="space-y-1.5">
+  1174→              <Label className="text-sm font-medium">Follow-up Date</Label>
+  1175→              <Input
+  1176→                type="date"
+  1177→                value={editFollowUpDate}
+  1178→                onChange={(e) => setEditFollowUpDate(e.target.value)}
+  1179→                className="h-9 text-sm"
+  1180→              />
+  1181→            </div>
+  1182→            <div className="space-y-1.5">
+  1183→              <Label className="text-sm font-medium">Interview Date</Label>
+  1184→              <Input
+  1185→                type="date"
+  1186→                value={editInterviewDate}
+  1187→                onChange={(e) => setEditInterviewDate(e.target.value)}
+  1188→                className="h-9 text-sm"
+  1189→              />
+  1190→            </div>
+  1191→            <div className="space-y-1.5">
+  1192→              <Label className="text-sm font-medium">Joined Date</Label>
+  1193→              <Input
+  1194→                type="date"
+  1195→                value={editJoinedDate}
+  1196→                onChange={(e) => setEditJoinedDate(e.target.value)}
+  1197→                className="h-9 text-sm"
+  1198→              />
+  1199→            </div>
+  1200→          </div>
+  1201→
+  1202→          {/* Notes */}
+  1203→          <div className="space-y-1.5">
+  1204→            <Label className="text-sm font-medium">Notes</Label>
+  1205→            <Textarea
+  1206→              value={editNotes}
+  1207→              onChange={(e) => setEditNotes(e.target.value)}
+  1208→              placeholder="Add notes about this candidate..."
+  1209→              rows={3}
+  1210→              className="text-sm resize-none"
+  1211→            />
+  1212→          </div>
+  1213→
+  1214→          {/* Remarks */}
+  1215→          <div className="space-y-1.5">
+  1216→            <Label className="text-sm font-medium">Remarks</Label>
+  1217→            <Textarea
+  1218→              value={editRemarks}
+  1219→              onChange={(e) => setEditRemarks(e.target.value)}
+  1220→              placeholder="Add internal remarks..."
+  1221→              rows={3}
+  1222→              className="text-sm resize-none"
+  1223→            />
+  1224→          </div>
+  1225→
+  1226→          {/* Recruiter Assignment — SUPER_ADMIN only */}
+  1227→          {isSuperAdmin && (
+  1228→            <div className="space-y-1.5">
+  1229→              <Label className="text-sm font-medium">Assign Recruiter</Label>
+  1230→              <Select value={editRecruiterId} onValueChange={setEditRecruiterId}>
+  1231→                <SelectTrigger className="h-9 text-sm">
+  1232→                  <SelectValue placeholder="Select recruiter..." />
+  1233→                </SelectTrigger>
+  1234→                <SelectContent>
+  1235→                  {recruiters.map((r) => (
+  1236→                    <SelectItem key={r.id} value={r.id}>
+  1237→                      {r.name}
+  1238→                    </SelectItem>
+  1239→                  ))}
+  1240→                </SelectContent>
+  1241→              </Select>
+  1242→            </div>
+  1243→          )}
+  1244→        </div>
+  1245→
+  1246→        <DialogFooter className="pt-2 border-t">
+  1247→          <Button
+  1248→            variant="outline"
+  1249→            onClick={() => setEditOpen(false)}
+  1250→            disabled={saving}
+  1251→          >
+  1252→            Cancel
+  1253→          </Button>
+  1254→          <Button
+  1255→            onClick={handleSaveEdit}
+  1256→            disabled={saving}
+  1257→            className="gap-1.5"
+  1258→          >
+  1259→            {saving ? (
+  1260→              <>
+  1261→                <Loader2 className="h-4 w-4 animate-spin" />
+  1262→                Saving...
+  1263→              </>
+  1264→            ) : (
+  1265→              <>
+  1266→                <Check className="h-4 w-4" />
+  1267→                Save Changes
+  1268→              </>
+  1269→            )}
+  1270→          </Button>
+  1271→        </DialogFooter>
+  1272→      </DialogContent>
+  1273→    </Dialog>
+  1274→  )
+  1275→
+  1276→  // ─── Notes History Dialog ──────────────────────────────────────────────────
+  1277→
+  1278→  const renderNotesDialog = () => (
+  1279→    <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+  1280→      <DialogContent className="sm:max-w-lg">
+  1281→        <DialogHeader>
+  1282→          <DialogTitle>Notes History</DialogTitle>
+  1283→          <DialogDescription>
+  1284→            Notes for {notesCandidate?.name}
+  1285→          </DialogDescription>
+  1286→        </DialogHeader>
+  1287→
+  1288→        <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6 space-y-4">
+  1289→          {/* Current notes */}
+  1290→          {notesCandidate?.notes && (
+  1291→            <div className="bg-muted/50 rounded-lg p-3">
+  1292→              <p className="text-xs font-medium text-muted-foreground mb-1">Current Notes</p>
+  1293→              <p className="text-sm">{notesCandidate.notes}</p>
+  1294→            </div>
+  1295→          )}
+  1296→
+  1297→          <Separator />
+  1298→
+  1299→          {/* Notes history */}
+  1300→          <div className="space-y-1">
+  1301→            <p className="text-xs font-medium text-muted-foreground">History ({notesHistory.length})</p>
+  1302→
+  1303→            {loadingNotes ? (
+  1304→              <div className="space-y-2 py-4">
+  1305→                <Skeleton className="h-16 w-full rounded-lg" />
+  1306→                <Skeleton className="h-16 w-full rounded-lg" />
+  1307→              </div>
+  1308→            ) : notesHistory.length === 0 ? (
+  1309→              <p className="text-sm text-muted-foreground text-center py-4">
+  1310→                No notes history yet.
+  1311→              </p>
+  1312→            ) : (
+  1313→              <div className="space-y-2">
+  1314→                {notesHistory.map((note) => (
+  1315→                  <div key={note.id} className="border rounded-lg p-3 space-y-1">
+  1316→                    <p className="text-sm">{note.note}</p>
+  1317→                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1318→                      <span className="font-medium">{note.authorName}</span>
+  1319→                      <span>•</span>
+  1320→                      <span>{formatDateTime(note.createdAt)}</span>
+  1321→                    </div>
+  1322→                  </div>
+  1323→                ))}
+  1324→              </div>
+  1325→            )}
+  1326→          </div>
+  1327→
+  1328→          <Separator />
+  1329→
+  1330→          {/* Add new note */}
+  1331→          <div className="space-y-2">
+  1332→            <Label className="text-sm font-medium">Add New Note</Label>
+  1333→            <Textarea
+  1334→              value={newNoteText}
+  1335→              onChange={(e) => setNewNoteText(e.target.value)}
+  1336→              placeholder="Write a note..."
+  1337→              rows={3}
+  1338→              className="text-sm resize-none"
+  1339→            />
+  1340→            <Button
+  1341→              onClick={handleAddNote}
+  1342→              disabled={savingNote || !newNoteText.trim()}
+  1343→              className="w-full gap-1.5"
+  1344→              size="sm"
+  1345→            >
+  1346→              {savingNote ? (
+  1347→                <>
+  1348→                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+  1349→                  Saving...
+  1350→                </>
+  1351→              ) : (
+  1352→                <>
+  1353→                  <MessageSquare className="h-3.5 w-3.5" />
+  1354→                  Save Note
+  1355→                </>
+  1356→              )}
+  1357→            </Button>
+  1358→          </div>
+  1359→        </div>
+  1360→      </DialogContent>
+  1361→    </Dialog>
+  1362→  )
+  1363→
+  1364→  // ─── Main Render ──────────────────────────────────────────────────────────
+  1365→
+  1366→  // Initial loading state
+  1367→  if (loading && candidates.length === 0) {
+  1368→    return (
+  1369→      <div className="p-4 sm:p-6 space-y-4">
+  1370→        <div className="flex items-center justify-between">
+  1371→          <div className="space-y-2">
+  1372→            <Skeleton className="h-7 w-56" />
+  1373→            <Skeleton className="h-4 w-80" />
+  1374→          </div>
+  1375→          <Skeleton className="h-9 w-28" />
+  1376→        </div>
+  1377→        <Skeleton className="h-10 w-full" />
+  1378→        <div className="space-y-2">
+  1379→          <Skeleton className="h-8 w-64" />
+  1380→        </div>
+  1381→        <Skeleton className="h-64 rounded-xl" />
+  1382→      </div>
+  1383→    )
+  1384→  }
+  1385→
+  1386→  return (
+  1387→    <div className="p-4 sm:p-6 space-y-4">
+  1388→      {/* Sub Navigation Tabs */}
+  1389→      <div className="flex items-center gap-1 rounded-lg border bg-card p-1">
+  1390→        <button
+  1391→          onClick={() => navigateTo('team-performance')}
+  1392→          className={cn(
+  1393→            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+  1394→            'text-muted-foreground hover:text-foreground hover:bg-muted'
+  1395→          )}
+  1396→        >
+  1397→          <BarChart3 className="h-4 w-4" />
+  1398→          <span>Call Reports</span>
+  1399→        </button>
+  1400→        <button
+  1401→          onClick={() => navigateTo('team-performance/pipeline')}
+  1402→          className={cn(
+  1403→            'flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors flex-1 justify-center',
+  1404→            'bg-emerald-600 text-white'
+  1405→          )}
+  1406→        >
+  1407→          <GitBranch className="h-4 w-4" />
+  1408→          <span>Pipeline</span>
+  1409→        </button>
+  1410→      </div>
+  1411→
+  1412→      {/* Header */}
+  1413→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  1414→        <div className="space-y-1">
+  1415→          <h2 className="text-xl font-bold tracking-tight">Pipeline Management</h2>
+  1416→          <p className="text-sm text-muted-foreground">
+  1417→            Centralized view of all candidate records across recruiters
+  1418→            {activeCount > 0 && (
+  1419→              <span className="ml-1">
+  1420→                — <span className="font-medium text-foreground">{activeCount}</span> candidate{activeCount !== 1 ? 's' : ''}
+  1421→              </span>
+  1422→            )}
+  1423→          </p>
+  1424→        </div>
+  1425→
+  1426→        {/* Export dropdown */}
+  1427→        <DropdownMenu>
+  1428→          <DropdownMenuTrigger asChild>
+  1429→            <Button variant="outline" size="sm" disabled={exporting} className="gap-1.5 h-9">
+  1430→              {exporting ? (
+  1431→                <Loader2 className="h-4 w-4 animate-spin" />
+  1432→              ) : (
+  1433→                <Download className="h-4 w-4" />
+  1434→              )}
+  1435→              Export
+  1436→              <ChevronDown className="h-3 w-3" />
+  1437→            </Button>
+  1438→          </DropdownMenuTrigger>
+  1439→          <DropdownMenuContent align="end">
+  1440→            <DropdownMenuItem onClick={() => handleExport('csv')} disabled={exporting}>
+  1441→              <FileSpreadsheet className="h-4 w-4 mr-2" />
+  1442→              Export as CSV
+  1443→            </DropdownMenuItem>
+  1444→            <DropdownMenuItem onClick={() => handleExport('xlsx')} disabled={exporting}>
+  1445→              <FileSpreadsheet className="h-4 w-4 mr-2" />
+  1446→              Export as Excel
+  1447→            </DropdownMenuItem>
+  1448→          </DropdownMenuContent>
+  1449→        </DropdownMenu>
+  1450→      </div>
+  1451→
+  1452→      {/* Filters */}
+  1453→      {renderFilters()}
+  1454→
+  1455→      {/* Stage Tabs */}
+  1456→      {renderStageTabs()}
+  1457→
+  1458→      {/* Infinite scroll sentinel */}
+  1459→      <div ref={sentinelRef} className="h-1" />
+  1460→
+  1461→      {/* Edit Dialog */}
+  1462→      {renderEditDialog()}
+  1463→
+  1464→      {/* Notes Dialog */}
+  1465→      {renderNotesDialog()}
+  1466→    </div>
+  1467→  )
+  1468→}
+  1469→

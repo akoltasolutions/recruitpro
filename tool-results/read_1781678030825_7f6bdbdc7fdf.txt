@@ -1,0 +1,1280 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import { toast } from 'sonner'
+     5→import {
+     6→  Users, UserPlus, Search, Pencil, Trash2, Mail, Phone, MailCheck,
+     7→  Loader2, UserCheck, UserX, Briefcase, Building, MoreHorizontal,
+     8→  Send, XCircle, Clock, BadgeCheck, Plus, Power, Shield, Eye,
+     9→} from 'lucide-react'
+    10→import { Button } from '@/components/ui/button'
+    11→import { Input } from '@/components/ui/input'
+    12→import { Label } from '@/components/ui/label'
+    13→import { Badge } from '@/components/ui/badge'
+    14→import { Switch } from '@/components/ui/switch'
+    15→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    16→import {
+    17→  Dialog,
+    18→  DialogContent,
+    19→  DialogHeader,
+    20→  DialogTitle,
+    21→  DialogFooter,
+    22→  DialogDescription,
+    23→} from '@/components/ui/dialog'
+    24→import {
+    25→  Select,
+    26→  SelectContent,
+    27→  SelectItem,
+    28→  SelectTrigger,
+    29→  SelectValue,
+    30→} from '@/components/ui/select'
+    31→import {
+    32→  Table,
+    33→  TableBody,
+    34→  TableCell,
+    35→  TableHead,
+    36→  TableHeader,
+    37→  TableRow,
+    38→} from '@/components/ui/table'
+    39→import {
+    40→  DropdownMenu,
+    41→  DropdownMenuContent,
+    42→  DropdownMenuItem,
+    43→  DropdownMenuLabel,
+    44→  DropdownMenuSeparator,
+    45→  DropdownMenuTrigger,
+    46→} from '@/components/ui/dropdown-menu'
+    47→import { Card, CardContent } from '@/components/ui/card'
+    48→import { PageHeader } from '@/components/shared/page-header'
+    49→import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+    50→import { EmptyState } from '@/components/shared/empty-state'
+    51→
+    52→// ─── Mock Types ──────────────────────────────────────────────────────────────
+    53→
+    54→interface TeamMember {
+    55→  id: string
+    56→  name: string
+    57→  email: string
+    58→  phone: string | null
+    59→  designation: string
+    60→  department: string
+    61→  role: string
+    62→  status: 'active' | 'inactive'
+    63→  joinedDate: string
+    64→}
+    65→
+    66→interface PendingInvitation {
+    67→  id: string
+    68→  email: string
+    69→  role: string
+    70→  designation: string
+    71→  department: string
+    72→  invitedDate: string
+    73→  status: 'pending' | 'expired'
+    74→}
+    75→
+    76→interface Designation {
+    77→  id: string
+    78→  name: string
+    79→  isActive: boolean
+    80→  memberCount: number
+    81→}
+    82→
+    83→interface Department {
+    84→  id: string
+    85→  name: string
+    86→  description: string
+    87→  headName: string
+    88→  memberCount: number
+    89→}
+    90→
+    91→// ─── Mock Data ──────────────────────────────────────────────────────────────
+    92→
+    93→const mockMembers: TeamMember[] = [
+    94→  { id: 'm1', name: 'Arjun Mehta', email: 'arjun@akolta.com', phone: '+91 98765 43210', designation: 'Senior Recruiter', department: 'Talent Acquisition', role: 'USER', status: 'active', joinedDate: '2024-08-15' },
+    95→  { id: 'm2', name: 'Priya Sharma', email: 'priya@akolta.com', phone: '+91 98765 43211', designation: 'Team Lead', department: 'Talent Acquisition', role: 'ORG_ADMIN', status: 'active', joinedDate: '2024-06-01' },
+    96→  { id: 'm3', name: 'Rahul Verma', email: 'rahul@akolta.com', phone: '+91 98765 43212', designation: 'Junior Recruiter', department: 'Sourcing', role: 'USER', status: 'active', joinedDate: '2024-10-20' },
+    97→  { id: 'm4', name: 'Sneha Gupta', email: 'sneha@akolta.com', phone: '+91 98765 43213', designation: 'Recruiter', department: 'Campus Hiring', role: 'USER', status: 'inactive', joinedDate: '2024-07-10' },
+    98→  { id: 'm5', name: 'Vikram Singh', email: 'vikram@akolta.com', phone: '+91 98765 43214', designation: 'Senior Recruiter', department: 'Sourcing', role: 'USER', status: 'active', joinedDate: '2024-09-05' },
+    99→  { id: 'm6', name: 'Anita Desai', email: 'anita@akolta.com', phone: '+91 98765 43215', designation: 'Team Lead', department: 'Campus Hiring', role: 'USER', status: 'active', joinedDate: '2024-05-22' },
+   100→]
+   101→
+   102→const mockInvitations: PendingInvitation[] = [
+   103→  { id: 'inv1', email: 'new.recruiter@example.com', role: 'USER', designation: 'Junior Recruiter', department: 'Sourcing', invitedDate: '2025-01-10', status: 'pending' },
+   104→  { id: 'inv2', email: 'lead.hiring@example.com', role: 'ORG_ADMIN', designation: 'Team Lead', department: 'Talent Acquisition', invitedDate: '2025-01-08', status: 'pending' },
+   105→  { id: 'inv3', email: 'old.invite@example.com', role: 'USER', designation: 'Recruiter', department: 'Campus Hiring', invitedDate: '2024-12-01', status: 'expired' },
+   106→]
+   107→
+   108→const mockDesignations: Designation[] = [
+   109→  { id: 'd1', name: 'Senior Recruiter', isActive: true, memberCount: 2 },
+   110→  { id: 'd2', name: 'Team Lead', isActive: true, memberCount: 2 },
+   111→  { id: 'd3', name: 'Junior Recruiter', isActive: true, memberCount: 1 },
+   112→  { id: 'd4', name: 'Recruiter', isActive: true, memberCount: 1 },
+   113→  { id: 'd5', name: 'Intern', isActive: false, memberCount: 0 },
+   114→]
+   115→
+   116→const mockDepartments: Department[] = [
+   117→  { id: 'dep1', name: 'Talent Acquisition', description: 'Core recruitment team for experienced hires', headName: 'Priya Sharma', memberCount: 2 },
+   118→  { id: 'dep2', name: 'Sourcing', description: 'Candidate sourcing and pipeline building', headName: 'Vikram Singh', memberCount: 2 },
+   119→  { id: 'dep3', name: 'Campus Hiring', description: 'University and campus recruitment programs', headName: 'Anita Desai', memberCount: 2 },
+   120→]
+   121→
+   122→// ─── Component ─────────────────────────────────────────────────────────────
+   123→
+   124→export function TeamManagementEnhanced() {
+   125→  const [search, setSearch] = useState('')
+   126→  const [activeTab, setActiveTab] = useState('members')
+   127→
+   128→  // Invite dialog state
+   129→  const [inviteOpen, setInviteOpen] = useState(false)
+   130→  const [inviteSubmitting, setInviteSubmitting] = useState(false)
+   131→  const [inviteForm, setInviteForm] = useState({
+   132→    email: '',
+   133→    role: 'USER',
+   134→    designation: '',
+   135→    department: '',
+   136→  })
+   137→
+   138→  // Designation dialog state
+   139→  const [desigDialogOpen, setDesigDialogOpen] = useState(false)
+   140→  const [editingDesig, setEditingDesig] = useState<Designation | null>(null)
+   141→  const [desigName, setDesigName] = useState('')
+   142→  const [desigActive, setDesigActive] = useState(true)
+   143→  const [desigSubmitting, setDesigSubmitting] = useState(false)
+   144→  const [desigDeleteConfirm, setDesigDeleteConfirm] = useState<Designation | null>(null)
+   145→
+   146→  // Department dialog state
+   147→  const [deptDialogOpen, setDeptDialogOpen] = useState(false)
+   148→  const [editingDept, setEditingDept] = useState<Department | null>(null)
+   149→  const [deptForm, setDeptForm] = useState({ name: '', description: '', headName: '' })
+   150→  const [deptSubmitting, setDeptSubmitting] = useState(false)
+   151→  const [deptDeleteConfirm, setDeptDeleteConfirm] = useState<Department | null>(null)
+   152→
+   153→  // Revoke invitation state
+   154→  const [revokeConfirm, setRevokeConfirm] = useState<PendingInvitation | null>(null)
+   155→
+   156→  // Note: Department Head Select dropdown auto-detects dialog container via DialogContainerContext
+   157→
+   158→  // ─── Members (placeholder state) ──────────────────────────────────────────
+   159→  const [invitations, setInvitations] = useState<PendingInvitation[]>(mockInvitations)
+   160→  const [designations, setDesignations] = useState<Designation[]>(mockDesignations)
+   161→  const [departments, setDepartments] = useState<Department[]>(mockDepartments)
+   162→
+   163→  // ─── Member state (declared before filteredMembers to avoid TDZ) ──────────
+   164→  const [teamList, setTeamList] = useState<TeamMember[]>(mockMembers)
+   165→  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+   166→  const [memberDialogOpen, setMemberDialogOpen] = useState(false)
+   167→  const [memberForm, setMemberForm] = useState({ name: '', email: '', phone: '', designation: '', department: '', role: 'USER' })
+   168→
+   169→  // ─── Filtered Members ────────────────────────────────────────────────────
+   170→
+   171→  const filteredMembers = teamList.filter((m) => {
+   172→    const q = search.toLowerCase().trim()
+   173→    if (!q) return true
+   174→    return (
+   175→      m.name.toLowerCase().includes(q) ||
+   176→      m.email.toLowerCase().includes(q) ||
+   177→      m.designation.toLowerCase().includes(q) ||
+   178→      m.department.toLowerCase().includes(q)
+   179→    )
+   180→  })
+   181→
+   182→  // ─── Invite Handlers ─────────────────────────────────────────────────────
+   183→
+   184→  function openInviteDialog() {
+   185→    setInviteForm({ email: '', role: 'USER', designation: '', department: '' })
+   186→    setInviteOpen(true)
+   187→  }
+   188→
+   189→  async function handleInvite() {
+   190→    if (!inviteForm.email.trim()) {
+   191→      toast.error('Email is required')
+   192→      return
+   193→    }
+   194→    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteForm.email)) {
+   195→      toast.error('Please enter a valid email address')
+   196→      return
+   197→    }
+   198→    if (!inviteForm.designation) {
+   199→      toast.error('Please select a designation')
+   200→      return
+   201→    }
+   202→    if (!inviteForm.department) {
+   203→      toast.error('Please select a department')
+   204→      return
+   205→    }
+   206→
+   207→    setInviteSubmitting(true)
+   208→    await new Promise((resolve) => setTimeout(resolve, 1000))
+   209→
+   210→    const newInvitation: PendingInvitation = {
+   211→      id: `inv-${Date.now()}`,
+   212→      email: inviteForm.email,
+   213→      role: inviteForm.role,
+   214→      designation: inviteForm.designation,
+   215→      department: inviteForm.department,
+   216→      invitedDate: new Date().toISOString().split('T')[0],
+   217→      status: 'pending',
+   218→    }
+   219→    setInvitations((prev) => [newInvitation, ...prev])
+   220→    setInviteOpen(false)
+   221→    toast.success(`Invitation sent to ${inviteForm.email}`)
+   222→    setInviteSubmitting(false)
+   223→  }
+   224→
+   225→  function handleRevoke(invitation: PendingInvitation) {
+   226→    setInvitations((prev) => prev.filter((inv) => inv.id !== invitation.id))
+   227→    toast.success(`Invitation to ${invitation.email} revoked`)
+   228→    setRevokeConfirm(null)
+   229→  }
+   230→
+   231→  // ─── Designation Handlers ───────────────────────────────────────────────
+   232→
+   233→  function openAddDesigDialog() {
+   234→    setEditingDesig(null)
+   235→    setDesigName('')
+   236→    setDesigActive(true)
+   237→    setDesigDialogOpen(true)
+   238→  }
+   239→
+   240→  function openEditDesigDialog(desig: Designation) {
+   241→    setEditingDesig(desig)
+   242→    setDesigName(desig.name)
+   243→    setDesigActive(desig.isActive)
+   244→    setDesigDialogOpen(true)
+   245→  }
+   246→
+   247→  async function handleSaveDesig() {
+   248→    if (!desigName.trim()) {
+   249→      toast.error('Designation name is required')
+   250→      return
+   251→    }
+   252→    setDesigSubmitting(true)
+   253→    await new Promise((resolve) => setTimeout(resolve, 500))
+   254→
+   255→    if (editingDesig) {
+   256→      setDesignations((prev) =>
+   257→        prev.map((d) => (d.id === editingDesig.id ? { ...d, name: desigName.trim(), isActive: desigActive } : d))
+   258→      )
+   259→      toast.success(`Designation "${desigName.trim()}" updated`)
+   260→    } else {
+   261→      const newDesig: Designation = {
+   262→        id: `d-${Date.now()}`,
+   263→        name: desigName.trim(),
+   264→        isActive: desigActive,
+   265→        memberCount: 0,
+   266→      }
+   267→      setDesignations((prev) => [...prev, newDesig])
+   268→      toast.success(`Designation "${desigName.trim()}" added`)
+   269→    }
+   270→    setDesigDialogOpen(false)
+   271→    setDesigSubmitting(false)
+   272→  }
+   273→
+   274→  function handleDeleteDesig(desig: Designation) {
+   275→    setDesignations((prev) => prev.filter((d) => d.id !== desig.id))
+   276→    toast.success(`Designation "${desig.name}" deleted`)
+   277→    setDesigDeleteConfirm(null)
+   278→  }
+   279→
+   280→  // ─── Department Handlers ─────────────────────────────────────────────────
+   281→
+   282→  function openAddDeptDialog() {
+   283→    setEditingDept(null)
+   284→    setDeptForm({ name: '', description: '', headName: '' })
+   285→    setDeptDialogOpen(true)
+   286→  }
+   287→
+   288→  function openEditDeptDialog(dept: Department) {
+   289→    setEditingDept(dept)
+   290→    setDeptForm({ name: dept.name, description: dept.description, headName: dept.headName })
+   291→    setDeptDialogOpen(true)
+   292→  }
+   293→
+   294→  async function handleSaveDept() {
+   295→    if (!deptForm.name.trim()) {
+   296→      toast.error('Department name is required')
+   297→      return
+   298→    }
+   299→    setDeptSubmitting(true)
+   300→    await new Promise((resolve) => setTimeout(resolve, 500))
+   301→
+   302→    if (editingDept) {
+   303→      setDepartments((prev) =>
+   304→        prev.map((d) => (d.id === editingDept.id ? { ...d, ...deptForm } : d))
+   305→      )
+   306→      toast.success(`Department "${deptForm.name.trim()}" updated`)
+   307→    } else {
+   308→      const newDept: Department = {
+   309→        id: `dep-${Date.now()}`,
+   310→        name: deptForm.name.trim(),
+   311→        description: deptForm.description.trim(),
+   312→        headName: deptForm.headName.trim(),
+   313→        memberCount: 0,
+   314→      }
+   315→      setDepartments((prev) => [...prev, newDept])
+   316→      toast.success(`Department "${deptForm.name.trim()}" added`)
+   317→    }
+   318→    setDeptDialogOpen(false)
+   319→    setDeptSubmitting(false)
+   320→  }
+   321→
+   322→  function handleDeleteDept(dept: Department) {
+   323→    toast.success(`Department "${dept.name}" deleted`)
+   324→    setDeptDeleteConfirm(null)
+   325→  }
+   326→
+   327→  // ─── Member Actions ────────────────────────────────────────────────────────
+   328→
+   329→  function openEditMemberDialog(member: TeamMember) {
+   330→    setEditingMember(member)
+   331→    setMemberForm({
+   332→      name: member.name,
+   333→      email: member.email,
+   334→      phone: member.phone || '',
+   335→      designation: member.designation,
+   336→      department: member.department,
+   337→      role: member.role,
+   338→    })
+   339→    setMemberDialogOpen(true)
+   340→  }
+   341→
+   342→  async function handleSaveMember() {
+   343→    if (!memberForm.name.trim() || !memberForm.email.trim()) {
+   344→      toast.error('Name and email are required')
+   345→      return
+   346→    }
+   347→    await new Promise((resolve) => setTimeout(resolve, 500))
+   348→    setTeamList((prev) =>
+   349→      prev.map((m) =>
+   350→        m.id === editingMember?.id
+   351→          ? { ...m, ...memberForm, phone: memberForm.phone || null }
+   352→          : m,
+   353→      ),
+   354→    )
+   355→    toast.success(`Member "${memberForm.name.trim()}" updated`)
+   356→    setMemberDialogOpen(false)
+   357→    setEditingMember(null)
+   358→  }
+   359→
+   360→  function handleToggleMemberStatus(member: TeamMember) {
+   361→    const newStatus = member.status === 'active' ? 'inactive' : 'active'
+   362→    setTeamList((prev) =>
+   363→      prev.map((m) => (m.id === member.id ? { ...m, status: newStatus } : m)),
+   364→    )
+   365→    toast.success(`${member.name} is now ${newStatus}`)
+   366→  }
+   367→
+   368→  function handleRemoveMember(member: TeamMember) {
+   369→    setTeamList((prev) => prev.filter((m) => m.id !== member.id))
+   370→    toast.success(`${member.name} has been removed`)
+   371→  }
+   372→
+   373→  function handleToggleMemberRole(member: TeamMember) {
+   374→    const newRole = member.role === 'ORG_ADMIN' ? 'USER' : 'ORG_ADMIN'
+   375→    setTeamList((prev) =>
+   376→      prev.map((m) => (m.id === member.id ? { ...m, role: newRole } : m)),
+   377→    )
+   378→    toast.success(`${member.name} is now ${newRole === 'ORG_ADMIN' ? 'Admin' : 'Member'}`)
+   379→  }
+   380→
+   381→  // ─── Badge Helpers ────────────────────────────────────────────────────────
+   382→
+   383→  function StatusBadge({ status }: { status: 'active' | 'inactive' }) {
+   384→    return status === 'active' ? (
+   385→      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+   386→        <UserCheck className="size-3 mr-1" /> Active
+   387→      </Badge>
+   388→    ) : (
+   389→      <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950 dark:text-red-400 dark:border-red-800">
+   390→        <UserX className="size-3 mr-1" /> Inactive
+   391→      </Badge>
+   392→    )
+   393→  }
+   394→
+   395→  function RoleBadge({ role }: { role: string }) {
+   396→    return role === 'ORG_ADMIN' ? (
+   397→      <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
+   398→        Admin
+   399→      </Badge>
+   400→    ) : (
+   401→      <Badge className="bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+   402→        Member
+   403→      </Badge>
+   404→    )
+   405→  }
+   406→
+   407→  function InvitationStatusBadge({ status }: { status: 'pending' | 'expired' }) {
+   408→    return status === 'pending' ? (
+   409→      <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
+   410→        <Clock className="size-3 mr-1" /> Pending
+   411→      </Badge>
+   412→    ) : (
+   413→      <Badge className="bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
+   414→        <XCircle className="size-3 mr-1" /> Expired
+   415→      </Badge>
+   416→    )
+   417→  }
+   418→
+   419→  // ─── Member Actions Dropdown ──────────────────────────────────────────────
+   420→
+   421→  function MemberActionsDropdown({ member }: { member: TeamMember }) {
+   422→    return (
+   423→      <DropdownMenu>
+   424→        <DropdownMenuTrigger asChild>
+   425→          <Button
+   426→            variant="ghost"
+   427→            size="icon"
+   428→            className="size-8"
+   429→          >
+   430→            <MoreHorizontal className="size-3.5" />
+   431→            <span className="sr-only">Actions for {member.name}</span>
+   432→          </Button>
+   433→        </DropdownMenuTrigger>
+   434→        <DropdownMenuContent align="end" className="w-48">
+   435→          <DropdownMenuLabel className="text-xs font-medium">
+   436→            {member.name}
+   437→          </DropdownMenuLabel>
+   438→          <DropdownMenuSeparator />
+   439→          <DropdownMenuItem onClick={() => openEditMemberDialog(member)}>
+   440→            <Eye className="size-3.5 mr-2" />
+   441→            View / Edit Profile
+   442→          </DropdownMenuItem>
+   443→          <DropdownMenuItem onClick={() => handleToggleMemberRole(member)}>
+   444→            <Shield className="size-3.5 mr-2" />
+   445→            {member.role === 'ORG_ADMIN' ? 'Remove Admin Role' : 'Make Admin'}
+   446→          </DropdownMenuItem>
+   447→          <DropdownMenuSeparator />
+   448→          <DropdownMenuItem onClick={() => handleToggleMemberStatus(member)}>
+   449→            <Power className="size-3.5 mr-2" />
+   450→            {member.status === 'active' ? 'Deactivate Member' : 'Activate Member'}
+   451→          </DropdownMenuItem>
+   452→          <DropdownMenuSeparator />
+   453→          <DropdownMenuItem
+   454→            className="text-red-600 focus:text-red-600"
+   455→            onClick={() => handleRemoveMember(member)}
+   456→          >
+   457→            <Trash2 className="size-3.5 mr-2" />
+   458→            Remove Member
+   459→          </DropdownMenuItem>
+   460→        </DropdownMenuContent>
+   461→      </DropdownMenu>
+   462→    )
+   463→  }
+   464→
+   465→  // ─── Render ──────────────────────────────────────────────────────────────
+   466→
+   467→  return (
+   468→    <div className="space-y-6">
+   469→      <PageHeader
+   470→        title="Team Management"
+   471→        description="Manage your organization's team members, designations, and departments"
+   472→        icon={Users}
+   473→      />
+   474→
+   475→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   476→        <TabsList className="flex-wrap">
+   477→          <TabsTrigger value="members" className="gap-1.5">
+   478→            <Users className="size-3.5" />
+   479→            Members
+   480→          </TabsTrigger>
+   481→          <TabsTrigger value="invites" className="gap-1.5">
+   482→            <MailCheck className="size-3.5" />
+   483→            Invites
+   484→            {invitations.filter((i) => i.status === 'pending').length > 0 && (
+   485→              <span className="ml-1 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+   486→                {invitations.filter((i) => i.status === 'pending').length}
+   487→              </span>
+   488→            )}
+   489→          </TabsTrigger>
+   490→          <TabsTrigger value="designations" className="gap-1.5">
+   491→            <Briefcase className="size-3.5" />
+   492→            Designations
+   493→          </TabsTrigger>
+   494→          <TabsTrigger value="departments" className="gap-1.5">
+   495→            <Building className="size-3.5" />
+   496→            Departments
+   497→          </TabsTrigger>
+   498→        </TabsList>
+   499→
+   500→        {/* ═══════════ Members Tab ═══════════ */}
+   501→        <TabsContent value="members">
+   502→          <div className="space-y-4">
+   503→            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+   504→              <div className="relative flex-1 max-w-sm">
+   505→                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   506→                <Input
+   507→                  placeholder="Search members..."
+   508→                  value={search}
+   509→                  onChange={(e) => setSearch(e.target.value)}
+   510→                  className="pl-9"
+   511→                />
+   512→              </div>
+   513→              <Button onClick={openInviteDialog} size="sm">
+   514→                <UserPlus className="size-4" />
+   515→                Invite Member
+   516→              </Button>
+   517→            </div>
+   518→
+   519→            {filteredMembers.length === 0 ? (
+   520→              <EmptyState
+   521→                icon={Users}
+   522→                title={search ? 'No members found' : 'No team members yet'}
+   523→                description={
+   524→                  search
+   525→                    ? 'Try adjusting your search terms'
+   526→                    : 'Invite your first team member to get started'
+   527→                }
+   528→                actionLabel={!search ? 'Invite Member' : undefined}
+   529→                onAction={!search ? openInviteDialog : undefined}
+   530→              />
+   531→            ) : (
+   532→              <>
+   533→                {/* Desktop Table */}
+   534→                <div className="hidden md:block rounded-lg border overflow-x-auto">
+   535→                  <Table>
+   536→                    <TableHeader>
+   537→                      <TableRow>
+   538→                        <TableHead>Name</TableHead>
+   539→                        <TableHead>Email</TableHead>
+   540→                        <TableHead>Phone</TableHead>
+   541→                        <TableHead>Designation</TableHead>
+   542→                        <TableHead>Department</TableHead>
+   543→                        <TableHead>Role</TableHead>
+   544→                        <TableHead>Status</TableHead>
+   545→                        <TableHead>Joined</TableHead>
+   546→                        <TableHead className="text-right">Actions</TableHead>
+   547→                      </TableRow>
+   548→                    </TableHeader>
+   549→                    <TableBody>
+   550→                      {filteredMembers.map((member) => (
+   551→                        <TableRow key={member.id} className={member.status === 'inactive' ? 'opacity-60' : ''}>
+   552→                          <TableCell className="font-medium">{member.name}</TableCell>
+   553→                          <TableCell>
+   554→                            <div className="flex items-center gap-1.5 text-muted-foreground">
+   555→                              <Mail className="size-3" />
+   556→                              {member.email}
+   557→                            </div>
+   558→                          </TableCell>
+   559→                          <TableCell>
+   560→                            {member.phone ? (
+   561→                              <div className="flex items-center gap-1.5 text-muted-foreground">
+   562→                                <Phone className="size-3" />
+   563→                                {member.phone}
+   564→                              </div>
+   565→                            ) : (
+   566→                              <span className="text-muted-foreground">—</span>
+   567→                            )}
+   568→                          </TableCell>
+   569→                          <TableCell>{member.designation}</TableCell>
+   570→                          <TableCell>{member.department}</TableCell>
+   571→                          <TableCell><RoleBadge role={member.role} /></TableCell>
+   572→                          <TableCell><StatusBadge status={member.status} /></TableCell>
+   573→                          <TableCell className="text-muted-foreground text-xs">
+   574→                            {new Date(member.joinedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+   575→                          </TableCell>
+   576→                          <TableCell className="text-right">
+   577→                            <MemberActionsDropdown member={member} />
+   578→                          </TableCell>
+   579→                        </TableRow>
+   580→                      ))}
+   581→                    </TableBody>
+   582→                  </Table>
+   583→                </div>
+   584→
+   585→                {/* Mobile Card View */}
+   586→                <div className="md:hidden space-y-3">
+   587→                  {filteredMembers.map((member) => (
+   588→                    <div
+   589→                      key={member.id}
+   590→                      className={`rounded-lg border p-4 space-y-3 ${member.status === 'inactive' ? 'opacity-60' : ''}`}
+   591→                    >
+   592→                      <div className="flex items-start justify-between">
+   593→                        <div className="space-y-1">
+   594→                          <p className="font-medium text-sm">{member.name}</p>
+   595→                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   596→                            <Mail className="size-3" />
+   597→                            {member.email}
+   598→                          </div>
+   599→                          {member.phone && (
+   600→                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   601→                              <Phone className="size-3" />
+   602→                              {member.phone}
+   603→                            </div>
+   604→                          )}
+   605→                        </div>
+   606→                        <div className="flex items-center gap-1.5">
+   607→                          <RoleBadge role={member.role} />
+   608→                          <StatusBadge status={member.status} />
+   609→                        </div>
+   610→                      </div>
+   611→
+   612→                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   613→                        <Badge variant="outline" className="text-xs">{member.designation}</Badge>
+   614→                        <Badge variant="outline" className="text-xs">{member.department}</Badge>
+   615→                      </div>
+   616→
+   617→                      <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
+   618→                        <span>Joined {new Date(member.joinedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+   619→                        <MemberActionsDropdown member={member} />
+   620→                      </div>
+   621→                    </div>
+   622→                  ))}
+   623→                </div>
+   624→              </>
+   625→            )}
+   626→          </div>
+   627→        </TabsContent>
+   628→
+   629→        {/* ═══════════ Invites Tab ═══════════ */}
+   630→        <TabsContent value="invites">
+   631→          <div className="space-y-4">
+   632→            <div className="flex items-center justify-between">
+   633→              <p className="text-sm text-muted-foreground">
+   634→                {invitations.filter((i) => i.status === 'pending').length} pending invitation(s)
+   635→              </p>
+   636→              <Button onClick={openInviteDialog} size="sm">
+   637→                <UserPlus className="size-4" />
+   638→                Invite Member
+   639→              </Button>
+   640→            </div>
+   641→
+   642→            {invitations.length === 0 ? (
+   643→              <EmptyState
+   644→                icon={MailCheck}
+   645→                title="No invitations"
+   646→                description="Invite new members to join your organization"
+   647→                actionLabel="Invite Member"
+   648→                onAction={openInviteDialog}
+   649→              />
+   650→            ) : (
+   651→              <>
+   652→                {/* Desktop Table */}
+   653→                <div className="hidden md:block rounded-lg border overflow-x-auto">
+   654→                  <Table>
+   655→                    <TableHeader>
+   656→                      <TableRow>
+   657→                        <TableHead>Email</TableHead>
+   658→                        <TableHead>Role</TableHead>
+   659→                        <TableHead>Designation</TableHead>
+   660→                        <TableHead>Department</TableHead>
+   661→                        <TableHead>Invited Date</TableHead>
+   662→                        <TableHead>Status</TableHead>
+   663→                        <TableHead className="text-right">Actions</TableHead>
+   664→                      </TableRow>
+   665→                    </TableHeader>
+   666→                    <TableBody>
+   667→                      {invitations.map((inv) => (
+   668→                        <TableRow key={inv.id} className={inv.status === 'expired' ? 'opacity-60' : ''}>
+   669→                          <TableCell>
+   670→                            <div className="flex items-center gap-1.5">
+   671→                              <Mail className="size-3 text-muted-foreground" />
+   672→                              {inv.email}
+   673→                            </div>
+   674→                          </TableCell>
+   675→                          <TableCell><RoleBadge role={inv.role} /></TableCell>
+   676→                          <TableCell>{inv.designation}</TableCell>
+   677→                          <TableCell>{inv.department}</TableCell>
+   678→                          <TableCell className="text-muted-foreground text-xs">
+   679→                            {new Date(inv.invitedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+   680→                          </TableCell>
+   681→                          <TableCell><InvitationStatusBadge status={inv.status} /></TableCell>
+   682→                          <TableCell className="text-right">
+   683→                            <Button
+   684→                              variant="ghost"
+   685→                              size="sm"
+   686→                              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 text-xs"
+   687→                              onClick={() => inv.status === 'pending' && setRevokeConfirm(inv)}
+   688→                              disabled={inv.status === 'expired'}
+   689→                            >
+   690→                              <XCircle className="size-3.5 mr-1" />
+   691→                              Revoke
+   692→                            </Button>
+   693→                          </TableCell>
+   694→                        </TableRow>
+   695→                      ))}
+   696→                    </TableBody>
+   697→                  </Table>
+   698→                </div>
+   699→
+   700→                {/* Mobile Card View */}
+   701→                <div className="md:hidden space-y-3">
+   702→                  {invitations.map((inv) => (
+   703→                    <div
+   704→                      key={inv.id}
+   705→                      className={`rounded-lg border p-4 space-y-3 ${inv.status === 'expired' ? 'opacity-60' : ''}`}
+   706→                    >
+   707→                      <div className="flex items-start justify-between">
+   708→                        <div className="space-y-1">
+   709→                          <p className="font-medium text-sm">{inv.email}</p>
+   710→                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   711→                            <span>Invited {new Date(inv.invitedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+   712→                          </div>
+   713→                        </div>
+   714→                        <InvitationStatusBadge status={inv.status} />
+   715→                      </div>
+   716→                      <div className="flex items-center gap-2">
+   717→                        <RoleBadge role={inv.role} />
+   718→                        <Badge variant="outline" className="text-xs">{inv.designation}</Badge>
+   719→                        <Badge variant="outline" className="text-xs">{inv.department}</Badge>
+   720→                      </div>
+   721→                      {inv.status === 'pending' && (
+   722→                        <Button
+   723→                          variant="outline"
+   724→                          size="sm"
+   725→                          className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 text-xs"
+   726→                          onClick={() => setRevokeConfirm(inv)}
+   727→                        >
+   728→                          <XCircle className="size-3 mr-1" />
+   729→                          Revoke Invitation
+   730→                        </Button>
+   731→                      )}
+   732→                    </div>
+   733→                  ))}
+   734→                </div>
+   735→              </>
+   736→            )}
+   737→          </div>
+   738→        </TabsContent>
+   739→
+   740→        {/* ═══════════ Designations Tab ═══════════ */}
+   741→        <TabsContent value="designations">
+   742→          <div className="space-y-4">
+   743→            <div className="flex items-center justify-between">
+   744→              <p className="text-sm text-muted-foreground">
+   745→                {designations.length} designation(s) configured
+   746→              </p>
+   747→              <Button onClick={openAddDesigDialog} size="sm">
+   748→                <Plus className="size-4" />
+   749→                Add Designation
+   750→              </Button>
+   751→            </div>
+   752→
+   753→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   754→              {designations.map((desig) => (
+   755→                <Card key={desig.id}>
+   756→                  <CardContent className="p-4">
+   757→                    <div className="flex items-start justify-between gap-3">
+   758→                      <div className="space-y-1 min-w-0 flex-1">
+   759→                        <p className="font-medium text-sm truncate">{desig.name}</p>
+   760→                        <p className="text-xs text-muted-foreground">{desig.memberCount} member(s)</p>
+   761→                      </div>
+   762→                      <div className="flex items-center gap-1 shrink-0">
+   763→                        <Switch
+   764→                          checked={desig.isActive}
+   765→                          onCheckedChange={(checked) => {
+   766→                            setDesignations((prev) =>
+   767→                              prev.map((d) => (d.id === desig.id ? { ...d, isActive: checked } : d))
+   768→                            )
+   769→                            toast.success(`Designation "${desig.name}" ${checked ? 'activated' : 'deactivated'}`)
+   770→                          }}
+   771→                          className="scale-90"
+   772→                        />
+   773→                      </div>
+   774→                    </div>
+   775→                    <div className="flex items-center gap-1 mt-3 pt-3 border-t">
+   776→                      <Button
+   777→                        variant="ghost"
+   778→                        size="sm"
+   779→                        className="flex-1 text-xs h-8"
+   780→                        onClick={() => openEditDesigDialog(desig)}
+   781→                      >
+   782→                        <Pencil className="size-3 mr-1" /> Edit
+   783→                      </Button>
+   784→                      <Button
+   785→                        variant="ghost"
+   786→                        size="sm"
+   787→                        className="text-xs h-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+   788→                        onClick={() => setDesigDeleteConfirm(desig)}
+   789→                        disabled={desig.memberCount > 0}
+   790→                      >
+   791→                        <Trash2 className="size-3 mr-1" /> Delete
+   792→                      </Button>
+   793→                    </div>
+   794→                  </CardContent>
+   795→                </Card>
+   796→              ))}
+   797→            </div>
+   798→          </div>
+   799→        </TabsContent>
+   800→
+   801→        {/* ═══════════ Departments Tab ═══════════ */}
+   802→        <TabsContent value="departments">
+   803→          <div className="space-y-4">
+   804→            <div className="flex items-center justify-between">
+   805→              <p className="text-sm text-muted-foreground">
+   806→                {departments.length} department(s)
+   807→              </p>
+   808→              <Button onClick={openAddDeptDialog} size="sm">
+   809→                <Plus className="size-4" />
+   810→                Add Department
+   811→              </Button>
+   812→            </div>
+   813→
+   814→            {departments.length === 0 ? (
+   815→              <EmptyState
+   816→                icon={Building}
+   817→                title="No departments"
+   818→                description="Create your first department to organize your team"
+   819→                actionLabel="Add Department"
+   820→                onAction={openAddDeptDialog}
+   821→              />
+   822→            ) : (
+   823→              <>
+   824→                {/* Desktop Table */}
+   825→                <div className="hidden md:block rounded-lg border overflow-x-auto">
+   826→                  <Table>
+   827→                    <TableHeader>
+   828→                      <TableRow>
+   829→                        <TableHead>Department</TableHead>
+   830→                        <TableHead>Description</TableHead>
+   831→                        <TableHead>Head</TableHead>
+   832→                        <TableHead>Members</TableHead>
+   833→                        <TableHead className="text-right">Actions</TableHead>
+   834→                      </TableRow>
+   835→                    </TableHeader>
+   836→                    <TableBody>
+   837→                      {departments.map((dept) => (
+   838→                        <TableRow key={dept.id}>
+   839→                          <TableCell className="font-medium">{dept.name}</TableCell>
+   840→                          <TableCell className="text-muted-foreground max-w-xs truncate">{dept.description}</TableCell>
+   841→                          <TableCell>
+   842→                            <div className="flex items-center gap-1.5">
+   843→                              <BadgeCheck className="size-3 text-emerald-600" />
+   844→                              {dept.headName}
+   845→                            </div>
+   846→                          </TableCell>
+   847→                          <TableCell>
+   848→                            <Badge variant="outline">{dept.memberCount}</Badge>
+   849→                          </TableCell>
+   850→                          <TableCell className="text-right">
+   851→                            <div className="flex items-center justify-end gap-1">
+   852→                              <Button
+   853→                                variant="ghost"
+   854→                                size="icon"
+   855→                                className="size-8"
+   856→                                onClick={() => openEditDeptDialog(dept)}
+   857→                                title="Edit department"
+   858→                              >
+   859→                                <Pencil className="size-3.5" />
+   860→                              </Button>
+   861→                              <Button
+   862→                                variant="ghost"
+   863→                                size="icon"
+   864→                                className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+   865→                                onClick={() => setDeptDeleteConfirm(dept)}
+   866→                                title="Delete department"
+   867→                              >
+   868→                                <Trash2 className="size-3.5" />
+   869→                              </Button>
+   870→                            </div>
+   871→                          </TableCell>
+   872→                        </TableRow>
+   873→                      ))}
+   874→                    </TableBody>
+   875→                  </Table>
+   876→                </div>
+   877→
+   878→                {/* Mobile Card View */}
+   879→                <div className="md:hidden space-y-3">
+   880→                  {departments.map((dept) => (
+   881→                    <div key={dept.id} className="rounded-lg border p-4 space-y-3">
+   882→                      <div className="flex items-start justify-between">
+   883→                        <div className="space-y-1">
+   884→                          <p className="font-medium text-sm">{dept.name}</p>
+   885→                          <p className="text-xs text-muted-foreground">{dept.description}</p>
+   886→                        </div>
+   887→                        <Badge variant="outline">{dept.memberCount} members</Badge>
+   888→                      </div>
+   889→                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   890→                        <BadgeCheck className="size-3 text-emerald-600" />
+   891→                        Head: {dept.headName}
+   892→                      </div>
+   893→                      <div className="flex items-center gap-1 pt-2 border-t">
+   894→                        <Button
+   895→                          variant="outline"
+   896→                          size="sm"
+   897→                          className="flex-1 text-xs h-9"
+   898→                          onClick={() => openEditDeptDialog(dept)}
+   899→                        >
+   900→                          <Pencil className="size-3 mr-1" /> Edit
+   901→                        </Button>
+   902→                        <Button
+   903→                          variant="outline"
+   904→                          size="sm"
+   905→                          className="text-xs h-9 text-red-500 hover:text-red-600"
+   906→                          onClick={() => setDeptDeleteConfirm(dept)}
+   907→                        >
+   908→                          <Trash2 className="size-3 mr-1" /> Delete
+   909→                        </Button>
+   910→                      </div>
+   911→                    </div>
+   912→                  ))}
+   913→                </div>
+   914→              </>
+   915→            )}
+   916→          </div>
+   917→        </TabsContent>
+   918→      </Tabs>
+   919→
+   920→      {/* ═══════════ Invite Member Dialog ═══════════ */}
+   921→      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+   922→        <DialogContent className="sm:max-w-md max-h-[90vh]">
+   923→          <DialogHeader>
+   924→            <DialogTitle>Invite Team Member</DialogTitle>
+   925→            <DialogDescription>
+   926→              Send an invitation to add a new member to your organization.
+   927→            </DialogDescription>
+   928→          </DialogHeader>
+   929→
+   930→          <div className="grid gap-4 py-2 flex-1 overflow-y-auto -mx-1 px-1">
+   931→            <div className="grid gap-2">
+   932→              <Label htmlFor="invite-email">
+   933→                Email Address <span className="text-red-500">*</span>
+   934→              </Label>
+   935→              <Input
+   936→                id="invite-email"
+   937→                type="email"
+   938→                placeholder="member@example.com"
+   939→                value={inviteForm.email}
+   940→                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+   941→                autoFocus
+   942→              />
+   943→            </div>
+   944→
+   945→            <div className="grid gap-2">
+   946→              <Label htmlFor="invite-role">Role</Label>
+   947→              <Select
+   948→                value={inviteForm.role}
+   949→                onValueChange={(value) => setInviteForm((f) => ({ ...f, role: value }))}
+   950→                modal={false}
+   951→              >
+   952→                <SelectTrigger id="invite-role" className="w-full">
+   953→                  <SelectValue placeholder="Select role" />
+   954→                </SelectTrigger>
+   955→                <SelectContent position="popper">
+   956→                  <SelectItem value="USER">Team Member</SelectItem>
+   957→                  <SelectItem value="ORG_ADMIN">Organization Admin</SelectItem>
+   958→                </SelectContent>
+   959→              </Select>
+   960→            </div>
+   961→
+   962→            <div className="grid gap-2">
+   963→              <Label htmlFor="invite-designation">Designation</Label>
+   964→              <Select
+   965→                value={inviteForm.designation}
+   966→                onValueChange={(value) => setInviteForm((f) => ({ ...f, designation: value }))}
+   967→                modal={false}
+   968→              >
+   969→                <SelectTrigger id="invite-designation" className="w-full">
+   970→                  <SelectValue placeholder="Select designation" />
+   971→                </SelectTrigger>
+   972→                <SelectContent position="popper">
+   973→                  {designations.filter((d) => d.isActive).map((d) => (
+   974→                    <SelectItem key={d.id} value={d.name}>
+   975→                      {d.name}
+   976→                    </SelectItem>
+   977→                  ))}
+   978→                </SelectContent>
+   979→              </Select>
+   980→            </div>
+   981→
+   982→            <div className="grid gap-2">
+   983→              <Label htmlFor="invite-department">Department</Label>
+   984→              <Select
+   985→                value={inviteForm.department}
+   986→                onValueChange={(value) => setInviteForm((f) => ({ ...f, department: value }))}
+   987→                modal={false}
+   988→              >
+   989→                <SelectTrigger id="invite-department" className="w-full">
+   990→                  <SelectValue placeholder="Select department" />
+   991→                </SelectTrigger>
+   992→                <SelectContent position="popper">
+   993→                  {departments.map((d) => (
+   994→                    <SelectItem key={d.id} value={d.name}>
+   995→                      {d.name}
+   996→                    </SelectItem>
+   997→                  ))}
+   998→                </SelectContent>
+   999→              </Select>
+  1000→            </div>
+  1001→          </div>
+  1002→
+  1003→          <DialogFooter className="pt-2 flex-shrink-0">
+  1004→            <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSubmitting}>
+  1005→              Cancel
+  1006→            </Button>
+  1007→            <Button onClick={handleInvite} disabled={inviteSubmitting}>
+  1008→              {inviteSubmitting ? (
+  1009→                <Loader2 className="size-4 animate-spin mr-2" />
+  1010→              ) : (
+  1011→                <Send className="size-4 mr-2" />
+  1012→              )}
+  1013→              Send Invitation
+  1014→            </Button>
+  1015→          </DialogFooter>
+  1016→        </DialogContent>
+  1017→      </Dialog>
+  1018→
+  1019→      {/* ═══════════ Edit Member Dialog ═══════════ */}
+  1020→      <Dialog open={memberDialogOpen} onOpenChange={setMemberDialogOpen}>
+  1021→        <DialogContent className="sm:max-w-md max-h-[90vh]">
+  1022→          <DialogHeader>
+  1023→            <DialogTitle>Edit Team Member</DialogTitle>
+  1024→            <DialogDescription>
+  1025→              Update member details. Changes will take effect immediately.
+  1026→            </DialogDescription>
+  1027→          </DialogHeader>
+  1028→
+  1029→          <div className="grid gap-4 py-2 flex-1 overflow-y-auto -mx-1 px-1">
+  1030→            <div className="grid gap-2">
+  1031→              <Label htmlFor="member-name">Name <span className="text-red-500">*</span></Label>
+  1032→              <Input
+  1033→                id="member-name"
+  1034→                value={memberForm.name}
+  1035→                onChange={(e) => setMemberForm((f) => ({ ...f, name: e.target.value }))}
+  1036→                autoFocus
+  1037→              />
+  1038→            </div>
+  1039→
+  1040→            <div className="grid gap-2">
+  1041→              <Label htmlFor="member-email">Email <span className="text-red-500">*</span></Label>
+  1042→              <Input
+  1043→                id="member-email"
+  1044→                type="email"
+  1045→                value={memberForm.email}
+  1046→                onChange={(e) => setMemberForm((f) => ({ ...f, email: e.target.value }))}
+  1047→              />
+  1048→            </div>
+  1049→
+  1050→            <div className="grid gap-2">
+  1051→              <Label htmlFor="member-phone">Phone</Label>
+  1052→              <Input
+  1053→                id="member-phone"
+  1054→                value={memberForm.phone}
+  1055→                onChange={(e) => setMemberForm((f) => ({ ...f, phone: e.target.value }))}
+  1056→                placeholder="+91 98765 43210"
+  1057→              />
+  1058→            </div>
+  1059→
+  1060→            <div className="grid gap-2">
+  1061→              <Label htmlFor="member-role">Role</Label>
+  1062→              <Select
+  1063→                value={memberForm.role}
+  1064→                onValueChange={(value) => setMemberForm((f) => ({ ...f, role: value }))}
+  1065→                modal={false}
+  1066→              >
+  1067→                <SelectTrigger id="member-role" className="w-full">
+  1068→                  <SelectValue placeholder="Select role" />
+  1069→                </SelectTrigger>
+  1070→                <SelectContent position="popper">
+  1071→                  <SelectItem value="USER">Team Member</SelectItem>
+  1072→                  <SelectItem value="ORG_ADMIN">Organization Admin</SelectItem>
+  1073→                </SelectContent>
+  1074→              </Select>
+  1075→            </div>
+  1076→
+  1077→            <div className="grid gap-2">
+  1078→              <Label htmlFor="member-designation">Designation</Label>
+  1079→              <Select
+  1080→                value={memberForm.designation}
+  1081→                onValueChange={(value) => setMemberForm((f) => ({ ...f, designation: value }))}
+  1082→                modal={false}
+  1083→              >
+  1084→                <SelectTrigger id="member-designation" className="w-full">
+  1085→                  <SelectValue placeholder="Select designation" />
+  1086→                </SelectTrigger>
+  1087→                <SelectContent position="popper">
+  1088→                  {designations.filter((d) => d.isActive).map((d) => (
+  1089→                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+  1090→                  ))}
+  1091→                </SelectContent>
+  1092→              </Select>
+  1093→            </div>
+  1094→
+  1095→            <div className="grid gap-2">
+  1096→              <Label htmlFor="member-department">Department</Label>
+  1097→              <Select
+  1098→                value={memberForm.department}
+  1099→                onValueChange={(value) => setMemberForm((f) => ({ ...f, department: value }))}
+  1100→                modal={false}
+  1101→              >
+  1102→                <SelectTrigger id="member-department" className="w-full">
+  1103→                  <SelectValue placeholder="Select department" />
+  1104→                </SelectTrigger>
+  1105→                <SelectContent position="popper">
+  1106→                  {departments.map((d) => (
+  1107→                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+  1108→                  ))}
+  1109→                </SelectContent>
+  1110→              </Select>
+  1111→            </div>
+  1112→          </div>
+  1113→
+  1114→          <DialogFooter className="pt-2 flex-shrink-0">
+  1115→            <Button variant="outline" onClick={() => setMemberDialogOpen(false)}>
+  1116→              Cancel
+  1117→            </Button>
+  1118→            <Button onClick={handleSaveMember}>
+  1119→              <Pencil className="size-4 mr-2" />
+  1120→              Save Changes
+  1121→            </Button>
+  1122→          </DialogFooter>
+  1123→        </DialogContent>
+  1124→      </Dialog>
+  1125→
+  1126→      {/* ═══════════ Designation Dialog ═══════════ */}
+  1127→      <Dialog open={desigDialogOpen} onOpenChange={setDesigDialogOpen}>
+  1128→        <DialogContent className="sm:max-w-sm">
+  1129→          <DialogHeader>
+  1130→            <DialogTitle>{editingDesig ? 'Edit Designation' : 'Add Designation'}</DialogTitle>
+  1131→            <DialogDescription>
+  1132→              {editingDesig ? 'Update the designation details.' : 'Create a new designation for your team.'}
+  1133→            </DialogDescription>
+  1134→          </DialogHeader>
+  1135→
+  1136→          <div className="grid gap-4 py-2">
+  1137→            <div className="grid gap-2">
+  1138→              <Label htmlFor="desig-name">
+  1139→                Designation Name <span className="text-red-500">*</span>
+  1140→              </Label>
+  1141→              <Input
+  1142→                id="desig-name"
+  1143→                placeholder="e.g., Senior Recruiter"
+  1144→                value={desigName}
+  1145→                onChange={(e) => setDesigName(e.target.value)}
+  1146→                autoFocus
+  1147→              />
+  1148→            </div>
+  1149→
+  1150→            <div className="flex items-center justify-between">
+  1151→              <div className="space-y-0.5">
+  1152→                <Label className="text-sm">Active</Label>
+  1153→                <p className="text-xs text-muted-foreground">Available for new members</p>
+  1154→              </div>
+  1155→              <Switch
+  1156→                checked={desigActive}
+  1157→                onCheckedChange={setDesigActive}
+  1158→              />
+  1159→            </div>
+  1160→          </div>
+  1161→
+  1162→          <DialogFooter className="pt-2">
+  1163→            <Button variant="outline" onClick={() => setDesigDialogOpen(false)} disabled={desigSubmitting}>
+  1164→              Cancel
+  1165→            </Button>
+  1166→            <Button onClick={handleSaveDesig} disabled={desigSubmitting}>
+  1167→              {desigSubmitting && <Loader2 className="size-4 animate-spin mr-2" />}
+  1168→              {editingDesig ? 'Save Changes' : 'Add Designation'}
+  1169→            </Button>
+  1170→          </DialogFooter>
+  1171→        </DialogContent>
+  1172→      </Dialog>
+  1173→
+  1174→      {/* ═══════════ Department Dialog ═══════════ */}
+  1175→      <Dialog open={deptDialogOpen} onOpenChange={setDeptDialogOpen}>
+  1176→        <DialogContent className="sm:max-w-md">
+  1177→          <DialogHeader>
+  1178→            <DialogTitle>{editingDept ? 'Edit Department' : 'Add Department'}</DialogTitle>
+  1179→            <DialogDescription>
+  1180→              {editingDept ? 'Update the department details.' : 'Create a new department for your organization.'}
+  1181→            </DialogDescription>
+  1182→          </DialogHeader>
+  1183→
+  1184→          <div className="grid gap-4 py-2 min-w-0">
+  1185→            <div className="grid gap-2">
+  1186→              <Label htmlFor="dept-name">
+  1187→                Department Name <span className="text-red-500">*</span>
+  1188→              </Label>
+  1189→              <Input
+  1190→                id="dept-name"
+  1191→                placeholder="e.g., Talent Acquisition"
+  1192→                value={deptForm.name}
+  1193→                onChange={(e) => setDeptForm((f) => ({ ...f, name: e.target.value }))}
+  1194→                autoFocus
+  1195→              />
+  1196→            </div>
+  1197→
+  1198→            <div className="grid gap-2">
+  1199→              <Label htmlFor="dept-description">Description</Label>
+  1200→              <Input
+  1201→                id="dept-description"
+  1202→                placeholder="Brief description of the department"
+  1203→                value={deptForm.description}
+  1204→                onChange={(e) => setDeptForm((f) => ({ ...f, description: e.target.value }))}
+  1205→              />
+  1206→            </div>
+  1207→
+  1208→            <div className="grid gap-2">
+  1209→              <Label htmlFor="dept-head">Department Head</Label>
+  1210→              <Select
+  1211→                value={deptForm.headName}
+  1212→                onValueChange={(value) => setDeptForm((f) => ({ ...f, headName: value }))}
+  1213→                modal={false}
+  1214→              >
+  1215→                <SelectTrigger id="dept-head" className="w-full min-w-0">
+  1216→                  <SelectValue placeholder="Select department head" />
+  1217→                </SelectTrigger>
+  1218→                <SelectContent position="popper" className="max-h-60">
+  1219→                  {teamList.filter((m) => m.status === 'active').map((m) => (
+  1220→                    <SelectItem key={m.id} value={m.name}>
+  1221→                      {m.name} — {m.designation}
+  1222→                    </SelectItem>
+  1223→                  ))}
+  1224→                </SelectContent>
+  1225→              </Select>
+  1226→            </div>
+  1227→          </div>
+  1228→
+  1229→          <DialogFooter className="pt-2">
+  1230→            <Button variant="outline" onClick={() => setDeptDialogOpen(false)} disabled={deptSubmitting}>
+  1231→              Cancel
+  1232→            </Button>
+  1233→            <Button onClick={handleSaveDept} disabled={deptSubmitting}>
+  1234→              {deptSubmitting && <Loader2 className="size-4 animate-spin mr-2" />}
+  1235→              {editingDept ? 'Save Changes' : 'Add Department'}
+  1236→            </Button>
+  1237→          </DialogFooter>
+  1238→        </DialogContent>
+  1239→      </Dialog>
+  1240→
+  1241→      {/* ═══════════ Confirmation Dialogs ═══════════ */}
+  1242→      <ConfirmDialog
+  1243→        open={!!revokeConfirm}
+  1244→        onOpenChange={(open) => !open && setRevokeConfirm(null)}
+  1245→        title="Revoke Invitation"
+  1246→        description={`Are you sure you want to revoke the invitation sent to "${revokeConfirm?.email}"? They will no longer be able to join using this invitation.`}
+  1247→        confirmLabel="Revoke"
+  1248→        variant="destructive"
+  1249→        onConfirm={() => {
+  1250→          if (revokeConfirm) handleRevoke(revokeConfirm)
+  1251→        }}
+  1252→      />
+  1253→
+  1254→      <ConfirmDialog
+  1255→        open={!!desigDeleteConfirm}
+  1256→        onOpenChange={(open) => !open && setDesigDeleteConfirm(null)}
+  1257→        title="Delete Designation"
+  1258→        description={`Are you sure you want to delete "${desigDeleteConfirm?.name}"? This cannot be undone.`}
+  1259→        confirmLabel="Delete"
+  1260→        variant="destructive"
+  1261→        onConfirm={() => {
+  1262→          if (desigDeleteConfirm) handleDeleteDesig(desigDeleteConfirm)
+  1263→        }}
+  1264→      />
+  1265→
+  1266→      <ConfirmDialog
+  1267→        open={!!deptDeleteConfirm}
+  1268→        onOpenChange={(open) => !open && setDeptDeleteConfirm(null)}
+  1269→        title="Delete Department"
+  1270→        description={`Are you sure you want to delete "${deptDeleteConfirm?.name}"? All members will be unassigned from this department.`}
+  1271→        confirmLabel="Delete"
+  1272→        variant="destructive"
+  1273→        onConfirm={() => {
+  1274→          if (deptDeleteConfirm) handleDeleteDept(deptDeleteConfirm)
+  1275→        }}
+  1276→      />
+  1277→    </div>
+  1278→  )
+  1279→}
+  1280→

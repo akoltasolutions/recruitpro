@@ -1,0 +1,1081 @@
+     1→'use client'
+     2→
+     3→import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+     4→import type { LucideIcon } from 'lucide-react'
+     5→import {
+     6→  Phone,
+     7→  MessageSquare,
+     8→  Search,
+     9→  Edit2,
+    10→  Check,
+    11→  X,
+    12→  Calendar,
+    13→  UserCheck,
+    14→  UserX,
+    15→  ArrowRight,
+    16→  Briefcase,
+    17→  Building2,
+    18→  StickyNote,
+    19→} from 'lucide-react'
+    20→import { Card, CardContent } from '@/components/ui/card'
+    21→import { Button } from '@/components/ui/button'
+    22→import { Input } from '@/components/ui/input'
+    23→import { Badge } from '@/components/ui/badge'
+    24→import { Skeleton } from '@/components/ui/skeleton'
+    25→import { Textarea } from '@/components/ui/textarea'
+    26→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    27→import {
+    28→  Table,
+    29→  TableBody,
+    30→  TableCell,
+    31→  TableHead,
+    32→  TableHeader,
+    33→  TableRow,
+    34→} from '@/components/ui/table'
+    35→import { EmptyState } from '@/components/shared/empty-state'
+    36→import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
+    37→import { toast } from 'sonner'
+    38→import { authFetch } from '@/stores/auth-store'
+    39→import { cn, formatPhoneForWhatsApp } from '@/lib/utils'
+    40→import { format } from 'date-fns'
+    41→
+    42→// ─── Types ──────────────────────────────────────────────────────────────────
+    43→
+    44→type PipelineStage =
+    45→  | 'SHORTLISTED'
+    46→  | 'FOLLOW_UP'
+    47→  | 'INTERVIEWED'
+    48→  | 'JOINED'
+    49→  | 'BACKOUT'
+    50→
+    51→interface PipelineCandidate {
+    52→  id: string
+    53→  name: string
+    54→  phone: string
+    55→  role: string | null
+    56→  location: string | null
+    57→  email: string | null
+    58→  notes: string | null
+    59→  pipelineStage: PipelineStage
+    60→  followUpDate: string | null
+    61→  interviewDate: string | null
+    62→  joinedDate: string | null
+    63→  backoutReason: string | null
+    64→  lastDisposition: string | null
+    65→  clientName: string | null
+    66→}
+    67→
+    68→interface PipelineResponse {
+    69→  candidates: PipelineCandidate[]
+    70→  grouped: Record<PipelineStage, PipelineCandidate[]>
+    71→  counts: Record<PipelineStage, number>
+    72→  totalCount?: number
+    73→  page?: number
+    74→  totalPages?: number
+    75→}
+    76→
+    77→// ─── Constants ──────────────────────────────────────────────────────────────
+    78→
+    79→const STAGES: PipelineStage[] = [
+    80→  'SHORTLISTED',
+    81→  'FOLLOW_UP',
+    82→  'INTERVIEWED',
+    83→  'JOINED',
+    84→  'BACKOUT',
+    85→]
+    86→
+    87→const STAGE_META: Record<
+    88→  PipelineStage,
+    89→  {
+    90→    label: string
+    91→    icon: LucideIcon
+    92→    color: string
+    93→    badgeClass: string
+    94→    dotClass: string
+    95→  }
+    96→> = {
+    97→  SHORTLISTED: {
+    98→    label: 'Shortlisted',
+    99→    icon: UserCheck,
+   100→    color: 'text-emerald-600',
+   101→    badgeClass:
+   102→      'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800',
+   103→    dotClass: 'bg-emerald-500',
+   104→  },
+   105→  FOLLOW_UP: {
+   106→    label: 'Follow-ups',
+   107→    icon: Calendar,
+   108→    color: 'text-amber-600',
+   109→    badgeClass:
+   110→      'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800',
+   111→    dotClass: 'bg-amber-500',
+   112→  },
+   113→  INTERVIEWED: {
+   114→    label: 'Interviewed',
+   115→    icon: ArrowRight,
+   116→    color: 'text-blue-600',
+   117→    badgeClass:
+   118→      'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800',
+   119→    dotClass: 'bg-blue-500',
+   120→  },
+   121→  JOINED: {
+   122→    label: 'Joined',
+   123→    icon: UserCheck,
+   124→    color: 'text-purple-600',
+   125→    badgeClass:
+   126→      'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-400 dark:border-purple-800',
+   127→    dotClass: 'bg-purple-500',
+   128→  },
+   129→  BACKOUT: {
+   130→    label: 'Backout',
+   131→    icon: UserX,
+   132→    color: 'text-red-600',
+   133→    badgeClass:
+   134→      'bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800',
+   135→    dotClass: 'bg-red-500',
+   136→  },
+   137→}
+   138→
+   139→const STAGE_MOVE_OPTIONS: Record<PipelineStage, PipelineStage[]> = {
+   140→  SHORTLISTED: ['FOLLOW_UP', 'INTERVIEWED', 'BACKOUT'],
+   141→  FOLLOW_UP: ['SHORTLISTED', 'INTERVIEWED', 'JOINED', 'BACKOUT'],
+   142→  INTERVIEWED: ['SHORTLISTED', 'FOLLOW_UP', 'JOINED', 'BACKOUT'],
+   143→  JOINED: ['SHORTLISTED', 'FOLLOW_UP', 'INTERVIEWED', 'BACKOUT'],
+   144→  BACKOUT: ['SHORTLISTED', 'FOLLOW_UP', 'INTERVIEWED', 'JOINED'],
+   145→}
+   146→
+   147→// ─── Component ──────────────────────────────────────────────────────────────
+   148→
+   149→export function CandidatePipeline() {
+   150→  const [activeStage, setActiveStage] = useState<PipelineStage>('SHORTLISTED')
+   151→  const [searchQuery, setSearchQuery] = useState('')
+   152→  const [loading, setLoading] = useState(true)
+   153→  const [saving, setSaving] = useState<string | null>(null) // candidateId being saved
+   154→
+   155→  // Data
+   156→  const [candidates, setCandidates] = useState<PipelineCandidate[]>([])
+   157→  const [counts, setCounts] = useState<Record<PipelineStage, number>>({
+   158→    SHORTLISTED: 0,
+   159→    FOLLOW_UP: 0,
+   160→    INTERVIEWED: 0,
+   161→    JOINED: 0,
+   162→    BACKOUT: 0,
+   163→  })
+   164→
+   165→  // Pagination state
+   166→  const [totalCount, setTotalCount] = useState(0)
+   167→  const [currentPage, setCurrentPage] = useState(1)
+   168→  const [totalPages, setTotalPages] = useState(1)
+   169→  const [pageSize, setPageSize] = useState(50)
+   170→  const [loadingMore, setLoadingMore] = useState(false)
+   171→  const sentinelRef = useRef<HTMLDivElement | null>(null)
+   172→
+   173→  // Inline edit state — keyed by candidateId
+   174→  const [editingId, setEditingId] = useState<string | null>(null)
+   175→  const [editNotes, setEditNotes] = useState('')
+   176→  const [editFollowUpDate, setEditFollowUpDate] = useState('')
+   177→  const [editInterviewDate, setEditInterviewDate] = useState('')
+   178→  const [editJoinedDate, setEditJoinedDate] = useState('')
+   179→  const [editBackoutReason, setEditBackoutReason] = useState('')
+   180→  const [editStage, setEditStage] = useState<PipelineStage>('SHORTLISTED')
+   181→
+   182→  // ── Fetch candidates (initial load — page 1, replaces data) ──
+   183→
+   184→  const fetchCandidates = useCallback(async () => {
+   185→    setLoading(true)
+   186→    setCurrentPage(1)
+   187→    try {
+   188→      const params = new URLSearchParams({ stage: activeStage })
+   189→      params.set('page', '1')
+   190→      params.set('limit', String(pageSize))
+   191→      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+   192→      const res = await authFetch(`/api/pipeline?${params.toString()}`)
+   193→      if (!res.ok) throw new Error('Failed to fetch pipeline data')
+   194→      const data: PipelineResponse = await res.json()
+   195→      setCandidates(data.candidates || [])
+   196→      setCounts(data.counts || {
+   197→        SHORTLISTED: 0,
+   198→        FOLLOW_UP: 0,
+   199→        INTERVIEWED: 0,
+   200→        JOINED: 0,
+   201→        BACKOUT: 0,
+   202→      })
+   203→      setTotalCount(data.totalCount || 0)
+   204→      setTotalPages(data.totalPages || 1)
+   205→    } catch {
+   206→      toast.error('Failed to load pipeline data')
+   207→      setCandidates([])
+   208→    } finally {
+   209→      setLoading(false)
+   210→    }
+   211→  }, [activeStage, searchQuery, pageSize])
+   212→
+   213→  useEffect(() => {
+   214→    // Debounce search
+   215→    const timer = setTimeout(fetchCandidates, 300)
+   216→    return () => clearTimeout(timer)
+   217→  }, [fetchCandidates])
+   218→
+   219→  // ── Load more — fetches next page, appends data ──
+   220→
+   221→  const loadMore = useCallback(async () => {
+   222→    if (loadingMore || currentPage >= totalPages) return
+   223→    setLoadingMore(true)
+   224→    const nextPage = currentPage + 1
+   225→    try {
+   226→      const params = new URLSearchParams({ stage: activeStage })
+   227→      params.set('page', String(nextPage))
+   228→      params.set('limit', String(pageSize))
+   229→      if (searchQuery.trim()) params.set('search', searchQuery.trim())
+   230→      const res = await authFetch(`/api/pipeline?${params.toString()}`)
+   231→      if (!res.ok) throw new Error('Failed to fetch more pipeline data')
+   232→      const data: PipelineResponse = await res.json()
+   233→      setCandidates(prev => [...prev, ...(data.candidates || [])])
+   234→      setCurrentPage(nextPage)
+   235→      setTotalCount(data.totalCount || 0)
+   236→      setTotalPages(data.totalPages || 1)
+   237→    } catch {
+   238→      toast.error('Failed to load more candidates')
+   239→    } finally {
+   240→      setLoadingMore(false)
+   241→    }
+   242→  }, [loadingMore, currentPage, totalPages, activeStage, searchQuery, pageSize])
+   243→
+   244→  // ── IntersectionObserver for infinite scroll ──
+   245→
+   246→  const loadMoreRef = useRef(loadMore)
+   247→  loadMoreRef.current = loadMore
+   248→
+   249→  useEffect(() => {
+   250→    const el = sentinelRef.current
+   251→    if (!el) return
+   252→    const observer = new IntersectionObserver(
+   253→      (entries) => {
+   254→        if (entries[0].isIntersecting) {
+   255→          loadMoreRef.current()
+   256→        }
+   257→      },
+   258→      { rootMargin: '300px' }
+   259→    )
+   260→    observer.observe(el)
+   261→    return () => observer.disconnect()
+   262→  }, [])
+   263→
+   264→  // ── Scroll handler for nested scroll containers ──
+   265→
+   266→  const handleContainerScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+   267→    const el = e.currentTarget
+   268→    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+   269→      if (!loadingMore && currentPage < totalPages) {
+   270→        loadMoreRef.current()
+   271→      }
+   272→    }
+   273→  }, [loadingMore, currentPage, totalPages])
+   274→
+   275→  // ── Inline edit helpers ──
+   276→
+   277→  const startEditing = (c: PipelineCandidate) => {
+   278→    setEditingId(c.id)
+   279→    setEditNotes(c.notes || '')
+   280→    setEditFollowUpDate(c.followUpDate ? c.followUpDate.slice(0, 10) : '')
+   281→    setEditInterviewDate(c.interviewDate ? c.interviewDate.slice(0, 10) : '')
+   282→    setEditJoinedDate(c.joinedDate ? c.joinedDate.slice(0, 10) : '')
+   283→    setEditBackoutReason(c.backoutReason || '')
+   284→    setEditStage(c.pipelineStage)
+   285→  }
+   286→
+   287→  const cancelEditing = () => {
+   288→    setEditingId(null)
+   289→    setEditNotes('')
+   290→    setEditFollowUpDate('')
+   291→    setEditInterviewDate('')
+   292→    setEditJoinedDate('')
+   293→    setEditBackoutReason('')
+   294→  }
+   295→
+   296→  // ── Save (PATCH) ──
+   297→
+   298→  const saveCandidate = async (candidateId: string) => {
+   299→    setSaving(candidateId)
+   300→    try {
+   301→      const payload: Record<string, unknown> = { candidateId }
+   302→      if (editStage) payload.pipelineStage = editStage
+   303→      if (editFollowUpDate) payload.followUpDate = editFollowUpDate
+   304→      if (editInterviewDate) payload.interviewDate = editInterviewDate
+   305→      if (editJoinedDate) payload.joinedDate = editJoinedDate
+   306→      if (editBackoutReason) payload.backoutReason = editBackoutReason
+   307→      if (editNotes !== undefined) payload.notes = editNotes
+   308→
+   309→      const res = await authFetch('/api/pipeline', {
+   310→        method: 'PATCH',
+   311→        body: JSON.stringify(payload),
+   312→      })
+   313→      if (!res.ok) throw new Error('Failed to save')
+   314→      toast.success('Candidate updated')
+   315→      setEditingId(null)
+   316→      fetchCandidates()
+   317→    } catch {
+   318→      toast.error('Failed to save changes')
+   319→    } finally {
+   320→      setSaving(null)
+   321→    }
+   322→  }
+   323→
+   324→  // ── Quick stage move ──
+   325→
+   326→  const moveStage = async (candidateId: string, newStage: PipelineStage) => {
+   327→    setSaving(candidateId)
+   328→    try {
+   329→      const res = await authFetch('/api/pipeline', {
+   330→        method: 'PATCH',
+   331→        body: JSON.stringify({ candidateId, pipelineStage: newStage }),
+   332→      })
+   333→      if (!res.ok) throw new Error('Failed to move')
+   334→      toast.success(`Moved to ${STAGE_META[newStage].label}`)
+   335→      fetchCandidates()
+   336→    } catch {
+   337→      toast.error('Failed to move candidate')
+   338→    } finally {
+   339→      setSaving(null)
+   340→    }
+   341→  }
+   342→
+   343→  // ── WhatsApp ──
+   344→
+   345→  const openWhatsApp = (phone: string) => {
+   346→    const formatted = formatPhoneForWhatsApp(phone)
+   347→    const url = `https://wa.me/${formatted}`
+   348→    // Use hidden anchor click so Android WebView shouldOverrideUrlLoading fires
+   349→    try {
+   350→      const a = document.createElement('a')
+   351→      a.href = url
+   352→      a.target = '_blank'
+   353→      a.rel = 'noopener noreferrer'
+   354→      a.style.display = 'none'
+   355→      document.body.appendChild(a)
+   356→      a.click()
+   357→      setTimeout(() => { try { document.body.removeChild(a) } catch { /* ignore */ } }, 300)
+   358→    } catch {
+   359→      window.location.href = url
+   360→    }
+   361→  }
+   362→
+   363→  // ── Filtered candidates (client-side on top of server search) ──
+   364→
+   365→  const filteredCandidates = useMemo(() => {
+   366→    if (!searchQuery.trim()) return candidates
+   367→    const q = searchQuery.toLowerCase()
+   368→    return candidates.filter(
+   369→      (c) =>
+   370→        c.name.toLowerCase().includes(q) ||
+   371→        c.phone.includes(q)
+   372→    )
+   373→  }, [candidates, searchQuery])
+   374→
+   375→  const isEditing = (id: string) => editingId === id
+   376→
+   377→  const handlePageSizeChange = (size: number) => {
+   378→    setPageSize(size)
+   379→  }
+   380→
+   381→  // ─── Render helpers ───────────────────────────────────────────────────────
+   382→
+   383→  const renderStageSpecificField = (c: PipelineCandidate) => {
+   384→    const editing = isEditing(c.id)
+   385→
+   386→    switch (c.pipelineStage) {
+   387→      case 'FOLLOW_UP':
+   388→        return (
+   389→          <div className="space-y-1.5">
+   390→            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   391→              <Calendar className="h-3 w-3" />
+   392→              Follow-up Date
+   393→            </label>
+   394→            {editing ? (
+   395→              <input
+   396→                type="date"
+   397→                value={editFollowUpDate}
+   398→                onChange={(e) => setEditFollowUpDate(e.target.value)}
+   399→                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   400→              />
+   401→            ) : (
+   402→              <p className="text-sm">
+   403→                {c.followUpDate
+   404→                  ? format(new Date(c.followUpDate), 'MMM d, yyyy')
+   405→                  : 'Not set'}
+   406→              </p>
+   407→            )}
+   408→          </div>
+   409→        )
+   410→
+   411→      case 'INTERVIEWED':
+   412→        return (
+   413→          <div className="space-y-1.5">
+   414→            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   415→              <Calendar className="h-3 w-3" />
+   416→              Interview Date
+   417→            </label>
+   418→            {editing ? (
+   419→              <input
+   420→                type="date"
+   421→                value={editInterviewDate}
+   422→                onChange={(e) => setEditInterviewDate(e.target.value)}
+   423→                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   424→              />
+   425→            ) : (
+   426→              <p className="text-sm">
+   427→                {c.interviewDate
+   428→                  ? format(new Date(c.interviewDate), 'MMM d, yyyy')
+   429→                  : 'Not set'}
+   430→              </p>
+   431→            )}
+   432→          </div>
+   433→        )
+   434→
+   435→      case 'JOINED':
+   436→        return (
+   437→          <div className="space-y-1.5">
+   438→            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   439→              <Calendar className="h-3 w-3" />
+   440→              Joining Date
+   441→            </label>
+   442→            {editing ? (
+   443→              <input
+   444→                type="date"
+   445→                value={editJoinedDate}
+   446→                onChange={(e) => setEditJoinedDate(e.target.value)}
+   447→                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   448→              />
+   449→            ) : (
+   450→              <p className="text-sm">
+   451→                {c.joinedDate
+   452→                  ? format(new Date(c.joinedDate), 'MMM d, yyyy')
+   453→                  : 'Not set'}
+   454→              </p>
+   455→            )}
+   456→          </div>
+   457→        )
+   458→
+   459→      case 'BACKOUT':
+   460→        return (
+   461→          <div className="space-y-1.5">
+   462→            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   463→              <UserX className="h-3 w-3" />
+   464→              Backout Reason
+   465→            </label>
+   466→            {editing ? (
+   467→              <Input
+   468→                value={editBackoutReason}
+   469→                onChange={(e) => setEditBackoutReason(e.target.value)}
+   470→                placeholder="Enter backout reason..."
+   471→                className="h-9 text-sm"
+   472→              />
+   473→            ) : (
+   474→              <p className="text-sm text-muted-foreground">
+   475→                {c.backoutReason || 'Not specified'}
+   476→              </p>
+   477→            )}
+   478→          </div>
+   479→        )
+   480→
+   481→      default:
+   482→        return null
+   483→    }
+   484→  }
+   485→
+   486→  // ─── Mobile Card ──────────────────────────────────────────────────────────
+   487→
+   488→  const MobileCard = ({ c }: { c: PipelineCandidate }) => {
+   489→    const editing = isEditing(c.id)
+   490→    const meta = STAGE_META[c.pipelineStage]
+   491→    const StageIcon = meta.icon
+   492→
+   493→    return (
+   494→      <Card className="overflow-hidden py-0">
+   495→        <CardContent className="p-4 space-y-3">
+   496→          {/* Header row */}
+   497→          <div className="flex items-start justify-between gap-2">
+   498→            <div className="min-w-0 flex-1">
+   499→              <p className="font-semibold text-sm truncate">{c.name}</p>
+   500→              <a
+   501→                href={`tel:${c.phone}`}
+   502→                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mt-0.5 transition-colors"
+   503→              >
+   504→                <Phone className="h-3 w-3 shrink-0" />
+   505→                <span className="truncate">{c.phone}</span>
+   506→              </a>
+   507→            </div>
+   508→            <Badge
+   509→              variant="outline"
+   510→              className={cn('text-[10px] shrink-0', meta.badgeClass)}
+   511→            >
+   512→              {meta.label}
+   513→            </Badge>
+   514→          </div>
+   515→
+   516→          {/* Info row */}
+   517→          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   518→            {c.role && (
+   519→              <span className="flex items-center gap-1">
+   520→                <Briefcase className="h-3 w-3 shrink-0" />
+   521→                <span className="truncate">{c.role}</span>
+   522→              </span>
+   523→            )}
+   524→            {c.clientName && (
+   525→              <span className="flex items-center gap-1">
+   526→                <Building2 className="h-3 w-3 shrink-0" />
+   527→                <span className="truncate">{c.clientName}</span>
+   528→              </span>
+   529→            )}
+   530→            {c.lastDisposition && (
+   531→              <span className="truncate">{c.lastDisposition}</span>
+   532→            )}
+   533→          </div>
+   534→
+   535→          {/* Action buttons */}
+   536→          <div className="flex items-center gap-2">
+   537→            <a
+   538→              href={`tel:${c.phone}`}
+   539→              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 transition-colors min-h-[36px]"
+   540→            >
+   541→              <Phone className="h-3.5 w-3.5" />
+   542→              Call
+   543→            </a>
+   544→            <button
+   545→              type="button"
+   546→              onClick={() => openWhatsApp(c.phone)}
+   547→              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 transition-colors min-h-[36px]"
+   548→            >
+   549→              <MessageSquare className="h-3.5 w-3.5" />
+   550→              WhatsApp
+   551→            </button>
+   552→            {!editing && (
+   553→              <Button
+   554→                variant="outline"
+   555→                size="sm"
+   556→                onClick={() => startEditing(c)}
+   557→                className="ml-auto h-9 gap-1 text-xs"
+   558→              >
+   559→                <Edit2 className="h-3 w-3" />
+   560→                Edit
+   561→              </Button>
+   562→            )}
+   563→          </div>
+   564→
+   565→          {/* Stage-specific field */}
+   566→          {renderStageSpecificField(c)}
+   567→
+   568→          {/* Notes */}
+   569→          <div className="space-y-1.5">
+   570→            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   571→              <StickyNote className="h-3 w-3" />
+   572→              Notes
+   573→            </label>
+   574→            {editing ? (
+   575→              <Textarea
+   576→                value={editNotes}
+   577→                onChange={(e) => setEditNotes(e.target.value)}
+   578→                placeholder="Add notes about this candidate..."
+   579→                rows={2}
+   580→                className="text-sm"
+   581→              />
+   582→            ) : (
+   583→              <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 min-h-[32px]">
+   584→                {c.notes || 'No notes'}
+   585→              </p>
+   586→            )}
+   587→          </div>
+   588→
+   589→          {/* Move to stage (quick) */}
+   590→          {!editing && (
+   591→            <div className="space-y-1.5">
+   592→              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+   593→                <ArrowRight className="h-3 w-3" />
+   594→                Move to
+   595→              </label>
+   596→              <div className="flex flex-wrap gap-1.5">
+   597→                {STAGE_MOVE_OPTIONS[c.pipelineStage].map((stage) => (
+   598→                  <button
+   599→                    key={stage}
+   600→                    type="button"
+   601→                    onClick={() => moveStage(c.id, stage)}
+   602→                    disabled={saving === c.id}
+   603→                    className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors hover:bg-muted disabled:opacity-50"
+   604→                  >
+   605→                    <span className={cn('h-1.5 w-1.5 rounded-full', STAGE_META[stage].dotClass)} />
+   606→                    {STAGE_META[stage].label}
+   607→                  </button>
+   608→                ))}
+   609→              </div>
+   610→            </div>
+   611→          )}
+   612→
+   613→          {/* Stage dropdown + Save/Cancel (edit mode) */}
+   614→          {editing && (
+   615→            <div className="space-y-3 pt-1 border-t">
+   616→              {/* Stage selector */}
+   617→              <div className="space-y-1.5">
+   618→                <label className="text-xs font-medium text-muted-foreground">
+   619→                  Move to Stage
+   620→                </label>
+   621→                <select
+   622→                  value={editStage}
+   623→                  onChange={(e) => setEditStage(e.target.value as PipelineStage)}
+   624→                  className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   625→                >
+   626→                  {STAGES.map((s) => (
+   627→                    <option key={s} value={s}>
+   628→                      {STAGE_META[s].label}
+   629→                    </option>
+   630→                  ))}
+   631→                </select>
+   632→              </div>
+   633→
+   634→              {/* Save / Cancel */}
+   635→              <div className="flex items-center gap-2">
+   636→                <Button
+   637→                  size="sm"
+   638→                  onClick={() => saveCandidate(c.id)}
+   639→                  disabled={saving === c.id}
+   640→                  className="gap-1.5 text-xs"
+   641→                >
+   642→                  <Check className="h-3.5 w-3.5" />
+   643→                  {saving === c.id ? 'Saving...' : 'Save'}
+   644→                </Button>
+   645→                <Button
+   646→                  variant="outline"
+   647→                  size="sm"
+   648→                  onClick={cancelEditing}
+   649→                  className="gap-1.5 text-xs"
+   650→                >
+   651→                  <X className="h-3.5 w-3.5" />
+   652→                  Cancel
+   653→                </Button>
+   654→              </div>
+   655→            </div>
+   656→          )}
+   657→        </CardContent>
+   658→      </Card>
+   659→    )
+   660→  }
+   661→
+   662→  // ─── Desktop Table ────────────────────────────────────────────────────────
+   663→
+   664→  const DesktopTable = () => {
+   665→    if (filteredCandidates.length === 0) {
+   666→      return (
+   667→        <div className="hidden md:block rounded-xl border overflow-hidden">
+   668→          <Table>
+   669→            <TableBody>
+   670→              <TableRow>
+   671→                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+   672→                  No candidates found
+   673→                </TableCell>
+   674→              </TableRow>
+   675→            </TableBody>
+   676→          </Table>
+   677→        </div>
+   678→      )
+   679→    }
+   680→
+   681→    return (
+   682→      <div className="hidden md:block rounded-xl border overflow-hidden">
+   683→        <Table>
+   684→          <TableHeader>
+   685→            <TableRow className="bg-muted/50">
+   686→              <TableHead className="font-semibold">Candidate</TableHead>
+   687→              <TableHead className="font-semibold">Phone</TableHead>
+   688→              <TableHead className="font-semibold">Role</TableHead>
+   689→              <TableHead className="font-semibold">Disposition</TableHead>
+   690→              <TableHead className="font-semibold">Client</TableHead>
+   691→              <TableHead className="font-semibold">
+   692→                {activeStage === 'FOLLOW_UP' && 'Follow-up Date'}
+   693→                {activeStage === 'INTERVIEWED' && 'Interview Date'}
+   694→                {activeStage === 'JOINED' && 'Joining Date'}
+   695→                {activeStage === 'BACKOUT' && 'Backout Reason'}
+   696→                {activeStage === 'SHORTLISTED' && 'Notes'}
+   697→              </TableHead>
+   698→              <TableHead className="font-semibold">Stage</TableHead>
+   699→              <TableHead className="font-semibold text-right">Actions</TableHead>
+   700→            </TableRow>
+   701→          </TableHeader>
+   702→          <TableBody>
+   703→            {filteredCandidates.map((c) => {
+   704→              const editing = isEditing(c.id)
+   705→              const meta = STAGE_META[c.pipelineStage]
+   706→
+   707→              return (
+   708→                <TableRow key={c.id} className={editing ? 'bg-muted/20' : ''}>
+   709→                  {/* Candidate name */}
+   710→                  <TableCell className="font-medium min-w-[140px]">
+   711→                    <div>
+   712→                      <p className="font-medium text-sm">{c.name}</p>
+   713→                      {c.location && (
+   714→                        <p className="text-xs text-muted-foreground">{c.location}</p>
+   715→                      )}
+   716→                    </div>
+   717→                  </TableCell>
+   718→
+   719→                  {/* Phone */}
+   720→                  <TableCell className="font-mono text-sm min-w-[120px]">
+   721→                    <a
+   722→                      href={`tel:${c.phone}`}
+   723→                      className="hover:text-emerald-600 transition-colors"
+   724→                    >
+   725→                      {c.phone}
+   726→                    </a>
+   727→                  </TableCell>
+   728→
+   729→                  {/* Role */}
+   730→                  <TableCell className="text-sm min-w-[100px]">
+   731→                    {c.role || '—'}
+   732→                  </TableCell>
+   733→
+   734→                  {/* Disposition */}
+   735→                  <TableCell className="text-sm min-w-[100px]">
+   736→                    {c.lastDisposition || '—'}
+   737→                  </TableCell>
+   738→
+   739→                  {/* Client */}
+   740→                  <TableCell className="text-sm min-w-[100px]">
+   741→                    {c.clientName || '—'}
+   742→                  </TableCell>
+   743→
+   744→                  {/* Stage-specific field */}
+   745→                  <TableCell className="min-w-[160px]">
+   746→                    {activeStage === 'SHORTLISTED' && (
+   747→                      editing ? (
+   748→                        <Textarea
+   749→                          value={editNotes}
+   750→                          onChange={(e) => setEditNotes(e.target.value)}
+   751→                          rows={2}
+   752→                          className="text-sm"
+   753→                        />
+   754→                      ) : (
+   755→                        <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+   756→                          {c.notes || 'No notes'}
+   757→                        </p>
+   758→                      )
+   759→                    )}
+   760→
+   761→                    {activeStage === 'FOLLOW_UP' && (
+   762→                      editing ? (
+   763→                        <input
+   764→                          type="date"
+   765→                          value={editFollowUpDate}
+   766→                          onChange={(e) => setEditFollowUpDate(e.target.value)}
+   767→                          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   768→                        />
+   769→                      ) : (
+   770→                        <p className="text-sm">
+   771→                          {c.followUpDate
+   772→                            ? format(new Date(c.followUpDate), 'MMM d, yyyy')
+   773→                            : 'Not set'}
+   774→                        </p>
+   775→                      )
+   776→                    )}
+   777→
+   778→                    {activeStage === 'INTERVIEWED' && (
+   779→                      editing ? (
+   780→                        <input
+   781→                          type="date"
+   782→                          value={editInterviewDate}
+   783→                          onChange={(e) => setEditInterviewDate(e.target.value)}
+   784→                          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   785→                        />
+   786→                      ) : (
+   787→                        <p className="text-sm">
+   788→                          {c.interviewDate
+   789→                            ? format(new Date(c.interviewDate), 'MMM d, yyyy')
+   790→                            : 'Not set'}
+   791→                        </p>
+   792→                      )
+   793→                    )}
+   794→
+   795→                    {activeStage === 'JOINED' && (
+   796→                      editing ? (
+   797→                        <input
+   798→                          type="date"
+   799→                          value={editJoinedDate}
+   800→                          onChange={(e) => setEditJoinedDate(e.target.value)}
+   801→                          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   802→                        />
+   803→                      ) : (
+   804→                        <p className="text-sm">
+   805→                          {c.joinedDate
+   806→                            ? format(new Date(c.joinedDate), 'MMM d, yyyy')
+   807→                            : 'Not set'}
+   808→                        </p>
+   809→                      )
+   810→                    )}
+   811→
+   812→                    {activeStage === 'BACKOUT' && (
+   813→                      editing ? (
+   814→                        <Input
+   815→                          value={editBackoutReason}
+   816→                          onChange={(e) => setEditBackoutReason(e.target.value)}
+   817→                          placeholder="Enter reason..."
+   818→                          className="h-9 text-sm"
+   819→                        />
+   820→                      ) : (
+   821→                        <p className="text-sm text-muted-foreground truncate max-w-[200px]">
+   822→                          {c.backoutReason || 'Not specified'}
+   823→                        </p>
+   824→                      )
+   825→                    )}
+   826→                  </TableCell>
+   827→
+   828→                  {/* Stage selector */}
+   829→                  <TableCell className="min-w-[140px]">
+   830→                    {editing ? (
+   831→                      <select
+   832→                        value={editStage}
+   833→                        onChange={(e) => setEditStage(e.target.value as PipelineStage)}
+   834→                        className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   835→                      >
+   836→                        {STAGES.map((s) => (
+   837→                          <option key={s} value={s}>
+   838→                            {STAGE_META[s].label}
+   839→                          </option>
+   840→                        ))}
+   841→                      </select>
+   842→                    ) : (
+   843→                      <Badge variant="outline" className={cn('text-[11px]', meta.badgeClass)}>
+   844→                        {meta.label}
+   845→                      </Badge>
+   846→                    )}
+   847→                  </TableCell>
+   848→
+   849→                  {/* Actions */}
+   850→                  <TableCell className="text-right">
+   851→                    <div className="flex items-center justify-end gap-1">
+   852→                      {/* Call */}
+   853→                      <a
+   854→                        href={`tel:${c.phone}`}
+   855→                        className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-950 text-emerald-600 transition-colors"
+   856→                        title="Call"
+   857→                      >
+   858→                        <Phone className="h-4 w-4" />
+   859→                      </a>
+   860→
+   861→                      {/* WhatsApp */}
+   862→                      <button
+   863→                        type="button"
+   864→                        onClick={() => openWhatsApp(c.phone)}
+   865→                        className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-green-100 dark:hover:bg-green-950 text-green-600 transition-colors"
+   866→                        title="WhatsApp"
+   867→                      >
+   868→                        <MessageSquare className="h-4 w-4" />
+   869→                      </button>
+   870→
+   871→                      {/* Edit / Save / Cancel */}
+   872→                      {!editing ? (
+   873→                        <button
+   874→                          type="button"
+   875→                          onClick={() => startEditing(c)}
+   876→                          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted transition-colors text-muted-foreground"
+   877→                          title="Edit"
+   878→                        >
+   879→                          <Edit2 className="h-4 w-4" />
+   880→                        </button>
+   881→                      ) : (
+   882→                        <>
+   883→                          <button
+   884→                            type="button"
+   885→                            onClick={() => saveCandidate(c.id)}
+   886→                            disabled={saving === c.id}
+   887→                            className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-950 text-emerald-600 transition-colors disabled:opacity-50"
+   888→                            title="Save"
+   889→                          >
+   890→                            <Check className="h-4 w-4" />
+   891→                          </button>
+   892→                          <button
+   893→                            type="button"
+   894→                            onClick={cancelEditing}
+   895→                            className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-red-100 dark:hover:bg-red-950 text-red-600 transition-colors"
+   896→                            title="Cancel"
+   897→                          >
+   898→                            <X className="h-4 w-4" />
+   899→                          </button>
+   900→                        </>
+   901→                      )}
+   902→
+   903→                      {/* Quick move dropdown */}
+   904→                      {!editing && (
+   905→                        <select
+   906→                          value=""
+   907→                          onChange={(e) => {
+   908→                            if (e.target.value) {
+   909→                              moveStage(c.id, e.target.value as PipelineStage)
+   910→                              e.target.value = ''
+   911→                            }
+   912→                          }}
+   913→                          className="h-8 w-8 rounded-md border border-input bg-transparent text-xs cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%23888%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[center_right_4px] bg-no-repeat hover:bg-muted transition-colors"
+   914→                          title="Move to stage"
+   915→                        >
+   916→                          <option value="" disabled>
+   917→                            Move
+   918→                          </option>
+   919→                          {STAGE_MOVE_OPTIONS[c.pipelineStage].map((s) => (
+   920→                            <option key={s} value={s}>
+   921→                              {STAGE_META[s].label}
+   922→                            </option>
+   923→                          ))}
+   924→                        </select>
+   925→                      )}
+   926→                    </div>
+   927→                  </TableCell>
+   928→                </TableRow>
+   929→              )
+   930→            })}
+   931→          </TableBody>
+   932→        </Table>
+   933→      </div>
+   934→    )
+   935→  }
+   936→
+   937→  // ─── Main Render ──────────────────────────────────────────────────────────
+   938→
+   939→  if (loading && candidates.length === 0) {
+   940→    return (
+   941→      <div className="p-4 sm:p-6 space-y-4">
+   942→        <Skeleton className="h-8 w-48" />
+   943→        <Skeleton className="h-10 w-full" />
+   944→        <div className="space-y-3">
+   945→          <Skeleton className="h-10 w-full" />
+   946→          <Skeleton className="h-10 w-full" />
+   947→          <Skeleton className="h-10 w-full" />
+   948→        </div>
+   949→        <Skeleton className="h-64 rounded-xl" />
+   950→      </div>
+   951→    )
+   952→  }
+   953→
+   954→  return (
+   955→    <div className="p-4 sm:p-6 space-y-4">
+   956→      {/* Header */}
+   957→      <div className="flex items-center justify-between">
+   958→        <div className="space-y-1">
+   959→          <h2 className="text-xl font-bold tracking-tight">Candidate Pipeline</h2>
+   960→          <p className="text-sm text-muted-foreground">
+   961→            Track and manage candidates across hiring stages
+   962→          </p>
+   963→        </div>
+   964→      </div>
+   965→
+   966→      {/* Search bar */}
+   967→      <div className="relative">
+   968→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   969→        <Input
+   970→          placeholder="Search by name or phone..."
+   971→          value={searchQuery}
+   972→          onChange={(e) => setSearchQuery(e.target.value)}
+   973→          className="pl-9 h-11"
+   974→        />
+   975→      </div>
+   976→
+   977→      {/* Pipeline Tabs */}
+   978→      <Tabs
+   979→        value={activeStage}
+   980→        onValueChange={(v) => setActiveStage(v as PipelineStage)}
+   981→      >
+   982→        <TabsList className="w-full overflow-x-auto flex-nowrap scrollbar-none">
+   983→          {STAGES.map((stage) => {
+   984→            const meta = STAGE_META[stage]
+   985→            const StageIcon = meta.icon
+   986→            const count = counts[stage] ?? 0
+   987→
+   988→            return (
+   989→              <TabsTrigger
+   990→                key={stage}
+   991→                value={stage}
+   992→                className="flex items-center gap-1.5 text-xs sm:text-sm whitespace-nowrap"
+   993→              >
+   994→                <StageIcon className={cn('h-3.5 w-3.5', meta.color)} />
+   995→                <span className="hidden sm:inline">{meta.label}</span>
+   996→                <span className="sm:hidden">
+   997→                  {meta.label.length > 6 ? meta.label.slice(0, 4) + '…' : meta.label}
+   998→                </span>
+   999→                {count > 0 && (
+  1000→                  <Badge
+  1001→                    variant="secondary"
+  1002→                    className="h-5 min-w-[20px] text-[10px] px-1.5 flex items-center justify-center"
+  1003→                  >
+  1004→                    {count}
+  1005→                  </Badge>
+  1006→                )}
+  1007→              </TabsTrigger>
+  1008→            )
+  1009→          })}
+  1010→        </TabsList>
+  1011→
+  1012→        {STAGES.map((stage) => (
+  1013→          <TabsContent key={stage} value={stage}>
+  1014→            {/* Loading state for tab switch */}
+  1015→            {loading ? (
+  1016→              <div className="space-y-3">
+  1017→                {[1, 2, 3].map((i) => (
+  1018→                  <Skeleton key={i} className="h-48 rounded-xl" />
+  1019→                ))}
+  1020→              </div>
+  1021→            ) : (
+  1022→              <>
+  1023→                {/* Mobile Card View */}
+  1024→                <div className="md:hidden space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto" onScroll={handleContainerScroll}>
+  1025→                  {filteredCandidates.length === 0 ? (
+  1026→                    <EmptyState
+  1027→                      icon={STAGE_META[stage].icon}
+  1028→                      title={`No ${STAGE_META[stage].label} Candidates`}
+  1029→                      description={
+  1030→                        searchQuery
+  1031→                          ? 'Try adjusting your search query.'
+  1032→                          : 'No candidates in this stage yet.'
+  1033→                      }
+  1034→                    />
+  1035→                  ) : (
+  1036→                    filteredCandidates.map((c) => (
+  1037→                      <MobileCard key={c.id} c={c} />
+  1038→                    ))
+  1039→                  )}
+  1040→
+  1041→                  {/* Infinite scroll sentinel inside mobile container */}
+  1042→                  <div ref={sentinelRef} className="h-1" />
+  1043→                </div>
+  1044→
+  1045→                {/* Desktop Table View */}
+  1046→                <div className="hidden md:block max-h-[calc(100vh-320px)] overflow-y-auto" onScroll={handleContainerScroll}>
+  1047→                  <DesktopTable />
+  1048→
+  1049→                  {/* Infinite scroll sentinel inside desktop container */}
+  1050→                  <div ref={sentinelRef} className="h-1" />
+  1051→                </div>
+  1052→
+  1053→                {/* Loading indicator for infinite scroll */}
+  1054→                <InfiniteScrollLoader
+  1055→                  loadingMore={loadingMore}
+  1056→                  isEnd={currentPage >= totalPages && candidates.length > 0}
+  1057→                />
+  1058→
+  1059→                {/* Pagination controls */}
+  1060→                <PaginationControls
+  1061→                  totalCount={totalCount}
+  1062→                  displayedCount={candidates.length}
+  1063→                  currentPage={currentPage}
+  1064→                  totalPages={totalPages}
+  1065→                  pageSize={pageSize}
+  1066→                  pageSizeOptions={[50, 100]}
+  1067→                  onPageSizeChange={handlePageSizeChange}
+  1068→                  onLoadMore={loadMore}
+  1069→                  loadingMore={loadingMore}
+  1070→                  loading={loading}
+  1071→                  hasMore={currentPage < totalPages}
+  1072→                />
+  1073→              </>
+  1074→            )}
+  1075→          </TabsContent>
+  1076→        ))}
+  1077→      </Tabs>
+  1078→    </div>
+  1079→  )
+  1080→}
+  1081→
