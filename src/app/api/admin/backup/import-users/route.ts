@@ -127,6 +127,11 @@ export async function POST(request: NextRequest) {
       let skipped = 0;
       const errors: string[] = [];
 
+      // Pre-load all existing emails to avoid N+1 duplicate checks
+      const existingEmails = new Set(
+        (await db.user.findMany({ select: { email: true } })).map(u => u.email.toLowerCase())
+      );
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
 
@@ -146,9 +151,8 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          // Check for duplicate email
-          const existing = await db.user.findUnique({ where: { email } });
-          if (existing) {
+          // Check for duplicate email using pre-loaded set
+          if (existingEmails.has(email)) {
             skipped++;
             errors.push(`Row ${i + 1}: Email "${email}" already exists.`);
             continue;
@@ -196,6 +200,7 @@ export async function POST(request: NextRequest) {
           });
 
           imported++;
+          existingEmails.add(email);
         } catch (err) {
           skipped++;
           errors.push(`Row ${i + 1}: ${err instanceof Error ? err.message : 'Unknown error'}`);

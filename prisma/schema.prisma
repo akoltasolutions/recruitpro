@@ -131,6 +131,8 @@ model DynamicField {
 
   organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        CallingProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model CustomDisposition {
@@ -147,6 +149,8 @@ model CustomDisposition {
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        CallingProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model CustomDesignation {
@@ -257,6 +261,7 @@ model User {
 
   @@index([organizationId, role])
   @@index([organizationId, isActive])
+  @@index([phone])
 }
 
 model Client {
@@ -269,6 +274,8 @@ model Client {
 
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
+
+  @@index([organizationId])
 }
 
 model Disposition {
@@ -285,6 +292,8 @@ model Disposition {
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        CallingProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   callRecords    CallRecord[]
+
+  @@index([organizationId])
 }
 
 model CallList {
@@ -384,6 +393,7 @@ model CallRecord {
   @@index([organizationId, calledAt])
   @@index([recruiterId, calledAt])
   @@index([candidateId])
+  @@index([dispositionId])
 }
 
 model MessageTemplate {
@@ -398,6 +408,8 @@ model MessageTemplate {
   updatedAt      DateTime @updatedAt
 
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model WhatsAppMessage {
@@ -428,6 +440,8 @@ model Announcement {
   updatedAt      DateTime @updatedAt
 
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model ActivityLog {

@@ -261,16 +261,16 @@ export function MessageTemplates() {
                     <p className="text-sm text-muted-foreground line-clamp-2">{t.content}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setPreviewTemplate(t); setPreviewOpen(true) }}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setPreviewTemplate(t); setPreviewOpen(true) }} aria-label="Preview template">
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => openEdit(t)} aria-label="Edit template">
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setConfirmToggle(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setConfirmToggle(t)} aria-label="Toggle template">
                       <Power className={`h-3.5 w-3.5 ${t.isActive ? 'text-red-500' : 'text-emerald-500'}`} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-red-500 hover:text-red-700" onClick={() => setConfirmDelete(t)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 text-red-500 hover:text-red-700" onClick={() => setConfirmDelete(t)} aria-label="Delete template">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>

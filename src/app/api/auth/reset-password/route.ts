@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 5 attempts per 15 minutes per IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateLimitResult = checkRateLimit(`reset-password:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many attempts. Please try again later.', code: 'RATE_LIMITED' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { method, code, email, phone, newPassword } = body;
 

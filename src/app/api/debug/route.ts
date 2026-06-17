@@ -1,16 +1,22 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { existsSync, statSync } from 'fs';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 
 /**
  * Diagnostic endpoint — verifies environment, database connectivity,
  * bcryptjs, and process info.
  *
- * NOT called from any frontend component. Intended for manual debugging
- * by developers (e.g., curl /api/debug).
+ * RESTRICTED: Requires SUPER_ADMIN authentication.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // ── Auth gate: SUPER_ADMIN only ──
+  const auth = await authenticateRequest(request);
+  if (!auth || !requireSuperAdmin(auth)) {
+    return NextResponse.json({ error: 'Unauthorized. Super Admin access required.' }, { status: 401 });
+  }
+
   const results: Record<string, string> = {};
 
   // 1. Check environment variables

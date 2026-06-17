@@ -165,12 +165,16 @@ export async function POST(
       await db.candidate.createMany({ data: toCreate });
     }
 
-    // Execute updates (one by one since we need individual updates with different data)
-    for (const upd of toUpdate) {
-      await db.candidate.update({
-        where: { id: upd.id },
-        data: upd.data,
-      });
+    // Execute updates in a single transaction to avoid N+1 queries
+    if (toUpdate.length > 0) {
+      await db.$transaction(
+        toUpdate.map(({ id, data }) =>
+          db.candidate.update({
+            where: { id },
+            data,
+          })
+        )
+      )
     }
 
     const total = sourceCandidates.length;

@@ -87,6 +87,7 @@ export function AdminDashboard() {
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
             className="w-full sm:w-auto sm:min-w-[130px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+            aria-label="Select time period"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
@@ -100,12 +101,14 @@ export function AdminDashboard() {
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                aria-label="From date"
               />
               <input
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                aria-label="To date"
               />
               <Button size="sm" onClick={fetchDashboard} disabled={!customFrom || !customTo}>Apply</Button>
             </>

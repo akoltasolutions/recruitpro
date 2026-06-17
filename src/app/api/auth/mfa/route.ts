@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyTOTP } from '@/lib/mfa';
 import { createToken } from '@/lib/auth-middleware';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 // Temporary MFA tokens expire after 5 minutes
 const MFA_TOKEN_EXPIRY_MS = 5 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting: 5 attempts per 15 minutes per IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateLimitResult = checkRateLimit(`mfa-verify:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+    if (!rateLimitResult.success) {
+      return NextResponse.json({ error: 'Too many attempts. Please try again later.', code: 'RATE_LIMITED' }, { status: 429 });
+    }
+
     const { mfaToken, code } = await request.json();
 
     if (!mfaToken || !code) {

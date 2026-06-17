@@ -227,7 +227,7 @@ export function AdminLayout({ activePage, onNavigate, onLogout, children }: Admi
         <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="shrink-0 relative">
+              <Button variant="ghost" size="icon" className="shrink-0 relative" aria-label="Toggle menu">
                 <Menu className="h-5 w-5" />
                 {hasApprovals && (
                   <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-amber-500 text-white text-[8px] font-bold leading-none px-0.5">

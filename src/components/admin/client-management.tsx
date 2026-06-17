@@ -233,6 +233,7 @@ export function ClientManagement() {
                           className="size-9"
                           onClick={() => openEdit(client)}
                           title="Edit client"
+                          aria-label="Edit client"
                         >
                           <Pencil className="size-3.5" />
                         </Button>
@@ -242,6 +243,7 @@ export function ClientManagement() {
                           className="size-9"
                           onClick={() => setToggleConfirm(client)}
                           title={client.isActive ? 'Deactivate client' : 'Activate client'}
+                          aria-label={client.isActive ? 'Deactivate client' : 'Activate client'}
                         >
                           <Power className="size-3.5" />
                         </Button>
@@ -251,6 +253,7 @@ export function ClientManagement() {
                           className="size-9 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                           onClick={() => setDeleteConfirm(client)}
                           title="Delete client"
+                          aria-label="Delete client"
                         >
                           <Trash2 className="size-3.5" />
                         </Button>

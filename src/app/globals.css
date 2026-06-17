@@ -301,3 +301,18 @@
 /* IMPORTANT: Do NOT set position:fixed or overflow:hidden on <body> via CSS.
    This breaks vh units and 50% centering for fixed-position dialogs in Android WebView.
    Radix Dialog handles body scroll lock internally via pointer-events:none. */
+
+/* Custom scrollbar for tables and scrollable containers */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: theme('colors.muted.foreground');
+  border-radius: 3px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background-color: theme('colors.muted');
+}

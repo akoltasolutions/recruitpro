@@ -158,7 +158,7 @@ export function OrganizationSettings() {
   const [orgPhone, setOrgPhone] = useState(organization?.phone || '+91 98765 00001')
   const [orgAddress, setOrgAddress] = useState('123 Business Park, MG Road, Bangalore 560001')
 
-  // Plan & Usage mock data
+  // TODO: Connect to real plan/usage API — currently showing placeholder data
   const planData = {
     name: 'Professional',
     status: 'active',
