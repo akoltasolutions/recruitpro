@@ -302,7 +302,7 @@ export function SuperAdminLayout({ activePage, onNavigate, onLogout, children }:
           </div>
           {headerRight}
         </header>
-        <main className="p-4 pb-24">
+        <main className="p-4 pb-28">
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}
