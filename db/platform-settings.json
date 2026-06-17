@@ -1,0 +1,7 @@
+{
+  "subscriptionEnforcement": false,
+  "defaultMaxUsers": 10,
+  "defaultMaxNumbers": 5000,
+  "defaultDailyUploadLimit": 500,
+  "includeDispositionTime": true
+}

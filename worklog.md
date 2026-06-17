@@ -515,3 +515,22 @@ Stage Summary:
 - All layouts: pb-28 bottom padding (was pb-20/pb-24)
 - Global audit: No other overlapping issues found
 - Deployed to https://app.akolta.com via GitHub Actions
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix "Cannot access 'ti' before initialization" error on Start Dialing button
+
+Work Log:
+- Analyzed screenshot showing "Cannot access 'ti' before initialization" error on app.akolta.com/pending
+- Investigated auto-dialer.tsx (2500+ lines) with comprehensive TDZ scan across all 49 hooks
+- Identified root cause: 4 useCallback variables referenced in dependency arrays before their declaration
+- Moved stopCallTimer (L523→L379), triggerNativeLink (L885→L546), advanceToCandidate (L998→L947), startGapTimer (L1073→L1049)
+- Verified zero remaining TDZ violations and zero duplicate declarations
+- Lint passed clean, dev server compiled successfully
+- Committed as 1d10c3b and pushed to GitHub for production deployment
+
+Stage Summary:
+- Root cause: JavaScript Temporal Dead Zone (TDZ) — const variables referenced in useCallback/useEffect dependency arrays before their declaration
+- In minified production builds, `stopCallTimer` was minified to `ti`, producing the visible error
+- Permanent fix: Reordered 4 hook declarations to precede all references in dependency arrays
+- Production deployment triggered via GitHub push to main branch
