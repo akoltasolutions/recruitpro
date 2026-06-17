@@ -1952,7 +1952,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       >
                         <Send className="h-3.5 w-3.5 mr-1.5" />
                         SMS
-                        {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+                        {(() => { const c = templates.filter(t => t.channel === 'SMS' || t.channel === 'ALL').length; return c > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{c}</Badge> })()}
                       </Button>
                       <Button
                         variant="outline"
@@ -1963,7 +1963,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       >
                         <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                         WhatsApp
-                        {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+                        {(() => { const c = templates.filter(t => t.channel === 'WHATSAPP' || t.channel === 'ALL').length; return c > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{c}</Badge> })()}
                       </Button>
                     </div>
                     {/* Show selected template preview */}
@@ -2302,7 +2302,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     >
                       <Send className="h-3.5 w-3.5 mr-1.5" />
                       SMS
-                      {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+                      {(() => { const c = templates.filter(t => t.channel === 'SMS' || t.channel === 'ALL').length; return c > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{c}</Badge> })()}
                     </Button>
                     <Button
                       variant="outline"
@@ -2312,7 +2312,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     >
                       <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                       WhatsApp
-                      {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+                      {(() => { const c = templates.filter(t => t.channel === 'WHATSAPP' || t.channel === 'ALL').length; return c > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{c}</Badge> })()}
                     </Button>
                   </div>
                   {selectedSmsText && (
