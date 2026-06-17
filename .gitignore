@@ -71,3 +71,6 @@ Caddyfile
 
 # Upload files
 upload/
+
+# Tool results (generated during development)
+tool-results/
