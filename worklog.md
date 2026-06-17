@@ -597,3 +597,24 @@ Stage Summary:
 - No API changes required — API already returns candidate status
 - Pending/Done/Scheduled counts now display for ALL calling lists on the admin page
 - Badge styling matches recruiter view for visual consistency across roles
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix SMS/WhatsApp template count in post-call disposition modal
+
+Work Log:
+- Analyzed screenshot: Post-Call Disposition modal showing "7" for both SMS and WhatsApp buttons
+- Root cause: `auto-dialer.tsx` uses `templates.length` (total ALL templates) for BOTH SMS and WhatsApp badge counts
+- Template list filtering was already correct (line 2084: `templates.filter(t => t.channel === ch || t.channel === 'ALL')`)
+- Fixed all 4 badge locations (2 mobile view + 2 desktop view) to filter by channel:
+  - SMS badge: `templates.filter(t => t.channel === 'SMS' || t.channel === 'ALL').length`
+  - WhatsApp badge: `templates.filter(t => t.channel === 'WHATSAPP' || t.channel === 'ALL').length`
+- This matches the admin dashboard counting logic exactly
+- Lint clean, pushed to GitHub
+
+Stage Summary:
+- File modified: `src/components/recruiter/auto-dialer.tsx` (4 badge count expressions)
+- No API changes needed
+- Counts now match admin dashboard: SMS counts SMS+ALL, WhatsApp counts WHATSAPP+ALL
+- Committed: 927ed9a, pushed to main
