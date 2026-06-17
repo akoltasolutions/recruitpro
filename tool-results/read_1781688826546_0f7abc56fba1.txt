@@ -1,0 +1,504 @@
+  1500→  1500→
+  1501→  1501→        {/* Candidate info card */}
+  1502→  1502→        <Card>
+  1503→  1503→          <CardContent className="p-4 sm:p-6 space-y-4">
+  1504→  1504→            {/* Candidate details */}
+  1505→  1505→            <div className="space-y-3">
+  1506→  1506→              <div className="flex items-center gap-3">
+  1507→  1507→                <div className="flex items-center justify-center h-12 w-12 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+  1508→  1508→                  <User className="h-6 w-6" />
+  1509→  1509→                </div>
+  1510→  1510→                <div className="min-w-0 flex-1">
+  1511→  1511→                  <p className="font-semibold text-lg truncate">{currentCandidate.name}</p>
+  1512→  1512→                  {currentCandidate.company && (
+  1513→  1513→                    <p className="text-sm text-muted-foreground truncate">{currentCandidate.company}</p>
+  1514→  1514→                  )}
+  1515→  1515→                </div>
+  1516→  1516→                {callInitiated && (
+  1517→  1517→                  <Badge variant="outline" className="text-[10px] shrink-0 text-emerald-600 border-emerald-300">
+  1518→  1518→                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
+  1519→  1519→                    {formattedTimer}
+  1520→  1520→                  </Badge>
+  1521→  1521→                )}
+  1522→  1522→              </div>
+  1523→  1523→              <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+  1524→  1524→                {currentCandidate.role && (
+  1525→  1525→                  <span className="flex items-center gap-1">
+  1526→  1526→                    <Briefcase className="h-3.5 w-3.5" />
+  1527→  1527→                    {currentCandidate.role}
+  1528→  1528→                  </span>
+  1529→  1529→                )}
+  1530→  1530→                {currentCandidate.location && (
+  1531→  1531→                  <span className="flex items-center gap-1">
+  1532→  1532→                    <MapPin className="h-3.5 w-3.5" />
+  1533→  1533→                    {currentCandidate.location}
+  1534→  1534→                  </span>
+  1535→  1535→                )}
+  1536→  1536→              </div>
+  1537→  1537→              <p className="text-xl font-mono font-bold tracking-wider text-foreground">
+  1538→  1538→                {currentCandidate.phone}
+  1539→  1539→              </p>
+  1540→  1540→            </div>
+  1541→  1541→
+  1542→  1542→            <Separator />
+  1543→  1543→
+  1544→  1544→            {/* Call timer (only visible after Call button pressed) */}
+  1545→  1545→            {callInitiated && (
+  1546→  1546→              <div className="text-center py-1">
+  1547→  1547→                <div className="flex items-center justify-center gap-2">
+  1548→  1548→                  <Clock className="h-4 w-4 text-muted-foreground" />
+  1549→  1549→                  <span className="text-2xl font-mono font-bold tabular-nums">
+  1550→  1550→                    {formattedTimer}
+  1551→  1551→                  </span>
+  1552→  1552→                </div>
+  1553→  1553→                <p className="text-xs text-muted-foreground mt-1">Call in progress — return after finishing</p>
+  1554→  1554→              </div>
+  1555→  1555→            )}
+  1556→  1556→
+  1557→  1557→            {/* ===== CALL BUTTON — starts pre-call delay timer ===== */}
+  1558→  1558→            <Button
+  1559→  1559→              onClick={startPreCallTimer}
+  1560→  1560→              onTouchEnd={(e) => { e.preventDefault(); startPreCallTimer() }}
+  1561→  1561→              disabled={callInitiated || preCallCountdown !== null}
+  1562→  1562→              className={cn(
+  1563→  1563→                'flex items-center justify-center gap-2 w-full h-16 rounded-lg text-white font-semibold text-base no-underline',
+  1564→  1564→                'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800',
+  1565→  1565→                (callInitiated || preCallCountdown !== null) && 'opacity-50 pointer-events-none'
+  1566→  1566→              )}
+  1567→  1567→              style={{ touchAction: 'manipulation' }}
+  1568→  1568→            >
+  1569→  1569→              <PhoneCall className="h-6 w-6" />
+  1570→  1570→              <span>Call {currentCandidate.phone}</span>
+  1571→  1571→            </Button>
+  1572→  1572→
+  1573→  1573→            <div className="grid grid-cols-2 gap-3">
+  1574→  1574→              <Button
+  1575→  1575→                variant="outline"
+  1576→  1576→                className="h-12 flex items-center justify-center gap-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+  1577→  1577→                onClick={handleSkip}
+  1578→  1578→              >
+  1579→  1579→                <SkipForward className="h-4 w-4" />
+  1580→  1580→                <span className="text-sm font-medium">Skip</span>
+  1581→  1581→              </Button>
+  1582→  1582→              <Button
+  1583→  1583→                className="h-12 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+  1584→  1584→                onClick={handleManualEndCall}
+  1585→  1585→              >
+  1586→  1586→                <ClipboardCheck className="h-4 w-4" />
+  1587→  1587→                <span className="text-sm font-medium">End Call &amp; Log</span>
+  1588→  1588→              </Button>
+  1589→  1589→            </div>
+  1590→  1590→
+  1591→  1591→            {/* Next Call + Cancel row */}
+  1592→  1592→            <div className="grid grid-cols-2 gap-3">
+  1593→  1593→              <Button
+  1594→  1594→                variant="outline"
+  1595→  1595→                className="h-12 flex items-center justify-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+  1596→  1596→                onClick={handleCancelCall}
+  1597→  1597→              >
+  1598→  1598→                <PhoneOff className="h-4 w-4" />
+  1599→  1599→                <span className="text-sm font-medium">Cancel Session</span>
+  1600→  1600→              </Button>
+  1601→  1601→              <Button
+  1602→  1602→                variant="outline"
+  1603→  1603→                className="h-12 flex items-center justify-center gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+  1604→  1604→                disabled={completedCount === 0 || callInitiated || callGapCountdown !== null || preCallCountdown !== null}
+  1605→  1605→                onClick={handleNextCall}
+  1606→  1606→                title={completedCount === 0 ? 'Complete or skip current call first' : `Go to next call (${currentIndex + 2}/${candidates.length})`}
+  1607→  1607→              >
+  1608→  1608→                <ChevronRight className="h-4 w-4" />
+  1609→  1609→                <span className="text-sm font-medium">Next Call</span>
+  1610→  1610→              </Button>
+  1611→  1611→            </div>
+  1612→  1612→          </CardContent>
+  1613→  1613→        </Card>
+  1614→  1614→
+  1615→  1615→        {/* ==================== PRE-CALL DELAY TIMER OVERLAY ==================== */}
+  1616→  1616→        {preCallCountdown !== null && (
+  1617→  1617→          <>
+  1618→  1618→            {/* Mobile: Custom CSS overlay */}
+  1619→  1619→            {isMobile && <div>
+  1620→  1620→              <div
+  1621→  1621→                className="fixed inset-0 bg-black/50 flex items-center justify-center"
+  1622→  1622→                data-dialer-overlay="timer"
+  1623→  1623→                style={{ touchAction: 'manipulation' }}
+  1624→  1624→              >
+  1625→  1625→                <div
+  1626→  1626→                  className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
+  1627→  1627→                  data-dialer-sheet="timer"
+  1628→  1628→                  style={{ touchAction: 'manipulation' }}
+  1629→  1629→                >
+  1630→  1630→                  {/* Close button */}
+  1631→  1631→                  <button
+  1632→  1632→                    type="button"
+  1633→  1633→                    onClick={cancelPreCallTimer}
+  1634→  1634→                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 shadow-md"
+  1635→  1635→                    style={{ touchAction: 'manipulation' }}
+  1636→  1636→                    aria-label="Cancel"
+  1637→  1637→                  >
+  1638→  1638→                    <X className="h-5 w-5" />
+  1639→  1639→                  </button>
+  1640→  1640→                  <div className="py-4 space-y-3">
+  1641→  1641→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1642→  1642→                      <PhoneCall className="h-7 w-7 animate-pulse" />
+  1643→  1643→                    </div>
+  1644→  1644→                    <p className="text-sm font-medium text-foreground">Calling in...</p>
+  1645→  1645→                    <p className="text-3xl font-mono font-bold">{preCallCountdown}s</p>
+  1646→  1646→                    <p className="text-xs text-muted-foreground">
+  1647→  1647→                      <span className="font-medium">{currentCandidate.name}</span>
+  1648→  1648→                    </p>
+  1649→  1649→                    <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1650→  1650→                    <Button
+  1651→  1651→                      className="mt-3 h-11 w-full bg-emerald-600 hover:bg-emerald-700"
+  1652→  1652→                      onClick={skipPreCallAndDial}
+  1653→  1653→                      style={{ touchAction: 'manipulation' }}
+  1654→  1654→                    >
+  1655→  1655→                      <Phone className="h-4 w-4 mr-1.5" />
+  1656→  1656→                      Call Now
+  1657→  1657→                    </Button>
+  1658→  1658→                  </div>
+  1659→  1659→                </div>
+  1660→  1660→              </div>
+  1661→  1661→            </div>}
+  1662→  1662→            {/* Desktop: Dialog */}
+  1663→  1663→            {!isMobile && (
+  1664→  1664→              <Dialog open>
+  1665→  1665→                <DialogContent className="sm:max-w-xs text-center" showCloseButton={false}>
+  1666→  1666→                  <div className="py-6 space-y-3">
+  1667→  1667→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1668→  1668→                      <PhoneCall className="h-7 w-7 animate-pulse" />
+  1669→  1669→                    </div>
+  1670→  1670→                    <p className="text-sm font-medium text-foreground">Calling in...</p>
+  1671→  1671→                    <p className="text-2xl font-mono font-bold">{preCallCountdown}s</p>
+  1672→  1672→                    <p className="text-xs text-muted-foreground">
+  1673→  1673→                      <span className="font-medium">{currentCandidate.name}</span>
+  1674→  1674→                    </p>
+  1675→  1675→                    <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1676→  1676→                    <Button
+  1677→  1677→                      className="mt-2 bg-emerald-600 hover:bg-emerald-700"
+  1678→  1678→                      onClick={skipPreCallAndDial}
+  1679→  1679→                    >
+  1680→  1680→                      <Phone className="h-4 w-4 mr-1.5" />
+  1681→  1681→                      Call Now
+  1682→  1682→                    </Button>
+  1683→  1683→                  </div>
+  1684→  1684→                </DialogContent>
+  1685→  1685→              </Dialog>
+  1686→  1686→            )}
+  1687→  1687→          </>
+  1688→  1688→        )}
+  1689→  1689→
+  1690→  1690→        {/* ==================== GAP TIMER OVERLAY ==================== */}
+  1691→  1691→        {callGapCountdown !== null && (
+  1692→  1692→          <>
+  1693→  1693→            {/* Mobile: Custom CSS overlay — NO Radix Dialog Portal (freezes WebView) */}
+  1694→  1694→            {isMobile && <div>
+  1695→  1695→              <div
+  1696→  1696→                className="fixed inset-0 bg-black/50 flex items-center justify-center"
+  1697→  1697→                data-dialer-overlay="timer"
+  1698→  1698→                style={{ touchAction: 'manipulation' }}
+  1699→  1699→              >
+  1700→  1700→                <div
+  1701→  1701→                  className="bg-background rounded-2xl shadow-2xl p-6 mx-4 max-w-xs w-full text-center relative"
+  1702→  1702→                  data-dialer-sheet="timer"
+  1703→  1703→                  style={{ touchAction: 'manipulation' }}
+  1704→  1704→                >
+  1705→  1705→                  {/* Close button */}
+  1706→  1706→                  <button
+  1707→  1707→                    type="button"
+  1708→  1708→                    onClick={handleGapTimerClose}
+  1709→  1709→                    className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors shadow-md"
+  1710→  1710→                    style={{ touchAction: 'manipulation' }}
+  1711→  1711→                    aria-label="Close"
+  1712→  1712→                  >
+  1713→  1713→                    <X className="h-5 w-5" />
+  1714→  1714→                  </button>
+  1715→  1715→                  <div className="py-4 space-y-3">
+  1716→  1716→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1717→  1717→                      <Clock className="h-7 w-7 animate-pulse" />
+  1718→  1718→                    </div>
+  1719→  1719→                    <p className="text-3xl font-mono font-bold">{callGapCountdown}s</p>
+  1720→  1720→                    <p className="text-sm text-muted-foreground">Next call starting...</p>
+  1721→  1721→                    <p className="text-xs text-muted-foreground">
+  1722→  1722→                      Up next: <span className="font-medium">{candidates[currentIndex + 1]?.name}</span>
+  1723→  1723→                    </p>
+  1724→  1724→                    <Button
+  1725→  1725→                      variant="outline"
+  1726→  1726→                      className="mt-3 h-11 w-full"
+  1727→  1727→                      onClick={handleGapTimerCallNow}
+  1728→  1728→                      style={{ touchAction: 'manipulation' }}
+  1729→  1729→                    >
+  1730→  1730→                      Call Now
+  1731→  1731→                    </Button>
+  1732→  1732→                  </div>
+  1733→  1733→                </div>
+  1734→  1734→              </div>
+  1735→  1735→            </div>}
+  1736→  1736→            {!isMobile && (
+  1737→  1737→              <Dialog open>
+  1738→  1738→                <DialogContent className="sm:max-w-xs text-center" showCloseButton={false}>
+  1739→  1739→                  <div className="py-6 space-y-3">
+  1740→  1740→                    <div className="h-14 w-14 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 flex items-center justify-center mx-auto">
+  1741→  1741→                      <Clock className="h-7 w-7 animate-pulse" />
+  1742→  1742→                    </div>
+  1743→  1743→                    <p className="text-2xl font-mono font-bold">{callGapCountdown}s</p>
+  1744→  1744→                    <p className="text-sm text-muted-foreground">Next call starting...</p>
+  1745→  1745→                    <p className="text-xs text-muted-foreground">
+  1746→  1746→                      Up next: <span className="font-medium">{candidates[currentIndex + 1]?.name}</span>
+  1747→  1747→                    </p>
+  1748→  1748→                    <Button
+  1749→  1749→                      variant="outline"
+  1750→  1750→                      className="mt-2"
+  1751→  1751→                      onClick={handleGapTimerCallNow}
+  1752→  1752→                    >
+  1753→  1753→                      Call Now
+  1754→  1754→                    </Button>
+  1755→  1755→                  </div>
+  1756→  1756→                </DialogContent>
+  1757→  1757→              </Dialog>
+  1758→  1758→            )}
+  1759→  1759→          </>
+  1760→  1760→        )}
+  1761→  1761→
+  1762→  1762→        {/* ==================== POST-CALL DISPOSITION MODAL ==================== */}
+  1763→  1763→        {/* Mobile: Simple CSS bottom-sheet (NO vaul Drawer — freezes Android WebView) */}
+  1764→  1764→        {isDispositionModalOpen && isMobile && (
+  1765→  1765→          <div>
+  1766→  1766→            {/* Overlay — clickable to close popup */}
+  1767→  1767→            <div
+  1768→  1768→              className="fixed inset-0 bg-black/40"
+  1769→  1769→              data-dialer-overlay="disposition"
+  1770→  1770→              style={{ touchAction: 'none' }}
+  1771→  1771→              onClick={handleDispositionClose}
+  1772→  1772→              aria-hidden="true"
+  1773→  1773→            />
+  1774→  1774→            {/* Bottom sheet — pure CSS, no body scroll lock, no portal
+  1775→  1775→                CRITICAL: Do NOT set touchAction: manipulation on this container!
+  1776→  1776→                That kills scroll inside Android WebView. Only set it on buttons.
+  1777→  1777→                Height is calculated from window.innerHeight (JS), NOT CSS dvh/vh units. */}
+  1778→  1778→            <div
+  1779→  1779→              className="fixed left-0 right-0 bg-background border-t border-border rounded-t-2xl shadow-2xl"
+  1780→  1780→              data-dialer-sheet="disposition"
+  1781→  1781→              style={{
+  1782→  1782→                bottom: 0,
+  1783→  1783→                /* Use JS-measured height — reliable in all Android WebView versions */
+  1784→  1784→                height: sheetHeight > 100 ? `${sheetHeight}px` : '85vh',
+  1785→  1785→                display: 'flex',
+  1786→  1786→                flexDirection: 'column',
+  1787→  1787→                overflow: 'hidden',
+  1788→  1788→              }}
+  1789→  1789→            >
+  1790→  1790→              {/* Header: drag handle + close button (44px touch target) */}
+  1791→  1791→              <div
+  1792→  1792→                className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0 relative"
+  1793→  1793→                style={{ touchAction: 'manipulation' }}
+  1794→  1794→              >
+  1795→  1795→                <div className="h-1 w-8 rounded-full bg-muted-foreground/25 mx-auto absolute left-0 right-0 top-2" />
+  1796→  1796→                <div className="w-11" />
+  1797→  1797→                <button
+  1798→  1798→                  type="button"
+  1799→  1799→                  onClick={handleDispositionClose}
+  1800→  1800→                  disabled={savingRecord}
+  1801→  1801→                  className="h-11 w-11 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-red-100 hover:text-red-600 active:bg-red-200 active:opacity-70"
+  1802→  1802→                  style={{ touchAction: 'manipulation', pointerEvents: 'auto', position: 'relative', zIndex: 10 }}
+  1803→  1803→                  aria-label="Close disposition"
+  1804→  1804→                >
+  1805→  1805→                  <X className="h-5 w-5" strokeWidth={2.5} />
+  1806→  1806→                  <span className="sr-only">Close</span>
+  1807→  1807→                </button>
+  1808→  1808→              </div>
+  1809→  1809→              <div className="px-4 pb-2 shrink-0">
+  1810→  1810→                <p className="flex items-center gap-2 text-base font-semibold text-foreground">
+  1811→  1811→                  <PhoneIncoming className="h-4 w-4 text-emerald-600" />
+  1812→  1812→                  Post-Call Disposition
+  1813→  1813→                </p>
+  1814→  1814→                <p className="text-sm text-muted-foreground mt-0.5">
+  1815→  1815→                  Log the call outcome for {currentCandidate.name}
+  1816→  1816→                </p>
+  1817→  1817→              </div>
+  1818→  1818→
+  1819→  1819→              {/* Scrollable body — MUST allow native scroll in Android WebView */}
+  1820→  1820→              <div
+  1821→  1821→                className="overflow-y-auto overflow-x-hidden flex-1 px-4"
+  1822→  1822→                style={{
+  1823→  1823→                  WebkitOverflowScrolling: 'touch',
+  1824→  1824→                  overscrollBehavior: 'contain',
+  1825→  1825→                  /* Restore default touch behavior so scroll works */
+  1826→  1826→                  touchAction: 'pan-y',
+  1827→  1827→                  minHeight: 0,
+  1828→  1828→                }}
+  1829→  1829→              >
+  1830→  1830→                <div className="space-y-4 pb-4">
+  1831→  1831→                  {/* Candidate summary — compact */}
+  1832→  1832→                  <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+  1833→  1833→                    <div className="flex items-center gap-2">
+  1834→  1834→                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 shrink-0">
+  1835→  1835→                        <User className="h-4 w-4" />
+  1836→  1836→                      </div>
+  1837→  1837→                      <div className="min-w-0 flex-1">
+  1838→  1838→                        <p className="font-medium text-sm truncate">{currentCandidate.name}</p>
+  1839→  1839→                        <p className="text-xs text-muted-foreground font-mono">{currentCandidate.phone}</p>
+  1840→  1840→                      </div>
+  1841→  1841→                      <Badge variant="outline" className="text-[10px] shrink-0 tabular-nums">
+  1842→  1842→                        {includeDispositionTime && timerRef.current && (
+  1843→  1843→                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
+  1844→  1844→                        )}
+  1845→  1845→                        {formattedTimer}
+  1846→  1846→                      </Badge>
+  1847→  1847→                    </div>
+  1848→  1848→                    {includeDispositionTime && timerRef.current && (
+  1849→  1849→                      <p className="text-[10px] text-amber-600 font-medium pl-10">⏱ Timer running — stops on disposition submit</p>
+  1850→  1850→                    )}
+  1851→  1851→                    <div className="flex gap-4 text-xs pl-10 text-muted-foreground">
+  1852→  1852→                      {currentCandidate.role && (
+  1853→  1853→                        <span className="flex items-center gap-1 truncate">
+  1854→  1854→                          <Briefcase className="h-3 w-3 shrink-0 text-emerald-500" />
+  1855→  1855→                          <span className="truncate">{currentCandidate.role}</span>
+  1856→  1856→                        </span>
+  1857→  1857→                      )}
+  1858→  1858→                      {currentCandidate.location && (
+  1859→  1859→                        <span className="flex items-center gap-1 truncate">
+  1860→  1860→                          <MapPin className="h-3 w-3 shrink-0 text-emerald-500" />
+  1861→  1861→                          <span className="truncate">{currentCandidate.location}</span>
+  1862→  1862→                        </span>
+  1863→  1863→                      )}
+  1864→  1864→                    </div>
+  1865→  1865→                  </div>
+  1866→  1866→
+  1867→  1867→                  {/* Disposition selector */}
+  1868→  1868→                  <div className="space-y-2">
+  1869→  1869→                    <Label className="text-sm font-medium">Call Disposition <span className="text-red-500">*</span></Label>
+  1870→  1870→                    <div className="grid grid-cols-2 gap-2">
+  1871→  1871→                      {dispositions.map((d) => (
+  1872→  1872→                        <button
+  1873→  1873→                          key={d.id}
+  1874→  1874→                          type="button"
+  1875→  1875→                          onClick={() => setSelectedDisposition(d.id)}
+  1876→  1876→                          style={{ touchAction: 'manipulation' }}
+  1877→  1877→                          className={cn(
+  1878→  1878→                            'px-3 py-2.5 rounded-lg text-xs font-medium border text-left min-h-[44px] flex items-center',
+  1879→  1879→                            selectedDisposition === d.id
+  1880→  1880→                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-1 ring-emerald-500'
+  1881→  1881→                              : 'border-border text-muted-foreground'
+  1882→  1882→                          )}
+  1883→  1883→                        >
+  1884→  1884→                          {d.heading}
+  1885→  1885→                        </button>
+  1886→  1886→                      ))}
+  1887→  1887→                    </div>
+  1888→  1888→                    {dispositions.length === 0 && (
+  1889→  1889→                      <p className="text-xs text-muted-foreground">No dispositions configured. Ask your admin.</p>
+  1890→  1890→                    )}
+  1891→  1891→                  </div>
+  1892→  1892→
+  1893→  1893→                  {/* Client dropdown — native <select> for Android WebView compatibility.
+  1894→  1894→                      Position:absolute dropdowns get clipped by overflow:hidden parent
+  1895→  1895→                      and break touch scroll in Android WebView. Native <select> renders as
+  1896→  1896→                      a system dialog — immune to scroll and overflow issues. */}
+  1897→  1897→                  <div className="space-y-2">
+  1898→  1898→                      <Label className="text-sm font-medium">Client</Label>
+  1899→  1899→                      <div className="relative">
+  1900→  1900→                        <select
+  1901→  1901→                          value={selectedClient || ''}
+  1902→  1902→                          onChange={(e) => setSelectedClient(e.target.value)}
+  1903→  1903→                          className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm appearance-none pr-10"
+  1904→  1904→                          style={{ touchAction: 'manipulation' }}
+  1905→  1905→                        >
+  1906→  1906→                          <option value="">Select client...</option>
+  1907→  1907→                          {clients.map((c) => (
+  1908→  1908→                            <option key={c.id} value={c.id}>{c.name}</option>
+  1909→  1909→                          ))}
+  1910→  1910→                          <option value="__other__">+ Other (enter manually)</option>
+  1911→  1911→                        </select>
+  1912→  1912→                        {/* Custom chevron icon overlaid on the native select */}
+  1913→  1913→                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+  1914→  1914→                          <ChevronDown className="h-4 w-4 opacity-50" />
+  1915→  1915→                        </div>
+  1916→  1916→                      </div>
+  1917→  1917→                      {selectedClient === '__other__' && (
+  1918→  1918→                        <input
+  1919→  1919→                          type="text"
+  1920→  1920→                          placeholder="Enter client name..."
+  1921→  1921→                          value={customClientName}
+  1922→  1922→                          onChange={(e) => setCustomClientName(e.target.value)}
+  1923→  1923→                          className="w-full h-11 px-3 mt-2 rounded-lg border border-border bg-background text-sm"
+  1924→  1924→                          style={{ touchAction: 'manipulation' }}
+  1925→  1925→                        />
+  1926→  1926→                      )}
+  1927→  1927→
+  1928→  1928→                      {/* F2F Interview Date — always shown */}
+  1929→  1929→                      <div className="space-y-2">
+  1930→  1930→                        <Label className="text-sm font-medium">F2F Interview Date</Label>
+  1931→  1931→                        <input
+  1932→  1932→                          type="date"
+  1933→  1933→                          value={f2fInterviewDate}
+  1934→  1934→                          onChange={(e) => setF2fInterviewDate(e.target.value)}
+  1935→  1935→                          min={new Date().toISOString().split('T')[0]}
+  1936→  1936→                          className="w-full h-11 px-3 rounded-lg border border-border bg-background text-sm"
+  1937→  1937→                          style={{ touchAction: 'manipulation' }}
+  1938→  1938→                        />
+  1939→  1939→                      </div>
+  1940→  1940→                    </div>
+  1941→  1941→
+  1942→  1942→                  {/* Notes with voice input */}
+  1943→  1943→                  <div className="space-y-2">
+  1944→  1944→                    <div className="flex items-center justify-between">
+  1945→  1945→                      <Label className="text-sm font-medium">Notes</Label>
+  1946→  1946→                      <Button
+  1947→  1947→                        type="button"
+  1948→  1948→                        variant={isListening ? 'destructive' : 'outline'}
+  1949→  1949→                        size="sm"
+  1950→  1950→                        className={cn('h-10 text-xs gap-1.5 min-w-[88px]', isListening && 'animate-pulse')}
+  1951→  1951→                        onClick={toggleVoiceInput}
+  1952→  1952→                        style={{ touchAction: 'manipulation' }}
+  1953→  1953→                      >
+  1954→  1954→                        {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+  1955→  1955→                        {isListening ? 'Stop' : 'Voice'}
+  1956→  1956→                      </Button>
+  1957→  1957→                    </div>
+  1958→  1958→                    <div className="relative">
+  1959→  1959→                      <Textarea
+  1960→  1960→                        ref={notesRef}
+  1961→  1961→                        placeholder={isListening ? 'Listening...' : 'Add call notes (optional)...'}
+  1962→  1962→                        value={notes}
+  1963→  1963→                        onChange={(e) => setNotes(e.target.value)}
+  1964→  1964→                        rows={2}
+  1965→  1965→                        className={cn('resize-none pr-10', isListening && 'ring-2 ring-red-300 border-red-300')}
+  1966→  1966→                      />
+  1967→  1967→                      {isListening && (
+  1968→  1968→                        <div className="absolute top-2.5 right-2.5">
+  1969→  1969→                          <div className="h-3 w-3 rounded-full bg-red-500 animate-ping" />
+  1970→  1970→                        </div>
+  1971→  1971→                      )}
+  1972→  1972→                    </div>
+  1973→  1973→                    {isListening && (
+  1974→  1974→                      <p className="text-xs text-red-500 flex items-center gap-1">
+  1975→  1975→                        <Mic className="h-3 w-3" /> Listening — speak now
+  1976→  1976→                      </p>
+  1977→  1977→                    )}
+  1978→  1978→                  </div>
+  1979→  1979→
+  1980→  1980→                  {/* Quick Actions: SMS, WhatsApp — show pre-filled text preview */}
+  1981→  1981→                  <div className="space-y-2">
+  1982→  1982→                    <div className="flex flex-wrap gap-2">
+  1983→  1983→                      <Button
+  1984→  1984→                        variant="outline"
+  1985→  1985→                        size="sm"
+  1986→  1986→                        className="h-11 min-w-[100px]"
+  1987→  1987→                        style={{ touchAction: 'manipulation', flex: 1 }}
+  1988→  1988→                        onClick={handleOpenSmsTemplate}
+  1989→  1989→                      >
+  1990→  1990→                        <Send className="h-3.5 w-3.5 mr-1.5" />
+  1991→  1991→                        SMS
+  1992→  1992→                        {templates.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0">{templates.length}</Badge>}
+  1993→  1993→                      </Button>
+  1994→  1994→                      <Button
+  1995→  1995→                        variant="outline"
+  1996→  1996→                        size="sm"
+  1997→  1997→                        className="h-11 min-w-[100px]"
+  1998→  1998→                        style={{ touchAction: 'manipulation', flex: 1 }}
+  1999→  1999→                        onClick={handleOpenWhatsAppTemplate}
+  2000→  2000→                      >
+  2001→
+
+[showing lines 1500-2001 of 2002; use offset=2002 with limit to continue reading]

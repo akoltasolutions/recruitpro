@@ -555,3 +555,24 @@ Stage Summary:
 - 2 files changed: src/app/api/call-lists/route.ts, src/components/recruiter/calling-list-view.tsx
 - Commit d1e0070 pushed and deployed to app.akolta.com
 - The fix also benefits create-calling-list page (same API endpoint)
+---
+Task ID: 5
+Agent: Main Agent
+Task: Template channel separation + dialer overlapping + dead code cleanup
+
+Work Log:
+- Added 'channel' field (SMS/WHATSAPP/ALL) to MessageTemplate Prisma model
+- Updated message-templates API (GET with ?channel filter, POST/PUT with channel validation)
+- Rewrote admin message-templates UI with channel selector, filter tabs, and channel badges
+- Fixed dialer overlapping: pre-call/gap timer close buttons moved inside card bounds
+- Fixed desktop template sheet clipping by moving it outside Dialog overflow:hidden
+- Filtered dialer template sheets by channel (SMS sheet shows SMS+ALL only)
+- Updated backup API to handle channel field
+- Dead code cleanup: removed 10 console statements, 2 unused imports, 1 dead function (~27 lines), unused variables
+- Lint passed clean, deployed to production
+
+Stage Summary:
+- 7 files changed, commit 8157038 pushed to production
+- Templates now have mandatory channel separation
+- Dialer no longer has overlapping elements on phone/tablet
+- ~20 dead code items removed improving bundle size and runtime performance

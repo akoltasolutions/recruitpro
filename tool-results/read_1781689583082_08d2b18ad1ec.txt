@@ -1,0 +1,639 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useEffect, useRef, useCallback } from 'react'
+     4→     4→import { PageHeader } from '@/components/shared/page-header'
+     5→     5→import { EmptyState } from '@/components/shared/empty-state'
+     6→     6→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     7→     7→import { Input } from '@/components/ui/input'
+     8→     8→import { Badge } from '@/components/ui/badge'
+     9→     9→import { Skeleton } from '@/components/ui/skeleton'
+    10→    10→import { Button } from '@/components/ui/button'
+    11→    11→import {
+    12→    12→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    13→    13→} from '@/components/ui/table'
+    14→    14→import {
+    15→    15→  Dialog, DialogContent, DialogHeader, DialogTitle,
+    16→    16→} from '@/components/ui/dialog'
+    17→    17→import {
+    18→    18→  PhoneCall, Users, Search, ChevronDown, ChevronUp, Eye, Clock, Play,
+    19→    19→  Loader2,
+    20→    20→} from 'lucide-react'
+    21→    21→import { toast } from 'sonner'
+    22→    22→import { authFetch } from '@/stores/auth-store'
+    23→    23→import { format } from 'date-fns'
+    24→    24→import { PaginationControls, InfiniteScrollLoader } from '@/components/shared/pagination-controls'
+    25→    25→
+    26→    26→interface CallingList {
+    27→    27→  id: string
+    28→    28→  name: string
+    29→    29→  description: string | null
+    30→    30→  source: string
+    31→    31→  createdAt: string
+    32→    32→  candidates: Array<{ id: string; status: string }>
+    33→    33→}
+    34→    34→
+    35→    35→interface Candidate {
+    36→    36→  id: string
+    37→    37→  name: string
+    38→    38→  phone: string
+    39→    39→  email: string | null
+    40→    40→  role: string | null
+    41→    41→  location: string | null
+    42→    42→  company: string | null
+    43→    43→  status: string
+    44→    44→  notes: string | null
+    45→    45→  lastDisposition: string | null
+    46→    46→}
+    47→    47→
+    48→    48→interface Props {
+    49→    49→  userId: string
+    50→    50→  onNavigate: (page: string) => void
+    51→    51→}
+    52→    52→
+    53→    53→const statusColors: Record<string, string> = {
+    54→    54→  PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+    55→    55→  DONE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+    56→    56→  SCHEDULED: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
+    57→    57→  SKIPPED: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    58→    58→}
+    59→    59→
+    60→    60→export function CallingListView({ userId, onNavigate }: Props) {
+    61→    61→  const [callingLists, setCallingLists] = useState<CallingList[]>([])
+    62→    62→  const [loading, setLoading] = useState(true)
+    63→    63→  const [search, setSearch] = useState('')
+    64→    64→  const [expandedListId, setExpandedListId] = useState<string | null>(null)
+    65→    65→
+    66→    66→  // Server-side pagination state
+    67→    67→  const [totalCount, setTotalCount] = useState(0)
+    68→    68→  const [currentPage, setCurrentPage] = useState(1)
+    69→    69→  const [totalPages, setTotalPages] = useState(0)
+    70→    70→  const [pageSize, setPageSize] = useState(50)
+    71→    71→  const [loadingMore, setLoadingMore] = useState(false)
+    72→    72→  const sentinelRef = useRef<HTMLDivElement>(null)
+    73→    73→
+    74→    74→  // View candidates dialog
+    75→    75→  const [candidatesOpen, setCandidatesOpen] = useState(false)
+    76→    76→  const [selectedList, setSelectedList] = useState<CallingList | null>(null)
+    77→    77→  const [candidateSearch, setCandidateSearch] = useState('')
+    78→    78→
+    79→    79→  // Fetched candidate details (per list)
+    80→    80→  const [listCandidatesMap, setListCandidatesMap] = useState<Record<string, Candidate[]>>({})
+    81→    81→  const [listCandidatesLoading, setListCandidatesLoading] = useState<Record<string, boolean>>({})
+    82→    82→
+    83→    83→  // ─── Debounced Search ──────────────────────────────────────────────────────
+    84→    84→
+    85→    85→  const [debouncedSearch, setDebouncedSearch] = useState('')
+    86→    86→
+    87→    87→  useEffect(() => {
+    88→    88→    const timer = setTimeout(() => {
+    89→    89→      setDebouncedSearch(search.trim())
+    90→    90→    }, 300)
+    91→    91→    return () => clearTimeout(timer)
+    92→    92→  }, [search])
+    93→    93→
+    94→    94→  // ─── Fetch Calling Lists ─────────────────────────────────────────────────────
+    95→    95→
+    96→    96→  const fetchCallingLists = useCallback(async (page = 1, limit = 50, searchVal = '', append = false) => {
+    97→    97→    try {
+    98→    98→      if (append) {
+    99→    99→        setLoadingMore(true)
+   100→   100→      } else {
+   101→   101→        setLoading(true)
+   102→   102→      }
+   103→   103→      const params = new URLSearchParams()
+   104→   104→      params.set('page', String(page))
+   105→   105→      params.set('limit', String(limit))
+   106→   106→      if (searchVal) params.set('search', searchVal)
+   107→   107→
+   108→   108→      const res = await authFetch(`/api/call-lists?${params.toString()}`)
+   109→   109→      if (!res.ok) throw new Error('Failed to fetch calling lists')
+   110→   110→      const json = await res.json()
+   111→   111→      // Filter to only lists that have candidates assigned
+   112→   112→      const assigned = (json.callLists || []).filter(
+   113→   113→        (l: CallingList) => l.candidates && l.candidates.length > 0
+   114→   114→      ) as CallingList[]
+   115→   115→
+   116→   116→      if (append) {
+   117→   117→        setCallingLists(prev => [...prev, ...assigned])
+   118→   118→      } else {
+   119→   119→        setCallingLists(assigned)
+   120→   120→      }
+   121→   121→      setTotalCount(json.totalCount || 0)
+   122→   122→      setCurrentPage(json.page || page)
+   123→   123→      setTotalPages(json.totalPages || 1)
+   124→   124→      lastFetchedRef.current = Date.now()
+   125→   125→    } catch {
+   126→   126→      toast.error('Failed to load calling lists')
+   127→   127→    } finally {
+   128→   128→      setLoading(false)
+   129→   129→      setLoadingMore(false)
+   130→   130→    }
+   131→   131→  }, [])
+   132→   132→
+   133→   133→  // Initial load + refetch when search or page size changes
+   134→   134→  useEffect(() => {
+   135→   135→    setCurrentPage(1)
+   136→   136→    setCallingLists([])
+   137→   137→    fetchCallingLists(1, pageSize, debouncedSearch)
+   138→   138→  }, [debouncedSearch, pageSize])
+   139→   139→
+   140→   140→  // ─── Auto-sync: refetch lists when page regains visibility/focus ──────────
+   141→   141→  // This ensures counts are always accurate after returning from the dialer
+   142→   142→  const lastFetchedRef = useRef(0)
+   143→   143→  useEffect(() => {
+   144→   144→    const handleVisibility = () => {
+   145→   145→      if (document.visibilityState === 'visible' && Date.now() - lastFetchedRef.current > 3000) {
+   146→   146→        lastFetchedRef.current = Date.now()
+   147→   147→        setListCandidatesMap({})
+   148→   148→        fetchCallingLists(1, pageSize, debouncedSearch)
+   149→   149→      }
+   150→   150→    }
+   151→   151→    const handleFocus = () => {
+   152→   152→      if (Date.now() - lastFetchedRef.current > 3000) {
+   153→   153→        lastFetchedRef.current = Date.now()
+   154→   154→        setListCandidatesMap({})
+   155→   155→        fetchCallingLists(1, pageSize, debouncedSearch)
+   156→   156→      }
+   157→   157→    }
+   158→   158→    document.addEventListener('visibilitychange', handleVisibility)
+   159→   159→    window.addEventListener('focus', handleFocus)
+   160→   160→    return () => {
+   161→   161→      document.removeEventListener('visibilitychange', handleVisibility)
+   162→   162→      window.removeEventListener('focus', handleFocus)
+   163→   163→    }
+   164→   164→  }, [fetchCallingLists, pageSize, debouncedSearch])
+   165→   165→
+   166→   166→  // ─── Infinite Scroll ──────────────────────────────────────────────────────
+   167→   167→
+   168→   168→  const hasMore = currentPage < totalPages && callingLists.length < totalCount
+   169→   169→
+   170→   170→  const loadMoreFn = () => {
+   171→   171→    if (loadingMore || !hasMore) return
+   172→   172→    fetchCallingLists(currentPage + 1, pageSize, debouncedSearch, true)
+   173→   173→  }
+   174→   174→
+   175→   175→  const loadMoreRef = useRef(loadMoreFn)
+   176→   176→  loadMoreRef.current = loadMoreFn
+   177→   177→
+   178→   178→  useEffect(() => {
+   179→   179→    const el = sentinelRef.current
+   180→   180→    if (!el) return
+   181→   181→    const observer = new IntersectionObserver(
+   182→   182→      (entries) => {
+   183→   183→        if (entries[0].isIntersecting) {
+   184→   184→          loadMoreRef.current()
+   185→   185→        }
+   186→   186→      },
+   187→   187→      { threshold: 0.1 }
+   188→   188→    )
+   189→   189→    observer.observe(el)
+   190→   190→    return () => observer.disconnect()
+   191→   191→  }, [])
+   192→   192→
+   193→   193→  // ─── Fetch Candidate Details for a List ─────────────────────────────────────
+   194→   194→
+   195→   195→  const fetchListCandidates = useCallback(async (listId: string) => {
+   196→   196→    if (listCandidatesMap[listId]) return // already fetched
+   197→   197→    setListCandidatesLoading(prev => ({ ...prev, [listId]: true }))
+   198→   198→    try {
+   199→   199→      const res = await authFetch(`/api/call-lists/${listId}/candidates`)
+   200→   200→      if (!res.ok) throw new Error()
+   201→   201→      const json = await res.json()
+   202→   202→      setListCandidatesMap(prev => ({ ...prev, [listId]: json.candidates || [] }))
+   203→   203→    } catch {
+   204→   204→      toast.error('Failed to load candidates')
+   205→   205→    } finally {
+   206→   206→      setListCandidatesLoading(prev => ({ ...prev, [listId]: false }))
+   207→   207→    }
+   208→   208→  }, [listCandidatesMap])
+   209→   209→
+   210→   210→  // ─── Filter candidates across a single list based on search ─────────────────
+   211→   211→
+   212→   212→  const getFilteredCandidates = useCallback((list: CallingList) => {
+   213→   213→    const candidates = listCandidatesMap[list.id] || []
+   214→   214→    const q = candidateSearch.toLowerCase().trim()
+   215→   215→    if (!q) return candidates
+   216→   216→    return candidates.filter(
+   217→   217→      (c) =>
+   218→   218→        c.name.toLowerCase().includes(q) ||
+   219→   219→        c.phone.includes(q) ||
+   220→   220→        (c.email && c.email.toLowerCase().includes(q)) ||
+   221→   221→        (c.role && c.role.toLowerCase().includes(q)) ||
+   222→   222→        (c.location && c.location.toLowerCase().includes(q)) ||
+   223→   223→        (c.company && c.company.toLowerCase().includes(q))
+   224→   224→    )
+   225→   225→  }, [listCandidatesMap, candidateSearch])
+   226→   226→
+   227→   227→  // Global search filters which lists are shown (by list name/description only)
+   228→   228→  const filteredLists = callingLists.filter((list) => {
+   229→   229→    const q = search.toLowerCase().trim()
+   230→   230→    if (!q) return true
+   231→   231→    return (
+   232→   232→      list.name.toLowerCase().includes(q) ||
+   233→   233→      (list.description && list.description.toLowerCase().includes(q))
+   234→   234→    )
+   235→   235→  })
+   236→   236→
+   237→   237→  const handleExpand = (listId: string) => {
+   238→   238→    const isExpanding = expandedListId !== listId
+   239→   239→    setExpandedListId((prev) => (prev === listId ? null : listId))
+   240→   240→    if (isExpanding) {
+   241→   241→      fetchListCandidates(listId)
+   242→   242→    }
+   243→   243→  }
+   244→   244→
+   245→   245→  const handleViewCandidates = (list: CallingList) => {
+   246→   246→    setSelectedList(list)
+   247→   247→    setCandidateSearch('')
+   248→   248→    fetchListCandidates(list.id)
+   249→   249→    setCandidatesOpen(true)
+   250→   250→  }
+   251→   251→
+   252→   252→  // Find the first list with candidates and start dialing
+   253→   253→  const handleStartDialing = () => {
+   254→   254→    const listWithCandidates = callingLists.find(
+   255→   255→      (l) => l.candidates.length > 0
+   256→   256→    )
+   257→   257→    if (!listWithCandidates) {
+   258→   258→      toast.info('No pending calling lists available. All candidates have been called.', { duration: 4000 })
+   259→   259→      return
+   260→   260→    }
+   261→   261→    // Store the list ID in sessionStorage for AutoDialer to pick up
+   262→   262→    try {
+   263→   263→      sessionStorage.setItem('auto_select_list_id', listWithCandidates.id)
+   264→   264→    } catch { /* ignore */ }
+   265→   265→    onNavigate('pending')
+   266→   266→  }
+   267→   267→
+   268→   268→  const getListStats = (list: CallingList) => {
+   269→   269→    // Always compute from list.candidates (included in API response with status field)
+   270→   270→    const candidates = list.candidates || []
+   271→   271→    const total = candidates.length
+   272→   272→    const pending = candidates.filter((c) => c.status === 'PENDING').length
+   273→   273→    const done = candidates.filter((c) => c.status === 'DONE').length
+   274→   274→    const scheduled = candidates.filter((c) => c.status === 'SCHEDULED').length
+   275→   275→    return { total, pending, done, scheduled }
+   276→   276→  }
+   277→   277→
+   278→   278→  if (loading) {
+   279→   279→    return (
+   280→   280→      <div className="p-4 md:p-6 space-y-4">
+   281→   281→        <Skeleton className="h-8 w-48" />
+   282→   282→        <div className="space-y-3">
+   283→   283→          {Array.from({ length: 3 }).map((_, i) => (
+   284→   284→            <Skeleton key={i} className="h-24 rounded-lg" />
+   285→   285→          ))}
+   286→   286→        </div>
+   287→   287→      </div>
+   288→   288→    )
+   289→   289→  }
+   290→   290→
+   291→   291→  return (
+   292→   292→    <div className="p-4 md:p-6 space-y-4">
+   293→   293→      <PageHeader
+   294→   294→        title="Calling Lists"
+   295→   295→        description="View your assigned calling lists and candidates"
+   296→   296→        icon={PhoneCall}
+   297→   297→      />
+   298→   298→
+   299→   299→      {/* Action buttons */}
+   300→   300→      <div className="flex items-center gap-3 flex-wrap">
+   301→   301→        <Button
+   302→   302→          onClick={handleStartDialing}
+   303→   303→          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   304→   304→          disabled={callingLists.length === 0}
+   305→   305→        >
+   306→   306→          <Play className="h-4 w-4 mr-2" />
+   307→   307→          Start Dialing
+   308→   308→        </Button>
+   309→   309→      </div>
+   310→   310→
+   311→   311→      {/* Search bar */}
+   312→   312→      <div className="relative max-w-sm">
+   313→   313→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   314→   314→        <Input
+   315→   315→          placeholder="Search lists..."
+   316→   316→          value={search}
+   317→   317→          onChange={(e) => setSearch(e.target.value)}
+   318→   318→          className="pl-9"
+   319→   319→        />
+   320→   320→      </div>
+   321→   321→
+   322→   322→      {filteredLists.length === 0 ? (
+   323→   323→        <EmptyState
+   324→   324→          icon={PhoneCall}
+   325→   325→          title={search ? 'No matching results' : 'No Calling Lists Assigned'}
+   326→   326→          description={
+   327→   327→            search
+   328→   328→              ? 'Try a different search term'
+   329→   329→              : "You haven't been assigned any calling lists yet. Please contact your admin."
+   330→   330→          }
+   331→   331→        />
+   332→   332→      ) : (
+   333→   333→        <div className="space-y-3">
+   334→   334→          {filteredLists.map((list) => {
+   335→   335→            const stats = getListStats(list)
+   336→   336→            const isExpanded = expandedListId === list.id
+   337→   337→            const candidatesForList = listCandidatesMap[list.id]
+   338→   338→            const isLoadingCandidates = listCandidatesLoading[list.id]
+   339→   339→
+   340→   340→            return (
+   341→   341→              <Card key={list.id} className="overflow-hidden">
+   342→   342→                <CardHeader
+   343→   343→                  className="pb-3 cursor-pointer hover:bg-muted/30 transition-colors"
+   344→   344→                  onClick={() => handleExpand(list.id)}
+   345→   345→                >
+   346→   346→                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+   347→   347→                    <div className="flex items-center gap-3 min-w-0 flex-1">
+   348→   348→                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
+   349→   349→                        <PhoneCall className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
+   350→   350→                      </div>
+   351→   351→                      <div className="min-w-0">
+   352→   352→                        <CardTitle className="text-base truncate">{list.name}</CardTitle>
+   353→   353→                        {list.description && (
+   354→   354→                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+   355→   355→                            {list.description}
+   356→   356→                          </p>
+   357→   357→                        )}
+   358→   358→                      </div>
+   359→   359→                    </div>
+   360→   360→                    <div className="flex items-center gap-2 shrink-0">
+   361→   361→                      <div className="flex items-center gap-2 text-xs flex-wrap justify-end">
+   362→   362→                        <Badge variant="secondary" className="text-xs">
+   363→   363→                          <Users className="h-3 w-3 mr-1" />
+   364→   364→                          {stats.total} candidates
+   365→   365→                        </Badge>
+   366→   366→                        <Badge className={statusColors.PENDING}>{stats.pending} pending</Badge>
+   367→   367→                        <Badge className={statusColors.DONE}>{stats.done} done</Badge>
+   368→   368→                        {stats.scheduled > 0 && (
+   369→   369→                          <Badge className={statusColors.SCHEDULED}>{stats.scheduled} scheduled</Badge>
+   370→   370→                        )}
+   371→   371→                        <span className="text-muted-foreground text-xs whitespace-nowrap">
+   372→   372→                          <Clock className="h-3 w-3 inline mr-1" />
+   373→   373→                          {format(new Date(list.createdAt), 'MMM dd, yyyy')}
+   374→   374→                        </span>
+   375→   375→                      </div>
+   376→   376→                      <div className="flex items-center gap-1 ml-2">
+   377→   377→                        <Button
+   378→   378→                          variant="ghost"
+   379→   379→                          size="sm"
+   380→   380→                          onClick={(e) => {
+   381→   381→                            e.stopPropagation()
+   382→   382→                            handleViewCandidates(list)
+   383→   383→                          }}
+   384→   384→                          className="h-8 px-2"
+   385→   385→                        >
+   386→   386→                          <Eye className="h-4 w-4 mr-1" />
+   387→   387→                          View
+   388→   388→                        </Button>
+   389→   389→                        <Button
+   390→   390→                          variant="ghost"
+   391→   391→                          size="sm"
+   392→   392→                          onClick={(e) => {
+   393→   393→                            e.stopPropagation()
+   394→   394→                            handleExpand(list.id)
+   395→   395→                          }}
+   396→   396→                          className="h-8 px-2"
+   397→   397→                        >
+   398→   398→                          {isExpanded ? (
+   399→   399→                            <ChevronUp className="h-4 w-4" />
+   400→   400→                          ) : (
+   401→   401→                            <ChevronDown className="h-4 w-4" />
+   402→   402→                          )}
+   403→   403→                        </Button>
+   404→   404→                      </div>
+   405→   405→                    </div>
+   406→   406→                  </div>
+   407→   407→                </CardHeader>
+   408→   408→
+   409→   409→                {/* Expanded candidate preview */}
+   410→   410→                {isExpanded && (
+   411→   411→                  <CardContent className="pt-0 px-4 pb-4">
+   412→   412→                    <div className="border-t pt-3">
+   413→   413→                      <div className="flex items-center justify-between mb-3">
+   414→   414→                        <p className="text-sm font-medium">Candidates</p>
+   415→   415→                        <Badge variant="outline" className="text-xs">
+   416→   416→                          Created {format(new Date(list.createdAt), 'MMM dd, yyyy')}
+   417→   417→                        </Badge>
+   418→   418→                      </div>
+   419→   419→
+   420→   420→                      {/* Inline candidate search */}
+   421→   421→                      <div className="relative mb-3 max-w-xs">
+   422→   422→                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+   423→   423→                        <Input
+   424→   424→                          placeholder="Filter candidates..."
+   425→   425→                          value={candidateSearch}
+   426→   426→                          onChange={(e) => setCandidateSearch(e.target.value)}
+   427→   427→                          className="pl-8 h-8 text-sm"
+   428→   428→                        />
+   429→   429→                      </div>
+   430→   430→
+   431→   431→                      {isLoadingCandidates ? (
+   432→   432→                        <div className="flex items-center justify-center py-8">
+   433→   433→                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+   434→   434→                        </div>
+   435→   435→                      ) : (
+   436→   436→                        <div className="rounded-md border overflow-x-auto max-h-96">
+   437→   437→                          <Table>
+   438→   438→                            <TableHeader>
+   439→   439→                              <TableRow>
+   440→   440→                                <TableHead className="text-xs w-8">#</TableHead>
+   441→   441→                                <TableHead className="text-xs">Name</TableHead>
+   442→   442→                                <TableHead className="text-xs">Phone</TableHead>
+   443→   443→                                <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
+   444→   444→                                <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
+   445→   445→                                <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
+   446→   446→                                <TableHead className="text-xs">Status</TableHead>
+   447→   447→                                <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
+   448→   448→                                <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
+   449→   449→                              </TableRow>
+   450→   450→                            </TableHeader>
+   451→   451→                            <TableBody>
+   452→   452→                              {getFilteredCandidates(list).length === 0 ? (
+   453→   453→                                <TableRow>
+   454→   454→                                  <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-6">
+   455→   455→                                    {candidateSearch ? 'No candidates match your filter' : 'No candidates in this list'}
+   456→   456→                                  </TableCell>
+   457→   457→                                </TableRow>
+   458→   458→                              ) : (
+   459→   459→                                getFilteredCandidates(list).map((candidate, idx) => (
+   460→   460→                                  <TableRow key={candidate.id}>
+   461→   461→                                    <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+   462→   462→                                    <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
+   463→   463→                                    <TableCell className="text-xs">{candidate.phone}</TableCell>
+   464→   464→                                    <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
+   465→   465→                                    <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
+   466→   466→                                    <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
+   467→   467→                                    <TableCell>
+   468→   468→                                      <Badge
+   469→   469→                                        variant="outline"
+   470→   470→                                        className={`text-xs ${statusColors[candidate.status] || ''}`}
+   471→   471→                                      >
+   472→   472→                                        {candidate.status}
+   473→   473→                                      </Badge>
+   474→   474→                                    </TableCell>
+   475→   475→                                    <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
+   476→   476→                                      {candidate.notes || '—'}
+   477→   477→                                    </TableCell>
+   478→   478→                                    <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate">
+   479→   479→                                      {candidate.lastDisposition || '—'}
+   480→   480→                                    </TableCell>
+   481→   481→                                  </TableRow>
+   482→   482→                                ))
+   483→   483→                              )}
+   484→   484→                            </TableBody>
+   485→   485→                          </Table>
+   486→   486→                        </div>
+   487→   487→                      )}
+   488→   488→                    </div>
+   489→   489→                  </CardContent>
+   490→   490→                )}
+   491→   491→              </Card>
+   492→   492→            )
+   493→   493→          })}
+   494→   494→
+   495→   495→          {/* Sentinel for infinite scroll */}
+   496→   496→          <div ref={sentinelRef} className="h-1" />
+   497→   497→
+   498→   498→          {/* Infinite scroll loader */}
+   499→   499→          <InfiniteScrollLoader loadingMore={loadingMore} isEnd={!hasMore && callingLists.length > 0} />
+   500→   500→
+   501→   501→          {/* Pagination controls */}
+   502→   502→          <PaginationControls
+   503→   503→            totalCount={totalCount}
+   504→   504→            displayedCount={callingLists.length}
+   505→   505→            currentPage={currentPage}
+   506→   506→            totalPages={totalPages}
+   507→   507→            pageSize={pageSize}
+   508→   508→            pageSizeOptions={[50, 100]}
+   509→   509→            onPageSizeChange={(newSize) => {
+   510→   510→              setPageSize(newSize)
+   511→   511→              setCurrentPage(1)
+   512→   512→              setCallingLists([])
+   513→   513→            }}
+   514→   514→            onLoadMore={loadMoreFn}
+   515→   515→            loadingMore={loadingMore}
+   516→   516→            loading={loading}
+   517→   517→            hasMore={hasMore}
+   518→   518→          />
+   519→   519→        </div>
+   520→   520→      )}
+   521→   521→
+   522→   522→      {/* View Candidates Dialog (full view with search) */}
+   523→   523→      <Dialog open={candidatesOpen} onOpenChange={setCandidatesOpen}>
+   524→   524→        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+   525→   525→          <DialogHeader>
+   526→   526→            <DialogTitle className="flex items-center gap-2">
+   527→   527→              <PhoneCall className="h-5 w-5 text-emerald-600" />
+   528→   528→              {selectedList?.name} — Candidates
+   529→   529→            </DialogTitle>
+   530→   530→          </DialogHeader>
+   531→   531→          {selectedList && (
+   532→   532→            <div className="space-y-3">
+   533→   533→              {/* Stats row */}
+   534→   534→              <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+   535→   535→                <Badge variant="secondary">{getListStats(selectedList).total} total</Badge>
+   536→   536→                <Badge className={statusColors.PENDING}>{getListStats(selectedList).pending} pending</Badge>
+   537→   537→                <Badge className={statusColors.DONE}>{getListStats(selectedList).done} done</Badge>
+   538→   538→                {getListStats(selectedList).scheduled > 0 && (
+   539→   539→                  <Badge className={statusColors.SCHEDULED}>{getListStats(selectedList).scheduled} scheduled</Badge>
+   540→   540→                )}
+   541→   541→                <Badge variant="outline" className="text-xs">
+   542→   542→                  <Clock className="h-3 w-3 mr-1" />
+   543→   543→                  {format(new Date(selectedList.createdAt), 'MMM dd, yyyy')}
+   544→   544→                </Badge>
+   545→   545→              </div>
+   546→   546→
+   547→   547→              {/* Candidate search */}
+   548→   548→              <div className="relative max-w-sm">
+   549→   549→                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   550→   550→                <Input
+   551→   551→                  placeholder="Search by name, phone, email, role, location..."
+   552→   552→                  value={candidateSearch}
+   553→   553→                  onChange={(e) => setCandidateSearch(e.target.value)}
+   554→   554→                  className="pl-9"
+   555→   555→                />
+   556→   556→              </div>
+   557→   557→
+   558→   558→              {/* Candidate table */}
+   559→   559→              {listCandidatesLoading[selectedList.id] ? (
+   560→   560→                <div className="flex items-center justify-center py-12">
+   561→   561→                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+   562→   562→                </div>
+   563→   563→              ) : (
+   564→   564→                <div className="rounded-md border overflow-x-auto max-h-[60vh]">
+   565→   565→                  <Table>
+   566→   566→                    <TableHeader>
+   567→   567→                      <TableRow>
+   568→   568→                        <TableHead className="text-xs w-8">#</TableHead>
+   569→   569→                        <TableHead className="text-xs">Name</TableHead>
+   570→   570→                        <TableHead className="text-xs">Phone</TableHead>
+   571→   571→                        <TableHead className="text-xs hidden sm:table-cell">Email</TableHead>
+   572→   572→                        <TableHead className="text-xs hidden md:table-cell">Role</TableHead>
+   573→   573→                        <TableHead className="text-xs hidden lg:table-cell">Location</TableHead>
+   574→   574→                        <TableHead className="text-xs">Status</TableHead>
+   575→   575→                        <TableHead className="text-xs hidden xl:table-cell">Notes</TableHead>
+   576→   576→                        <TableHead className="text-xs hidden xl:table-cell">Last Disposition</TableHead>
+   577→   577→                      </TableRow>
+   578→   578→                    </TableHeader>
+   579→   579→                    <TableBody>
+   580→   580→                      {getFilteredCandidates(selectedList).length === 0 ? (
+   581→   581→                        <TableRow>
+   582→   582→                          <TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">
+   583→   583→                            {candidateSearch ? 'No candidates match your search' : 'No candidates in this list'}
+   584→   584→                          </TableCell>
+   585→   585→                        </TableRow>
+   586→   586→                      ) : (
+   587→   587→                        getFilteredCandidates(selectedList).map((candidate, idx) => (
+   588→   588→                          <TableRow key={candidate.id}>
+   589→   589→                            <TableCell className="text-xs text-muted-foreground">{idx + 1}</TableCell>
+   590→   590→                            <TableCell className="text-xs font-medium">{candidate.name}</TableCell>
+   591→   591→                            <TableCell className="text-xs">
+   592→   592→                              <a
+   593→   593→                                href={`tel:${candidate.phone.replace(/[^0-9]/g, '')}`}
+   594→   594→                                className="text-emerald-600 hover:underline"
+   595→   595→                                style={{ touchAction: 'manipulation' }}
+   596→   596→                              >
+   597→   597→                                {candidate.phone}
+   598→   598→                              </a>
+   599→   599→                            </TableCell>
+   600→   600→                            <TableCell className="text-xs hidden sm:table-cell">{candidate.email || '—'}</TableCell>
+   601→   601→                            <TableCell className="text-xs hidden md:table-cell">{candidate.role || '—'}</TableCell>
+   602→   602→                            <TableCell className="text-xs hidden lg:table-cell">{candidate.location || '—'}</TableCell>
+   603→   603→                            <TableCell>
+   604→   604→                              <Badge
+   605→   605→                                variant="outline"
+   606→   606→                                className={`text-xs ${statusColors[candidate.status] || ''}`}
+   607→   607→                              >
+   608→   608→                                {candidate.status}
+   609→   609→                              </Badge>
+   610→   610→                            </TableCell>
+   611→   611→                            <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.notes || ''}>
+   612→   612→                              {candidate.notes || '—'}
+   613→   613→                            </TableCell>
+   614→   614→                            <TableCell className="text-xs hidden xl:table-cell max-w-[150px] truncate" title={candidate.lastDisposition || ''}>
+   615→   615→                              {candidate.lastDisposition || '—'}
+   616→   616→                            </TableCell>
+   617→   617→                          </TableRow>
+   618→   618→                        ))
+   619→   619→                      )}
+   620→   620→                    </TableBody>
+   621→   621→                  </Table>
+   622→   622→                </div>
+   623→   623→              )}
+   624→   624→
+   625→   625→              {/* Result count */}
+   626→   626→              {!listCandidatesLoading[selectedList.id] && (
+   627→   627→                <p className="text-xs text-muted-foreground text-right">
+   628→   628→                  Showing {getFilteredCandidates(selectedList).length} of {listCandidatesMap[selectedList.id]?.length || selectedList.candidates.length} candidates
+   629→   629→                  {candidateSearch && ' (filtered)'}
+   630→   630→                </p>
+   631→   631→              )}
+   632→   632→            </div>
+   633→   633→          )}
+   634→   634→        </DialogContent>
+   635→   635→      </Dialog>
+   636→   636→    </div>
+   637→   637→  )
+   638→   638→}
+   639→   639→
