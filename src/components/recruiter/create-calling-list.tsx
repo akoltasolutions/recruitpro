@@ -524,7 +524,7 @@ export function CreateCallingList({ userId, onNavigate }: Props) {
                           {pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} valid
                         </Badge>
                       </div>
-                      <div className="rounded-md border overflow-auto max-h-48">
+                      <div className="rounded-md border overflow-x-auto max-h-48">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -674,7 +674,7 @@ export function CreateCallingList({ userId, onNavigate }: Props) {
                 <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">{selectedList.candidates.filter(c => c.status === 'PENDING').length} pending</Badge>
                 <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400">{selectedList.candidates.filter(c => c.status === 'DONE').length} done</Badge>
               </div>
-              <div className="rounded-md border overflow-auto max-h-96">
+              <div className="rounded-md border overflow-x-auto max-h-96">
                 <Table>
                   <TableHeader>
                     <TableRow>

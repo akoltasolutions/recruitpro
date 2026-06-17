@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
@@ -262,7 +262,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         const t = await tmplRes.json()
         const activeTemplates = (t.templates || []).filter((tmpl: MessageTemplate) => tmpl.isActive)
         setTemplates(activeTemplates)
-        console.log('[AutoDialer] Loaded', activeTemplates.length, 'message templates')
+        // Templates loaded
       } else {
         console.error('[AutoDialer] Failed to fetch templates:', tmplRes.status)
       }
@@ -284,7 +284,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         const val = data.includeDispositionTime ?? true
         setIncludeDispositionTime(val)
         includeDispositionTimeRef.current = val
-        console.log('[AutoDialer] includeDispositionTime:', val)
+        // includeDispositionTime loaded from settings
       })
       .catch(() => { /* non-blocking — default true */ })
   }, [])
@@ -335,7 +335,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         company: candidate.company,
         timestamp: Date.now(),
       }))
-      console.log('[AutoDialer] Call state saved to sessionStorage')
+      // Call state saved to sessionStorage
     } catch (e) {
       console.error('[AutoDialer] Failed to save call state:', e)
     }
@@ -358,7 +358,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         return false
       }
       // Found a pending call — user returned from dialer
-      console.log('[AutoDialer] Pending call detected on return:', data.phone)
+      // Pending call detected on return
       sessionStorage.removeItem(CALL_STATE_KEY)
       return data
     } catch {
@@ -374,7 +374,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const handleReturnFromDialer = useCallback((storedData?: { candidateId: string; phone: string; name: string; role: string | null; location: string | null; company: string | null; timestamp: number }) => {
     // Prevent duplicate triggers from multiple simultaneous events
     if (dispositionShownRef.current) {
-      console.log('[AutoDialer] Disposition already shown, skipping duplicate trigger')
+      // Disposition already shown, skipping duplicate trigger
       return
     }
     dispositionShownRef.current = true
@@ -406,14 +406,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Small delay to ensure UI is ready before showing the popup
     setTimeout(() => {
       setIsDispositionModalOpen(true)
-      console.log('[AutoDialer] Disposition popup shown')
+      // Disposition popup shown
     }, 500)
-  }, []) // Empty deps — uses refs and functional state updates to avoid stale closures
+  }, [stopCallTimer]) // stopCallTimer is stable (useCallback with []), so this remains effectively stable
 
   useEffect(() => {
     // Listen for visibility change (tab/WebView becomes visible again)
     const handleVisibilityChange = () => {
-      console.log('[AutoDialer] visibilitychange:', document.visibilityState, 'callInitiated:', callInitiatedRef.current)
+      // visibilitychange detected
       if (document.visibilityState === 'visible') {
         if (callInitiatedRef.current) {
           handleReturnFromDialer()
@@ -429,7 +429,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
     // Listen for window focus (WebView regains focus)
     const handleFocus = () => {
-      console.log('[AutoDialer] window focus event, callInitiated:', callInitiatedRef.current)
+      // window focus event
       if (callInitiatedRef.current) {
         handleReturnFromDialer()
       } else {
@@ -442,7 +442,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
     // Listen for pageshow (page restored from bfcache or back navigation)
     const handlePageShow = (e: PageTransitionEvent) => {
-      console.log('[AutoDialer] pageshow, persisted:', e.persisted)
+      // pageshow event
       if (e.persisted) {
         const pendingData = checkPendingCall()
         if (pendingData) {
@@ -457,7 +457,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
     // Listen for global event dispatched by Android bridge (from page.tsx)
     const handleGlobalDisposition = (e: Event) => {
-      console.log('[AutoDialer] Global disposition event received')
+      // Global disposition event received
       handleReturnFromDialer()
     }
     window.addEventListener('show-disposition-from-dialer', handleGlobalDisposition)
@@ -480,10 +480,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // Android WebView can call: webView.evaluateJavascript("showPostCallDisposition('7458898305')", null)
   useEffect(() => {
     (window as unknown as Record<string, unknown>).showPostCallDisposition = (phoneNumber: string) => {
-      console.log('[AutoDialer] showPostCallDisposition called from Android:', phoneNumber)
+      // showPostCallDisposition called from Android
       // Prevent duplicate triggers
       if (dispositionShownRef.current) {
-        console.log('[AutoDialer] Disposition already shown, skipping Android bridge trigger')
+        // Disposition already shown, skipping Android bridge trigger
         return
       }
       callInitiatedRef.current = false
@@ -509,38 +509,38 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     return () => {
       delete (window as unknown as Record<string, unknown>).showPostCallDisposition
     }
-  }, [clearCallState, checkPendingCall, handleReturnFromDialer])
+  }, [clearCallState, checkPendingCall, handleReturnFromDialer, stopCallTimer])
 
   // ==================== CALL TIMER HELPERS ====================
-  const startCallTimer = () => {
+  const startCallTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
     setCallTimer(1) // Start from 1 second immediately (no delay)
     timerRef.current = setInterval(() => {
       setCallTimer((prev) => prev + 1)
     }, 1000)
-  }
+  }, [])
 
-  const stopCallTimer = () => {
+  const stopCallTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
-  }
+  }, [])
 
   // ==================== PRE-CALL DELAY TIMER ====================
   // Shows a countdown overlay before automatically placing the call.
   // When countdown reaches 0, it programmatically opens the phone dialer.
-  const cancelPreCallTimer = () => {
+  const cancelPreCallTimer = useCallback(() => {
     if (preCallTimerRef.current) {
       clearInterval(preCallTimerRef.current)
       preCallTimerRef.current = null
     }
     setPreCallCountdown(null)
-  }
+  }, [])
 
   // Execute the actual call — programmatically trigger tel: link
   // First tries Android native bridge (ACTION_CALL = direct dial), falls back to tel: link (ACTION_DIAL = open dialer)
-  const executeCall = () => {
+  const executeCall = useCallback(() => {
     if (!currentCandidate?.phone) {
       toast.error('No phone number available')
       return
@@ -588,7 +588,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
 
-    console.log('[AutoDialer] executeCall for:', phone)
+    // executeCall invoked
 
     // ===== ANDROID WEBVIEW: Use native bridge to place call directly (ACTION_CALL) =====
     // This bypasses the phone dialer UI and calls the number directly.
@@ -599,7 +599,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
         { makeCall: (phoneNumber: string) => void } | undefined
       if (bridge?.makeCall) {
-        console.log('[AutoDialer] Using AndroidBridge.makeCall for direct dial:', phone)
+        // Using AndroidBridge.makeCall for direct dial
         bridge.makeCall(phone)
         return
       }
@@ -613,7 +613,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const autoDial = (window as unknown as Record<string, unknown>)._autoDial as
         ((phoneNumber: string) => void) | undefined
       if (typeof autoDial === 'function') {
-        console.log('[AutoDialer] Using window._autoDial for direct dial:', phone)
+        // Using window._autoDial for direct dial
         autoDial(phone)
         return
       }
@@ -623,23 +623,23 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
     // ===== FALLBACK: tel: link (ACTION_DIAL) — opens phone dialer with number pasted =====
     // This is the standard web behavior; requires user to press Call in the dialer.
-    console.log('[AutoDialer] AndroidBridge.makeCall not available, falling back to tel: link')
+    // AndroidBridge not available, falling back to tel: link
     triggerNativeLink(`tel:${phone}`)
     toast.info('Opening dialer... Please press Call to connect.', { duration: 2000 })
-  }
+  }, [currentCandidate, saveCallState, startCallTimer, stopCallTimer, clearCallState, triggerNativeLink])
 
   // Helper: check if current status allows calling
-  const canMakeCalls = (): boolean => {
+  const canMakeCalls = useCallback((): boolean => {
     try {
       const rawStatus = localStorage.getItem('recruiter_current_status')
       return !!rawStatus && rawStatus === 'ACTIVE'
     } catch {
       return false
     }
-  }
+  }, [])
 
   // Start pre-call countdown — when it reaches 0, executeCall is called
-  const startPreCallTimer = () => {
+  const startPreCallTimer = useCallback(() => {
     if (!currentCandidate?.phone) {
       toast.error('No phone number available')
       return
@@ -674,10 +674,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         return prev - 1
       })
     }, 1000)
-  }
+  }, [currentCandidate, callGap, canMakeCalls, startCallTimer, executeCall])
 
   // Skip pre-call countdown and call immediately
-  const skipPreCallAndDial = () => {
+  const skipPreCallAndDial = useCallback(() => {
     // Status check before calling
     if (!canMakeCalls()) {
       cancelPreCallTimer()
@@ -686,14 +686,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
     cancelPreCallTimer()
     executeCall()
-  }
+  }, [canMakeCalls, cancelPreCallTimer, executeCall])
 
   // ==================== ANDROID BACK BUTTON + CLOSE ALL MODALS ====================
   // Listen for 'close-all-modals' event (dispatched by page.tsx on back button)
   // Also push a history entry when disposition opens so back button works
   useEffect(() => {
     const handleCloseAllModals = () => {
-      console.log('[AutoDialer] close-all-modals event received')
+      // close-all-modals event received
       if (isDispositionModalOpen && !savingRecord) {
         setIsDispositionModalOpen(false)
         clearCallState()
@@ -772,7 +772,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
   }, [])
 
-  const toggleVoiceInput = async () => {
+  const toggleVoiceInput = useCallback(async () => {
     if (isListening) {
       if (recognitionRef.current) {
         try { recognitionRef.current.stop() } catch { /* ignore */ }
@@ -860,10 +860,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       console.error('[Voice] Failed to start recognition:', recErr)
       toast.error('Failed to start voice input')
     }
-  }
+  }, [isListening])
 
   // Template helper: replace placeholders
-  const fillTemplate = (content: string) => {
+  const fillTemplate = useCallback((content: string) => {
     if (!currentCandidate) return content
     return content
       .replace(/\{\{candidate_name\}\}/g, currentCandidate.name)
@@ -872,7 +872,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       .replace(/\{\{location\}\}/g, currentCandidate.location || '')
       .replace(/\{\{company\}\}/g, currentCandidate.company || '')
       .replace(/\{\{recruiter_name\}\}/g, user?.name || 'Recruiter')
-  }
+  }, [currentCandidate, user?.name])
 
   // All templates are available for both SMS and WhatsApp sending
   // DB type values: NOT_ANSWERED, SHORTLISTED, CUSTOM (not SMS/WHATSAPP)
@@ -881,7 +881,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // This is the MOST reliable way to open tel:/sms:/https: links in Android WebView
   // because it simulates a real user tap — which always fires shouldOverrideUrlLoading.
   // window.open() does NOT reliably trigger it (especially with _blank target).
-  const triggerNativeLink = (url: string) => {
+  const triggerNativeLink = useCallback((url: string) => {
     // Method 1: Hidden anchor click (triggers WebView shouldOverrideUrlLoading)
     try {
       const a = document.createElement('a')
@@ -894,9 +894,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       // Method 2: Direct navigation fallback
       try { window.location.href = url } catch { /* ignore */ }
     }
-  }
+  }, [])
 
-  const handleSendSms = () => {
+  const handleSendSms = useCallback(() => {
     const tmpl = templates.find((t) => t.id === selectedSmsTemplate)
     const msg = tmpl ? fillTemplate(tmpl.content) : ''
     if (!msg) { toast.error('No message to send'); return }
@@ -905,9 +905,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     try { window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}` } catch { triggerNativeLink(`sms:${phone}?body=${encodeURIComponent(msg)}`) }
     setTemplateSheetOpen(null)
     toast.success('Opening SMS app...')
-  }
+  }, [templates, selectedSmsTemplate, fillTemplate, currentCandidate, triggerNativeLink])
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsApp = useCallback(() => {
     const tmpl = templates.find((t) => t.id === selectedWaTemplate)
     const msg = tmpl ? fillTemplate(tmpl.content) : ''
     if (!msg) { toast.error('No message to send'); return }
@@ -916,7 +916,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     try { window.location.href = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` } catch { triggerNativeLink(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`) }
     setTemplateSheetOpen(null)
     toast.success('Opening WhatsApp...')
-  }
+  }, [templates, selectedWaTemplate, fillTemplate, currentCandidate, triggerNativeLink])
 
   // Load candidates for a list
   const loadCandidates = useCallback(async (listId: string) => {
@@ -936,14 +936,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   }, [])
 
   // Select a call list and go to summary
-  const handleSelectList = (list: CallListInfo) => {
+  const handleSelectList = useCallback((list: CallListInfo) => {
     setSelectedList(list)
     loadCandidates(list.id)
     setScreen('list-summary')
-  }
+  }, [loadCandidates])
 
   // Start calling
-  const handleStartCalling = () => {
+  const handleStartCalling = useCallback(() => {
     if (candidates.length === 0) {
       toast.error('No candidates to call')
       return
@@ -957,7 +957,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     setCompletedCount(0)
     setScreen('calling')
     advanceToCandidate(0)
-  }
+  }, [candidates, canMakeCalls, advanceToCandidate])
 
   /* ==================== PREPARE CALL STATE (before native tel: link activates) ====================
    * IMPORTANT: The Call button is a REAL <a href="tel:..."> link.
@@ -965,7 +965,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
    * This function runs on onTouchStart/onMouseDown — BEFORE the native click completes.
    * The native <a> click then sends the tel: URL to Android, which opens the phone dialer.
    */
-  const prepareCall = (e: React.TouchEvent | React.MouseEvent) => {
+  const prepareCall = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     if (!currentCandidate?.phone) {
       e.preventDefault()
       toast.error('No phone number available')
@@ -987,14 +987,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
 
-    console.log('[AutoDialer] prepareCall ready for:', phone, '— native tel: link will handle the rest')
+    // prepareCall ready — native tel: link will handle the rest
 
     // Do NOT call e.preventDefault() here!
     // Let the native <a href="tel:..."> click proceed so Android WebView intercepts it.
-  }
+  }, [currentCandidate, startCallTimer, saveCallState])
 
   // Advance to a specific candidate index
-  const advanceToCandidate = (idx: number) => {
+  const advanceToCandidate = useCallback((idx: number) => {
     if (idx >= candidates.length) {
       toast.success('All calls completed!')
       setScreen('select-list')
@@ -1031,10 +1031,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
-  }
+  }, [candidates, cancelPreCallTimer])
 
   // Cancel current call
-  const handleCancelCall = () => {
+  const handleCancelCall = useCallback(() => {
     stopCallTimer()
     cancelPreCallTimer()
     callInitiatedRef.current = false
@@ -1042,10 +1042,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     clearCallState()
     toast.info('Call cancelled')
     setScreen('list-summary')
-  }
+  }, [stopCallTimer, cancelPreCallTimer, clearCallState])
 
   // Skip current candidate
-  const handleSkip = () => {
+  const handleSkip = useCallback(() => {
     stopCallTimer()
     cancelPreCallTimer()
     callInitiatedRef.current = false
@@ -1054,10 +1054,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     toast.info('Candidate skipped')
     setCompletedCount((prev) => prev + 1)
     startGapTimer(currentIndex + 1)
-  }
+  }, [stopCallTimer, cancelPreCallTimer, clearCallState, startGapTimer, currentIndex])
 
   // Manually open disposition (user clicks "End Call & Log" button)
-  const handleManualEndCall = () => {
+  const handleManualEndCall = useCallback(() => {
     // Only stop the timer if disposition time is NOT included
     if (!includeDispositionTimeRef.current) {
       stopCallTimer()
@@ -1066,10 +1066,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     setCallInitiated(false)
     clearCallState()
     setIsDispositionModalOpen(true)
-  }
+  }, [stopCallTimer, clearCallState])
 
   // Gap timer between calls
-  const startGapTimer = (nextIdx: number) => {
+  const startGapTimer = useCallback((nextIdx: number) => {
     setCallGapCountdown(callGap)
     if (gapTimerRef.current) clearInterval(gapTimerRef.current)
     gapTimerRef.current = setInterval(() => {
@@ -1085,10 +1085,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         return prev - 1
       })
     }, 1000)
-  }
+  }, [callGap, advanceToCandidate])
 
   /* ==================== SAVE HELPERS ==================== */
-  const buildSaveBody = () => {
+  const buildSaveBody = useCallback(() => {
     const isScheduled = !!scheduledDate
 
     const body: Record<string, unknown> = {
@@ -1110,18 +1110,18 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
 
     return { body }
-  }
+  }, [currentCandidate, userId, selectedDisposition, notes, callTimer, scheduledDate, f2fInterviewDate, selectedClient, customClientName])
 
-  const validateSave = (): string | null => {
+  const validateSave = useCallback((): string | null => {
     if (!currentCandidate || !selectedDisposition) {
       return 'Please select a disposition'
     }
     // Client is optional for all dispositions — no mandatory check
     return null
-  }
+  }, [currentCandidate, selectedDisposition])
 
   /* ==================== SAVE & NEXT CALL ==================== */
-  const handleSaveAndNext = async () => {
+  const handleSaveAndNext = useCallback(async () => {
     const validationError = validateSave()
     if (validationError) {
       toast.error(validationError)
@@ -1131,7 +1131,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     setSavingRecord(true)
     try {
       const { body } = buildSaveBody()
-      console.log('[AutoDialer] Saving call record:', JSON.stringify(body))
 
       const res = await authFetch('/api/call-records', {
         method: 'POST',
@@ -1145,16 +1144,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         try {
           const errData = await res.json()
           errorMsg = errData.error || errorMsg
-          console.error('[AutoDialer] Save failed:', res.status, errData)
         } catch {
-          console.error('[AutoDialer] Save failed:', res.status, '(could not parse error body)')
+          // could not parse error body
         }
         toast.error(errorMsg)
         return
       }
 
       const result = await res.json()
-      console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
       recordCallActivity() // Reset auto-idle timer on call record save
 
       // STOP TIMER NOW — disposition submitted, capture final duration
@@ -1181,10 +1178,10 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       toast.error('Failed to save call record. Please try again.')
     }
     setSavingRecord(false)
-  }
+  }, [validateSave, buildSaveBody, stopCallTimer, clearCallState, startGapTimer, currentIndex, candidates])
 
   // Save without advancing (just save current record)
-  const handleSaveOnly = async () => {
+  const handleSaveOnly = useCallback(async () => {
     const validationError = validateSave()
     if (validationError) {
       toast.error(validationError)
@@ -1194,7 +1191,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     setSavingRecord(true)
     try {
       const { body } = buildSaveBody()
-      console.log('[AutoDialer] Saving call record:', JSON.stringify(body))
 
       const res = await authFetch('/api/call-records', {
         method: 'POST',
@@ -1217,7 +1213,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       }
 
       const result = await res.json()
-      console.log('[AutoDialer] Call record saved successfully:', result.callRecord?.id)
       recordCallActivity() // Reset auto-idle timer on call record save
 
       // STOP TIMER NOW — disposition submitted, capture final duration
@@ -1235,9 +1230,104 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       toast.error('Failed to save call record. Please try again.')
     }
     setSavingRecord(false)
-  }
+  }, [validateSave, buildSaveBody, stopCallTimer, clearCallState])
 
   const pendingCandidates = candidates.length - completedCount
+
+  // Memoize formatted timer display to avoid redundant formatDuration calls in JSX
+  const formattedTimer = useMemo(() => formatDuration(callTimer), [callTimer])
+
+  // Memoize call list stats to avoid recomputing on every render
+  const callListStats = useMemo(() =>
+    callLists.map((list) => {
+      const total = list.candidates.length
+      const pending = list.candidates.filter(
+        (c) => c.status === 'PENDING' || c.status === 'SCHEDULED'
+      ).length
+      const done = list.candidates.filter((c) => c.status === 'DONE').length
+      const progress = total > 0 ? Math.round((done / total) * 100) : 0
+      return { total, pending, done, progress }
+    }),
+  [callLists])
+
+  // Extracted inline handlers — avoid creating new function references in JSX
+  const handleBackToListSummary = useCallback(() => {
+    stopCallTimer()
+    callInitiatedRef.current = false
+    setCallInitiated(false)
+    clearCallState()
+    setIsDispositionModalOpen(false)
+    if (gapTimerRef.current) {
+      clearInterval(gapTimerRef.current)
+      gapTimerRef.current = null
+      setCallGapCountdown(null)
+    }
+    setScreen('list-summary')
+  }, [stopCallTimer, clearCallState])
+
+  const handleNextCall = useCallback(() => {
+    if (gapTimerRef.current) {
+      clearInterval(gapTimerRef.current)
+      gapTimerRef.current = null
+      setCallGapCountdown(null)
+    }
+    cancelPreCallTimer()
+    const nextIdx = currentIndex + 1
+    if (nextIdx < candidates.length) {
+      advanceToCandidate(nextIdx)
+      setScreen('calling')
+      toast.success(`Moving to candidate ${nextIdx + 1}`)
+    } else {
+      toast.success('All calls completed!')
+      setScreen('select-list')
+    }
+  }, [cancelPreCallTimer, advanceToCandidate, currentIndex, candidates])
+
+  const handleGapTimerClose = useCallback(() => {
+    if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+    gapTimerRef.current = null
+    setCallGapCountdown(null)
+    setScreen('list-summary')
+  }, [])
+
+  const handleGapTimerCallNow = useCallback(() => {
+    if (gapTimerRef.current) clearInterval(gapTimerRef.current)
+    gapTimerRef.current = null
+    setCallGapCountdown(null)
+    advanceToCandidate(currentIndex + 1)
+    setScreen('calling')
+  }, [advanceToCandidate, currentIndex])
+
+  const handleDispositionClose = useCallback(() => {
+    if (!savingRecord) {
+      setIsDispositionModalOpen(false)
+      clearCallState()
+      setCallInitiated(false)
+      callInitiatedRef.current = false
+      stopCallTimer()
+    }
+  }, [savingRecord, clearCallState, stopCallTimer])
+
+  const handleDispositionDialogChange = useCallback((open: boolean) => {
+    if (open || savingRecord) return
+    setIsDispositionModalOpen(false)
+    clearCallState()
+    setCallInitiated(false)
+    callInitiatedRef.current = false
+    stopCallTimer()
+  }, [savingRecord, clearCallState, stopCallTimer])
+
+  const handleOpenSmsTemplate = useCallback(() => {
+    setSelectedSmsTemplate('')
+    setSelectedSmsText('')
+    setTemplateSheetOpen('sms')
+  }, [])
+
+  const handleOpenWhatsAppTemplate = useCallback(() => {
+    setSelectedWaTemplate('')
+    setSelectedWaText('')
+    setTemplateSheetOpen('whatsapp')
+  }, [])
 
   /* ==================== SCREEN: Select Call List ==================== */
   if (screen === 'select-list') {
@@ -1269,13 +1359,8 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
           </Card>
         ) : (
           <div className="space-y-3">
-            {callLists.map((list) => {
-              const total = list.candidates.length
-              const pending = list.candidates.filter(
-                (c) => c.status === 'PENDING' || c.status === 'SCHEDULED'
-              ).length
-              const done = list.candidates.filter((c) => c.status === 'DONE').length
-              const progress = total > 0 ? Math.round((done / total) * 100) : 0
+            {callLists.map((list, listIdx) => {
+              const stats = callListStats[listIdx]
               return (
                 <Card
                   key={list.id}
@@ -1292,14 +1377,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <ListChecks className="h-3 w-3" />
-                            {total} total
+                            {stats.total} total
                           </span>
-                          <span className="text-amber-600 font-medium">{pending} pending</span>
-                          <span className="text-emerald-600 font-medium">{done} done</span>
+                          <span className="text-amber-600 font-medium">{stats.pending} pending</span>
+                          <span className="text-emerald-600 font-medium">{stats.done} done</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                        <Badge variant="secondary" className="text-[10px]">{progress}%</Badge>
+                        <Badge variant="secondary" className="text-[10px]">{stats.progress}%</Badge>
                         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                           Select
                           <ChevronRight className="h-3 w-3 ml-1" />
@@ -1396,20 +1481,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             variant="ghost"
             size="sm"
             className="h-11 w-11 p-0 rounded-full shrink-0"
-            onClick={() => {
-              // Stop any in-progress call state
-              stopCallTimer()
-              callInitiatedRef.current = false
-              setCallInitiated(false)
-              clearCallState()
-              setIsDispositionModalOpen(false)
-              if (gapTimerRef.current) {
-                clearInterval(gapTimerRef.current)
-                gapTimerRef.current = null
-                setCallGapCountdown(null)
-              }
-              setScreen('list-summary')
-            }}
+            onClick={handleBackToListSummary}
             aria-label="Go back"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -1443,7 +1515,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 {callInitiated && (
                   <Badge variant="outline" className="text-[10px] shrink-0 text-emerald-600 border-emerald-300">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse mr-1.5" />
-                    {formatDuration(callTimer)}
+                    {formattedTimer}
                   </Badge>
                 )}
               </div>
@@ -1474,7 +1546,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 <div className="flex items-center justify-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <span className="text-2xl font-mono font-bold tabular-nums">
-                    {formatDuration(callTimer)}
+                    {formattedTimer}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">Call in progress — return after finishing</p>
@@ -1529,24 +1601,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 variant="outline"
                 className="h-12 flex items-center justify-center gap-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200"
                 disabled={completedCount === 0 || callInitiated || callGapCountdown !== null || preCallCountdown !== null}
-                onClick={() => {
-                  // Next Call: skip gap timer, jump to the next pending candidate
-                  if (gapTimerRef.current) {
-                    clearInterval(gapTimerRef.current)
-                    gapTimerRef.current = null
-                    setCallGapCountdown(null)
-                  }
-                  cancelPreCallTimer()
-                  const nextIdx = currentIndex + 1
-                  if (nextIdx < candidates.length) {
-                    advanceToCandidate(nextIdx)
-                    setScreen('calling')
-                    toast.success(`Moving to candidate ${nextIdx + 1}`)
-                  } else {
-                    toast.success('All calls completed!')
-                    setScreen('select-list')
-                  }
-                }}
+                onClick={handleNextCall}
                 title={completedCount === 0 ? 'Complete or skip current call first' : `Go to next call (${currentIndex + 2}/${candidates.length})`}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -1649,12 +1704,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                   {/* Close button */}
                   <button
                     type="button"
-                    onClick={() => {
-                      if (gapTimerRef.current) clearInterval(gapTimerRef.current)
-                      gapTimerRef.current = null
-                      setCallGapCountdown(null)
-                      setScreen('list-summary')
-                    }}
+                    onClick={handleGapTimerClose}
                     className="absolute -top-2 -right-2 h-11 w-11 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors shadow-md"
                     style={{ touchAction: 'manipulation' }}
                     aria-label="Close"
@@ -1673,13 +1723,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     <Button
                       variant="outline"
                       className="mt-3 h-11 w-full"
-                      onClick={() => {
-                        if (gapTimerRef.current) clearInterval(gapTimerRef.current)
-                        gapTimerRef.current = null
-                        setCallGapCountdown(null)
-                        advanceToCandidate(currentIndex + 1)
-                        setScreen('calling')
-                      }}
+                      onClick={handleGapTimerCallNow}
                       style={{ touchAction: 'manipulation' }}
                     >
                       Call Now
@@ -1703,13 +1747,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                     <Button
                       variant="outline"
                       className="mt-2"
-                      onClick={() => {
-                        if (gapTimerRef.current) clearInterval(gapTimerRef.current)
-                        gapTimerRef.current = null
-                        setCallGapCountdown(null)
-                        advanceToCandidate(currentIndex + 1)
-                        setScreen('calling')
-                      }}
+                      onClick={handleGapTimerCallNow}
                     >
                       Call Now
                     </Button>
@@ -1729,15 +1767,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
               className="fixed inset-0 bg-black/40"
               data-dialer-overlay="disposition"
               style={{ touchAction: 'none' }}
-              onClick={() => {
-                if (!savingRecord) {
-                  setIsDispositionModalOpen(false)
-                  clearCallState()
-                  setCallInitiated(false)
-                  callInitiatedRef.current = false
-                  stopCallTimer()
-                }
-              }}
+              onClick={handleDispositionClose}
               aria-hidden="true"
             />
             {/* Bottom sheet — pure CSS, no body scroll lock, no portal
@@ -1765,15 +1795,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                 <div className="w-11" />
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!savingRecord) {
-                      setIsDispositionModalOpen(false)
-                      clearCallState()
-                      setCallInitiated(false)
-                      callInitiatedRef.current = false
-                      stopCallTimer()
-                    }
-                  }}
+                  onClick={handleDispositionClose}
                   disabled={savingRecord}
                   className="h-11 w-11 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-red-100 hover:text-red-600 active:bg-red-200 active:opacity-70"
                   style={{ touchAction: 'manipulation', pointerEvents: 'auto', position: 'relative', zIndex: 10 }}
@@ -1819,7 +1841,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                         {includeDispositionTime && timerRef.current && (
                           <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
                         )}
-                        {formatDuration(callTimer)}
+                        {formattedTimer}
                       </Badge>
                     </div>
                     {includeDispositionTime && timerRef.current && (
@@ -1962,11 +1984,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                         size="sm"
                         className="h-11 min-w-[100px]"
                         style={{ touchAction: 'manipulation', flex: 1 }}
-                        onClick={() => {
-                          setSelectedSmsTemplate('')
-                          setSelectedSmsText('')
-                          setTemplateSheetOpen('sms')
-                        }}
+                        onClick={handleOpenSmsTemplate}
                       >
                         <Send className="h-3.5 w-3.5 mr-1.5" />
                         SMS
@@ -1977,11 +1995,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                         size="sm"
                         className="h-11 min-w-[100px]"
                         style={{ touchAction: 'manipulation', flex: 1 }}
-                        onClick={() => {
-                          setSelectedWaTemplate('')
-                          setSelectedWaText('')
-                          setTemplateSheetOpen('whatsapp')
-                        }}
+                        onClick={handleOpenWhatsAppTemplate}
                       >
                         <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                         WhatsApp
@@ -2164,14 +2178,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
         {/* Desktop: centered Dialog — only render on non-mobile to avoid portal duplicate */}
         {!isMobile && (
-          <Dialog open={isDispositionModalOpen} onOpenChange={(open) => {
-            if (open || savingRecord) return
-            setIsDispositionModalOpen(false)
-            clearCallState()
-            setCallInitiated(false)
-            callInitiatedRef.current = false
-            stopCallTimer()
-          }}>
+          <Dialog open={isDispositionModalOpen} onOpenChange={handleDispositionDialogChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-base">
@@ -2198,7 +2205,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       {includeDispositionTime && timerRef.current && (
                         <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse mr-1.5" />
                       )}
-                      {formatDuration(callTimer)}
+                      {formattedTimer}
                     </Badge>
                   </div>
                   {includeDispositionTime && timerRef.current && (
@@ -2322,7 +2329,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       variant="outline"
                       size="sm"
                       className="h-10"
-                      onClick={() => { setSelectedSmsTemplate(''); setSelectedSmsText(''); setTemplateSheetOpen('sms') }}
+                      onClick={handleOpenSmsTemplate}
                     >
                       <Send className="h-3.5 w-3.5 mr-1.5" />
                       SMS
@@ -2332,7 +2339,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
                       variant="outline"
                       size="sm"
                       className="h-10"
-                      onClick={() => { setSelectedWaTemplate(''); setSelectedWaText(''); setTemplateSheetOpen('whatsapp') }}
+                      onClick={handleOpenWhatsAppTemplate}
                     >
                       <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                       WhatsApp

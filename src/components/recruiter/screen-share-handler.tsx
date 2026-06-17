@@ -126,7 +126,6 @@ export function ScreenCaptureService() {
         }
       } catch (err) {
         // User denied screen picker or error
-        console.log('[ScreenCapture] Capture failed:', err)
         isCapturingRef.current = false
         socketRef.current?.emit('capture-failed', {
           userId,

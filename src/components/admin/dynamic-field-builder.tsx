@@ -159,7 +159,7 @@ function SortableFieldItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-9 w-9"
                 onClick={() => onEdit(field)}
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -167,7 +167,7 @@ function SortableFieldItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-red-500 hover:text-red-700"
+                className="h-9 w-9 text-red-500 hover:text-red-700"
                 onClick={() => onDelete(field)}
               >
                 <Trash2 className="h-3.5 w-3.5" />

@@ -127,7 +127,7 @@ const DialogContent = React.forwardRef<
           ref={setRefs}
           data-slot="dialog-content"
           className={cn(
-            "bg-background pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 w-full max-w-[calc(100%-2rem)] max-h-[85vh] flex flex-col overflow-hidden gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+            "bg-background pointer-events-auto data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 w-full max-w-[calc(100%-1.5rem)] max-h-[90vh] flex flex-col overflow-hidden gap-4 rounded-lg border sm:p-6 p-4 shadow-lg duration-200 sm:max-w-lg",
             className
           )}
         >

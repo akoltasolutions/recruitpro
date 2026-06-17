@@ -1412,7 +1412,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                           {pasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} valid
                         </Badge>
                       </div>
-                      <div className="rounded-md border overflow-auto max-h-48">
+                      <div className="rounded-md border overflow-x-auto max-h-48">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -1532,7 +1532,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                 <Separator />
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Preview (first 5 rows)</Label>
-                  <div className="rounded-md border overflow-auto max-h-48">
+                  <div className="rounded-md border overflow-x-auto max-h-48">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1635,7 +1635,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                     <Label className="text-sm font-semibold">Data Preview</Label>
                     <Badge variant="secondary" className="text-xs">{gsRows.length} rows</Badge>
                   </div>
-                  <div className="rounded-md border overflow-auto max-h-48">
+                  <div className="rounded-md border overflow-x-auto max-h-48">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1849,7 +1849,7 @@ export function CallListManagement({ userId }: { userId: string }) {
             )}
           </div>
 
-          <div className="rounded-md border overflow-auto max-h-96 flex-1 min-h-0">
+          <div className="rounded-md border overflow-x-auto max-h-96 flex-1 min-h-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -2053,15 +2053,15 @@ export function CallListManagement({ userId }: { userId: string }) {
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
                   </Button>
                 </div>
-                <div className="rounded-md border overflow-auto max-h-72">
+                <div className="rounded-md border overflow-x-auto max-h-72">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">#</TableHead>
-                        <TableHead className="min-w-[120px]">Name *</TableHead>
-                        <TableHead className="min-w-[130px]">Phone *</TableHead>
-                        <TableHead className="min-w-[140px] hidden sm:table-cell">Email</TableHead>
-                        <TableHead className="min-w-[120px] hidden lg:table-cell">Role</TableHead>
+                        <TableHead className="min-w-[100px]">Name *</TableHead>
+                        <TableHead className="min-w-[100px]">Phone *</TableHead>
+                        <TableHead className="min-w-[100px] hidden sm:table-cell">Email</TableHead>
+                        <TableHead className="min-w-[100px] hidden lg:table-cell">Role</TableHead>
                         <TableHead className="min-w-[100px] hidden lg:table-cell">Location</TableHead>
                         <TableHead className="min-w-[100px] hidden lg:table-cell">Company</TableHead>
                         <TableHead className="min-w-[100px] hidden lg:table-cell">Notes</TableHead>
@@ -2083,7 +2083,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
+                              className="h-9 w-9 p-0 text-muted-foreground hover:text-red-600"
                               onClick={() => removeAddNumberRow(index)}
                               disabled={addNumbersEntries.length <= 1}
                             >
@@ -2121,7 +2121,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                         {addNumbersPasteParsed.filter(e => e.name.trim() && e.phone.trim()).length} valid
                       </Badge>
                     </div>
-                    <div className="rounded-md border overflow-auto max-h-48">
+                    <div className="rounded-md border overflow-x-auto max-h-48">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -2290,7 +2290,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                 </AlertDescription>
               </Alert>
 
-              <div className="rounded-md border overflow-auto max-h-64">
+              <div className="rounded-md border overflow-x-auto max-h-64">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -2371,7 +2371,7 @@ export function CallListManagement({ userId }: { userId: string }) {
                 <Separator />
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Preview (first 5 rows)</Label>
-                  <div className="rounded-md border overflow-auto max-h-40">
+                  <div className="rounded-md border overflow-x-auto max-h-40">
                     <Table>
                       <TableHeader>
                         <TableRow>

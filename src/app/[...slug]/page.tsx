@@ -12,8 +12,8 @@ import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components
  * - Page refreshes work on any route (no 404s)
  * - All navigation uses clean URLs without #
  *
- * The client-side router (usePathRouter in AppContent) reads the
- * original URL path from the browser and renders the correct component.
+ * The client-side router in AppContent reads the original URL path
+ * from the browser and renders the correct component.
  */
 export default function CatchAllPage() {
   const isOnline = useNetworkStatus()

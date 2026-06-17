@@ -179,11 +179,11 @@ export function DispositionManagement() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(d)} className="h-8 w-8"><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => setConfirmToggle(d)} className="h-8 w-8">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(d)} className="h-9 w-9"><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => setConfirmToggle(d)} className="h-9 w-9">
                         <Power className={`h-3.5 w-3.5 ${d.isActive ? 'text-red-500' : 'text-emerald-500'}`} />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(d)} className="h-8 w-8 text-red-500 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(d)} className="h-9 w-9 text-red-500 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>

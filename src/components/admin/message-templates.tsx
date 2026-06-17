@@ -169,7 +169,7 @@ export function MessageTemplates() {
   return (
     <div>
       <PageHeader title="Message Templates" description="Manage WhatsApp and SMS templates" icon={MessageSquare}>
-        <Button onClick={openCreate} className="bg-emerald-600 hover:bg-emerald-700">
+        <Button onClick={openCreate} className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
           <Plus className="h-4 w-4 mr-2" /> Add Template
         </Button>
       </PageHeader>
@@ -217,7 +217,7 @@ export function MessageTemplates() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>{editing ? 'Edit Template' : 'Add Template'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2 -mx-1 px-1">
             <div className="space-y-2">
               <Label>Template Name</Label>
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Not Answered Template" />
@@ -247,13 +247,13 @@ export function MessageTemplates() {
             </div>
             <div className="space-y-2">
               <Label>Content</Label>
-              <Textarea ref={textareaRef} value={content} onChange={e => setContent(e.target.value)} placeholder="Write your message template..." rows={5} />
+              <Textarea ref={textareaRef} value={content} onChange={e => setContent(e.target.value)} placeholder="Write your message template..." rows={5} className="min-h-[100px]" />
               <p className="text-xs text-muted-foreground">Click on variables above to insert them at cursor position</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} className="flex-1 sm:flex-none">Cancel</Button>
+            <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 flex-1 sm:flex-none">{saving ? 'Saving...' : editing ? 'Update' : 'Create'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -262,7 +262,7 @@ export function MessageTemplates() {
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle>Template Preview</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 py-2">
             <div>
               <Label className="text-xs text-muted-foreground">Original</Label>
               <p className="text-sm bg-muted rounded-md p-3 whitespace-pre-wrap">{previewTemplate?.content}</p>

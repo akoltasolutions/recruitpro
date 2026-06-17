@@ -58,8 +58,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('[ExportCalls] Query where:', JSON.stringify(where));
-
     // ── Fetch records ─────────────────────────────────────────────────
     const callRecords = await db.callRecord.findMany({
       where,

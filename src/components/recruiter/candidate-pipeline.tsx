@@ -664,7 +664,7 @@ export function CandidatePipeline() {
   const DesktopTable = () => {
     if (filteredCandidates.length === 0) {
       return (
-        <div className="hidden md:block rounded-xl border overflow-hidden">
+        <div className="hidden md:block rounded-xl border overflow-x-auto overflow-hidden">
           <Table>
             <TableBody>
               <TableRow>
@@ -679,7 +679,7 @@ export function CandidatePipeline() {
     }
 
     return (
-      <div className="hidden md:block rounded-xl border overflow-hidden">
+      <div className="hidden md:block rounded-xl border overflow-x-auto overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
@@ -707,7 +707,7 @@ export function CandidatePipeline() {
               return (
                 <TableRow key={c.id} className={editing ? 'bg-muted/20' : ''}>
                   {/* Candidate name */}
-                  <TableCell className="font-medium min-w-[140px]">
+                  <TableCell className="font-medium min-w-[120px]">
                     <div>
                       <p className="font-medium text-sm">{c.name}</p>
                       {c.location && (
@@ -742,7 +742,7 @@ export function CandidatePipeline() {
                   </TableCell>
 
                   {/* Stage-specific field */}
-                  <TableCell className="min-w-[160px]">
+                  <TableCell className="min-w-[120px]">
                     {activeStage === 'SHORTLISTED' && (
                       editing ? (
                         <Textarea
@@ -826,7 +826,7 @@ export function CandidatePipeline() {
                   </TableCell>
 
                   {/* Stage selector */}
-                  <TableCell className="min-w-[140px]">
+                  <TableCell className="min-w-[100px]">
                     {editing ? (
                       <select
                         value={editStage}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
+import React, { useState, useEffect, useCallback, useSyncExternalStore, Suspense } from 'react'
 import { useAuthStore, isWithinLoginGrace } from '@/stores/auth-store'
 import { LoginPage } from '@/components/auth/login-page'
 import { SignupPage } from '@/components/auth/signup-page'
@@ -12,35 +12,46 @@ import { UserManagement } from '@/components/admin/user-management'
 import { ApprovalRequests } from '@/components/admin/approval-requests'
 import { ClientManagement } from '@/components/admin/client-management'
 import { DispositionManagement } from '@/components/admin/disposition-management'
-import { CallListManagement } from '@/components/admin/call-list-management'
 import { MessageTemplates } from '@/components/admin/message-templates'
-import { TeamPerformance } from '@/components/admin/team-performance'
-import { TeamMonitoring } from '@/components/admin/team-monitoring'
 import { AdminSettings } from '@/components/admin/admin-settings'
 import { AnnouncementsManagement } from '@/components/admin/announcements-management'
-import { TeamManagementEnhanced } from '@/components/admin/team-management-enhanced'
 import { OrganizationSettings } from '@/components/admin/organization-settings'
-import { DynamicFieldBuilder } from '@/components/admin/dynamic-field-builder'
-import { DispositionBuilder } from '@/components/admin/disposition-builder'
-import { ShiftManagement } from '@/components/admin/shift-management'
 import { SuperAdminLayout } from '@/components/super-admin/super-admin-layout'
-import { PlatformDashboard } from '@/components/super-admin/platform-dashboard'
-import { OrganizationManagement } from '@/components/super-admin/organization-management'
-import { PlanManagement } from '@/components/super-admin/plan-management'
-import { PlatformSettingsPage } from '@/components/super-admin/platform-settings'
-import { BackupRestorePage } from '@/components/admin/backup-restore'
-import { AdminPipeline } from '@/components/admin/admin-pipeline'
 import { RecruiterLayout } from '@/components/recruiter/recruiter-layout'
 import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
-import { AutoDialer } from '@/components/recruiter/auto-dialer'
-import { CallHistory } from '@/components/recruiter/call-history'
-import { ScheduledCalls } from '@/components/recruiter/scheduled-calls'
 import { Settings } from '@/components/recruiter/settings'
-import { CandidatePipeline } from '@/components/recruiter/candidate-pipeline'
-import { CreateCallingList } from '@/components/recruiter/create-calling-list'
-import { CallingListView } from '@/components/recruiter/calling-list-view'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
+
+// Lazy-loaded heavy components (code-split for faster initial load)
+const CallListManagement = React.lazy(() => import('@/components/admin/call-list-management').then(m => ({ default: m.CallListManagement })))
+const TeamPerformance = React.lazy(() => import('@/components/admin/team-performance').then(m => ({ default: m.TeamPerformance })))
+const TeamMonitoring = React.lazy(() => import('@/components/admin/team-monitoring').then(m => ({ default: m.TeamMonitoring })))
+const ShiftManagement = React.lazy(() => import('@/components/admin/shift-management').then(m => ({ default: m.ShiftManagement })))
+const TeamManagementEnhanced = React.lazy(() => import('@/components/admin/team-management-enhanced').then(m => ({ default: m.TeamManagementEnhanced })))
+const DynamicFieldBuilder = React.lazy(() => import('@/components/admin/dynamic-field-builder').then(m => ({ default: m.DynamicFieldBuilder })))
+const DispositionBuilder = React.lazy(() => import('@/components/admin/disposition-builder').then(m => ({ default: m.DispositionBuilder })))
+const AdminPipeline = React.lazy(() => import('@/components/admin/admin-pipeline').then(m => ({ default: m.AdminPipeline })))
+const BackupRestorePage = React.lazy(() => import('@/components/admin/backup-restore').then(m => ({ default: m.BackupRestorePage })))
+const PlatformDashboard = React.lazy(() => import('@/components/super-admin/platform-dashboard').then(m => ({ default: m.PlatformDashboard })))
+const OrganizationManagement = React.lazy(() => import('@/components/super-admin/organization-management').then(m => ({ default: m.OrganizationManagement })))
+const PlanManagement = React.lazy(() => import('@/components/super-admin/plan-management').then(m => ({ default: m.PlanManagement })))
+const PlatformSettingsPage = React.lazy(() => import('@/components/super-admin/platform-settings').then(m => ({ default: m.PlatformSettingsPage })))
+const AutoDialer = React.lazy(() => import('@/components/recruiter/auto-dialer').then(m => ({ default: m.AutoDialer })))
+const CallHistory = React.lazy(() => import('@/components/recruiter/call-history').then(m => ({ default: m.CallHistory })))
+const ScheduledCalls = React.lazy(() => import('@/components/recruiter/scheduled-calls').then(m => ({ default: m.ScheduledCalls })))
+const CandidatePipeline = React.lazy(() => import('@/components/recruiter/candidate-pipeline').then(m => ({ default: m.CandidatePipeline })))
+const CreateCallingList = React.lazy(() => import('@/components/recruiter/create-calling-list').then(m => ({ default: m.CreateCallingList })))
+const CallingListView = React.lazy(() => import('@/components/recruiter/calling-list-view').then(m => ({ default: m.CallingListView })))
+
+// Reusable page-level loading skeleton
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
 
 // Auth route paths (used for clean URL routing)
 const AUTH_ROUTES = ['login', 'signup', 'register', 'forgot-password'] as const
@@ -285,28 +296,28 @@ export function AppContent() {
       // If on old /pipeline URL, show nothing (redirect will happen via useEffect)
       if (currentPath === 'pipeline') return null
       switch (superAdminPage) {
-        case 'platform-dashboard': return <PlatformDashboard />
-        case 'organizations': return <OrganizationManagement />
-        case 'plans': return <PlanManagement />
-        case 'platform-settings': return <PlatformSettingsPage />
-        case 'backup-restore': return <BackupRestorePage />
+        case 'platform-dashboard': return <Suspense fallback={<PageLoader />}><PlatformDashboard /></Suspense>
+        case 'organizations': return <Suspense fallback={<PageLoader />}><OrganizationManagement /></Suspense>
+        case 'plans': return <Suspense fallback={<PageLoader />}><PlanManagement /></Suspense>
+        case 'platform-settings': return <Suspense fallback={<PageLoader />}><PlatformSettingsPage /></Suspense>
+        case 'backup-restore': return <Suspense fallback={<PageLoader />}><BackupRestorePage /></Suspense>
         case 'admin-dashboard': return <AdminDashboard />
-        case 'team-performance': return isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />
-        case 'team-monitoring': return <TeamMonitoring />
-        case 'shift-management': return <ShiftManagement />
+        case 'team-performance': return <Suspense fallback={<PageLoader />}>{isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />}</Suspense>
+        case 'team-monitoring': return <Suspense fallback={<PageLoader />}><TeamMonitoring /></Suspense>
+        case 'shift-management': return <Suspense fallback={<PageLoader />}><ShiftManagement /></Suspense>
         case 'dispositions': return <DispositionManagement />
-        case 'call-lists': return <CallListManagement userId={user.id} />
+        case 'call-lists': return <Suspense fallback={<PageLoader />}><CallListManagement userId={user.id} /></Suspense>
         case 'templates': return <MessageTemplates />
         case 'clients': return <ClientManagement />
         case 'announcements': return <AnnouncementsManagement />
         case 'users': return <UserManagement />
-        case 'team-management': return <TeamManagementEnhanced />
+        case 'team-management': return <Suspense fallback={<PageLoader />}><TeamManagementEnhanced /></Suspense>
         case 'approvals': return <ApprovalRequests />
-        case 'field-builder': return <DynamicFieldBuilder />
-        case 'disposition-builder': return <DispositionBuilder />
+        case 'field-builder': return <Suspense fallback={<PageLoader />}><DynamicFieldBuilder /></Suspense>
+        case 'disposition-builder': return <Suspense fallback={<PageLoader />}><DispositionBuilder /></Suspense>
         case 'admin-settings': return <AdminSettings userId={user.id} />
         case 'organization-settings': return <OrganizationSettings />
-        default: return <PlatformDashboard />
+        default: return <Suspense fallback={<PageLoader />}><PlatformDashboard /></Suspense>
       }
     }
 
@@ -324,21 +335,21 @@ export function AppContent() {
       if (currentPath === 'pipeline') return null
       switch (adminPage) {
         case 'dashboard': return <AdminDashboard />
-        case 'team-performance': return isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />
-        case 'team-monitoring': return <TeamMonitoring />
-        case 'shift-management': return <ShiftManagement />
+        case 'team-performance': return <Suspense fallback={<PageLoader />}>{isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />}</Suspense>
+        case 'team-monitoring': return <Suspense fallback={<PageLoader />}><TeamMonitoring /></Suspense>
+        case 'shift-management': return <Suspense fallback={<PageLoader />}><ShiftManagement /></Suspense>
         case 'dispositions': return <DispositionManagement />
-        case 'call-lists': return <CallListManagement userId={user.id} />
+        case 'call-lists': return <Suspense fallback={<PageLoader />}><CallListManagement userId={user.id} /></Suspense>
         case 'templates': return <MessageTemplates />
         case 'clients': return <ClientManagement />
         case 'users': return <UserManagement />
         case 'approvals': return <ApprovalRequests />
         case 'settings': return <AdminSettings userId={user.id} />
         case 'announcements': return <AnnouncementsManagement />
-        case 'team-management': return <TeamManagementEnhanced />
+        case 'team-management': return <Suspense fallback={<PageLoader />}><TeamManagementEnhanced /></Suspense>
         case 'organization-settings': return <OrganizationSettings />
-        case 'field-builder': return <DynamicFieldBuilder />
-        case 'disposition-builder': return <DispositionBuilder />
+        case 'field-builder': return <Suspense fallback={<PageLoader />}><DynamicFieldBuilder /></Suspense>
+        case 'disposition-builder': return <Suspense fallback={<PageLoader />}><DispositionBuilder /></Suspense>
         default: return <AdminDashboard />
       }
     }
@@ -354,12 +365,12 @@ export function AppContent() {
   const renderRecruiterPage = () => {
     switch (recruiterPage) {
       case 'home': return <RecruiterDashboard userId={user.id} onNavigate={(page) => go(page)} />
-      case 'calling-list': return <CallingListView userId={user.id} onNavigate={(page) => go(page)} />
-      case 'create-list': return <CreateCallingList userId={user.id} onNavigate={(page) => go(page)} />
-      case 'pending': return <AutoDialer userId={user.id} onNavigate={(page) => go(page)} />
-      case 'history': return <CallHistory userId={user.id} />
-      case 'scheduled': return <ScheduledCalls userId={user.id} onNavigate={(page) => go(page)} />
-      case 'pipeline': return <CandidatePipeline />
+      case 'calling-list': return <Suspense fallback={<PageLoader />}><CallingListView userId={user.id} onNavigate={(page) => go(page)} /></Suspense>
+      case 'create-list': return <Suspense fallback={<PageLoader />}><CreateCallingList userId={user.id} onNavigate={(page) => go(page)} /></Suspense>
+      case 'pending': return <Suspense fallback={<PageLoader />}><AutoDialer userId={user.id} onNavigate={(page) => go(page)} /></Suspense>
+      case 'history': return <Suspense fallback={<PageLoader />}><CallHistory userId={user.id} /></Suspense>
+      case 'scheduled': return <Suspense fallback={<PageLoader />}><ScheduledCalls userId={user.id} onNavigate={(page) => go(page)} /></Suspense>
+      case 'pipeline': return <Suspense fallback={<PageLoader />}><CandidatePipeline /></Suspense>
       case 'settings': return <Settings userId={user.id} onLogout={handleLogout} />
       default: return <RecruiterDashboard userId={user.id} onNavigate={(page) => go(page)} />
     }

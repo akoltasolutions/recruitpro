@@ -765,19 +765,19 @@ export function AdminPipeline() {
     }
 
     return (
-      <div className="hidden md:block rounded-xl border overflow-hidden">
+      <div className="hidden md:block rounded-xl border overflow-x-auto overflow-hidden">
         <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="font-semibold min-w-[180px]">Candidate</TableHead>
-                <TableHead className="font-semibold min-w-[120px]">Phone</TableHead>
-                <TableHead className="font-semibold min-w-[100px]">Role</TableHead>
-                <TableHead className="font-semibold min-w-[100px]">Disposition</TableHead>
-                <TableHead className="font-semibold min-w-[100px]">Client</TableHead>
-                <TableHead className="font-semibold min-w-[120px]">Recruiter</TableHead>
-                <TableHead className="font-semibold min-w-[120px]">Organization</TableHead>
-                <TableHead className="font-semibold min-w-[100px]">Stage</TableHead>
+                <TableHead className="font-semibold min-w-[120px]">Candidate</TableHead>
+                <TableHead className="font-semibold min-w-[100px]">Phone</TableHead>
+                <TableHead className="font-semibold min-w-[80px]">Role</TableHead>
+                <TableHead className="font-semibold min-w-[80px]">Disposition</TableHead>
+                <TableHead className="font-semibold min-w-[80px]">Client</TableHead>
+                <TableHead className="font-semibold min-w-[100px]">Recruiter</TableHead>
+                <TableHead className="font-semibold min-w-[100px]">Organization</TableHead>
+                <TableHead className="font-semibold min-w-[80px]">Stage</TableHead>
                 <TableHead className="font-semibold min-w-[140px]">Notes</TableHead>
                 <TableHead className="font-semibold text-right min-w-[80px]">Actions</TableHead>
               </TableRow>

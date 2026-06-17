@@ -1,5 +1,15 @@
 import { NextResponse } from 'next/server';
+import { existsSync, statSync } from 'fs';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
+/**
+ * Diagnostic endpoint — verifies environment, database connectivity,
+ * bcryptjs, and process info.
+ *
+ * NOT called from any frontend component. Intended for manual debugging
+ * by developers (e.g., curl /api/debug).
+ */
 export async function GET() {
   const results: Record<string, string> = {};
 
@@ -10,23 +20,21 @@ export async function GET() {
 
   // 2. Check if DB file exists
   try {
-    const fs = require('fs');
     const dbPath = process.env.DATABASE_URL?.replace('file:', '') || '';
     results['DB_FILE_PATH'] = dbPath;
-    results['DB_FILE_EXISTS'] = fs.existsSync(dbPath) ? 'YES' : 'NO';
-    if (fs.existsSync(dbPath)) {
-      const stats = fs.statSync(dbPath);
+    results['DB_FILE_EXISTS'] = existsSync(dbPath) ? 'YES' : 'NO';
+    if (existsSync(dbPath)) {
+      const stats = statSync(dbPath);
       results['DB_FILE_SIZE'] = stats.size + ' bytes';
     }
-  } catch (e: any) {
-    results['DB_FILE_CHECK_ERROR'] = e.message;
+  } catch (e: unknown) {
+    results['DB_FILE_CHECK_ERROR'] = (e as Error).message;
   }
 
-  // 3. Try importing and using Prisma Client
+  // 3. Try using Prisma Client
   try {
-    const { PrismaClient } = require('@prisma/client');
     results['PRISMA_IMPORT'] = 'SUCCESS';
-    
+
     const client = new PrismaClient({
       log: ['error', 'warn'],
     });
@@ -42,18 +50,17 @@ export async function GET() {
 
     await client.$disconnect();
     results['PRISMA_DISCONNECT'] = 'SUCCESS';
-  } catch (e: any) {
-    results['PRISMA_ERROR'] = e.message || String(e);
-    results['PRISMA_ERROR_STACK'] = e.stack?.split('\n').slice(0, 5).join('\n') || 'No stack';
+  } catch (e: unknown) {
+    results['PRISMA_ERROR'] = (e as Error).message || String(e);
+    results['PRISMA_ERROR_STACK'] = (e as Error).stack?.split('\n').slice(0, 5).join('\n') || 'No stack';
   }
 
   // 4. Check if bcryptjs works
   try {
-    const bcrypt = require('bcryptjs');
     const hash = await bcrypt.hash('test', 10);
     results['BCRYPTJS'] = 'OK (hash length: ' + hash.length + ')';
-  } catch (e: any) {
-    results['BCRYPTJS_ERROR'] = e.message || String(e);
+  } catch (e: unknown) {
+    results['BCRYPTJS_ERROR'] = (e as Error).message || String(e);
   }
 
   // 5. Check process info

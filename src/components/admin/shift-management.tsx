@@ -851,7 +851,7 @@ export function ShiftManagement() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-9 w-9"
                       onClick={() => openEditDialog(shift)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -859,7 +859,7 @@ export function ShiftManagement() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-red-500 hover:text-red-600"
+                      className="h-9 w-9 text-red-500 hover:text-red-600"
                       onClick={() => openDeleteDialog(shift)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -919,6 +919,7 @@ export function ShiftManagement() {
       {!loading && shifts.length > 0 && (
         <Card className="hidden lg:block">
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -977,7 +978,7 @@ export function ShiftManagement() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8"
+                          className="h-9 w-9"
                           onClick={() => openEditDialog(shift)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -985,7 +986,7 @@ export function ShiftManagement() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                           onClick={() => openDeleteDialog(shift)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -996,6 +997,7 @@ export function ShiftManagement() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

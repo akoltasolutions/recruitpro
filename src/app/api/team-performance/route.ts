@@ -33,16 +33,6 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)))
 
-    console.log('[TeamPerformance] Fetching with params:', {
-      recruiterId,
-      dateFrom,
-      dateTo,
-      page,
-      limit,
-      adminOrgId: auth.organizationId,
-      adminRole: auth.role,
-    })
-
     // Build where clause with filters
     const where: Record<string, unknown> = {}
 
@@ -72,8 +62,6 @@ export async function GET(request: NextRequest) {
       }
       where.calledAt = calledAtFilter
     }
-
-    console.log('[TeamPerformance] Query where clause:', JSON.stringify(where))
 
     // Fetch paginated call records, total count, and aggregate stats (from ALL matching records) in parallel
     const [callRecords, totalCount, aggregateStats] = await Promise.all([
@@ -126,8 +114,6 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    console.log('[TeamPerformance] Found', totalCount, 'total call records, returning', callRecords.length, 'for page', page)
-
     // Fetch all active recruiters for the dropdown
     // Include both USER and RECRUITER roles (system may use either)
     const recruiterWhere: Record<string, unknown> = { isActive: true }
@@ -142,8 +128,6 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     })
-
-    console.log('[TeamPerformance] Found', recruiters.length, 'recruiters')
 
     return NextResponse.json({
       callRecords,

@@ -64,8 +64,6 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    console.log('[CallRecords GET] Query where:', JSON.stringify(where));
-
     const [callRecords, totalCount] = await Promise.all([
       db.callRecord.findMany({
         where,
@@ -147,15 +145,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('[CallRecords POST] Creating record:', {
-      candidateId,
-      recruiterId,
-      dispositionId,
-      callDuration,
-      callStatus,
-      organizationId,
-    });
-
     const callRecord = await db.callRecord.create({
       data: {
         candidateId,
@@ -177,8 +166,6 @@ export async function POST(request: NextRequest) {
         client: true,
       },
     });
-
-    console.log('[CallRecords POST] Call record created successfully:', callRecord.id);
 
     // Log activity for recruiter tracking
     try {

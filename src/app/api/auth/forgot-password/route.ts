@@ -15,16 +15,10 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
     return false;
   }
 
-  console.log('[ForgotPassword] RESEND_API_KEY is set (length:', apiKey.length, 'starts re_:', apiKey.startsWith('re_'));
-
   try {
     const { Resend } = await import('resend');
-    console.log('[ForgotPassword] resend module loaded successfully');
-
     const resend = new Resend(apiKey);
-
     const fromAddress = process.env.EMAIL_FROM || 'RecruitPro <noreply@app.akolta.com>';
-    console.log('[ForgotPassword] Sending email from:', fromAddress, 'to:', to);
 
     const { data, error: resendError } = await resend.emails.send({
       from: fromAddress,
@@ -65,7 +59,6 @@ async function sendResetEmail(to: string, name: string, code: string): Promise<b
       return false;
     }
 
-    console.log('[ForgotPassword] Reset email sent successfully to:', to, 'Resend ID:', data?.id);
     return true;
   } catch (error) {
     console.error('[ForgotPassword] Exception sending email via Resend:', error);

@@ -86,7 +86,7 @@ export function AdminDashboard() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="w-[130px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-full sm:w-auto sm:min-w-[130px] rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>

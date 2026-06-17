@@ -408,7 +408,7 @@ export function CallingListView({ userId, onNavigate }: Props) {
                           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         </div>
                       ) : (
-                        <div className="rounded-md border overflow-auto max-h-96">
+                        <div className="rounded-md border overflow-x-auto max-h-96">
                           <Table>
                             <TableHeader>
                               <TableRow>
@@ -536,7 +536,7 @@ export function CallingListView({ userId, onNavigate }: Props) {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="rounded-md border overflow-auto max-h-[60vh]">
+                <div className="rounded-md border overflow-x-auto max-h-[60vh]">
                   <Table>
                     <TableHeader>
                       <TableRow>

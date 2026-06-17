@@ -230,7 +230,7 @@ export function ClientManagement() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="size-8"
+                          className="size-9"
                           onClick={() => openEdit(client)}
                           title="Edit client"
                         >
@@ -239,7 +239,7 @@ export function ClientManagement() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="size-8"
+                          className="size-9"
                           onClick={() => setToggleConfirm(client)}
                           title={client.isActive ? 'Deactivate client' : 'Activate client'}
                         >
@@ -248,7 +248,7 @@ export function ClientManagement() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                          className="size-9 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
                           onClick={() => setDeleteConfirm(client)}
                           title="Delete client"
                         >
