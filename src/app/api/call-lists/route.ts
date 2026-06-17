@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       db.callList.findMany({
         where,
         include: {
-          candidates: { select: { id: true } },
+          candidates: { select: { id: true, status: true } },
           assignments: {
             include: {
               recruiter: { select: { id: true, name: true, email: true } },

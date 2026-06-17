@@ -29,7 +29,7 @@ interface CallingList {
   description: string | null
   source: string
   createdAt: string
-  candidates: Array<{ id: string }>
+  candidates: Array<{ id: string; status: string }>
 }
 
 interface Candidate {
@@ -121,6 +121,7 @@ export function CallingListView({ userId, onNavigate }: Props) {
       setTotalCount(json.totalCount || 0)
       setCurrentPage(json.page || page)
       setTotalPages(json.totalPages || 1)
+      lastFetchedRef.current = Date.now()
     } catch {
       toast.error('Failed to load calling lists')
     } finally {
@@ -135,6 +136,32 @@ export function CallingListView({ userId, onNavigate }: Props) {
     setCallingLists([])
     fetchCallingLists(1, pageSize, debouncedSearch)
   }, [debouncedSearch, pageSize])
+
+  // ─── Auto-sync: refetch lists when page regains visibility/focus ──────────
+  // This ensures counts are always accurate after returning from the dialer
+  const lastFetchedRef = useRef(0)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchedRef.current > 3000) {
+        lastFetchedRef.current = Date.now()
+        setListCandidatesMap({})
+        fetchCallingLists(1, pageSize, debouncedSearch)
+      }
+    }
+    const handleFocus = () => {
+      if (Date.now() - lastFetchedRef.current > 3000) {
+        lastFetchedRef.current = Date.now()
+        setListCandidatesMap({})
+        fetchCallingLists(1, pageSize, debouncedSearch)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('focus', handleFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [fetchCallingLists, pageSize, debouncedSearch])
 
   // ─── Infinite Scroll ──────────────────────────────────────────────────────
 
@@ -239,10 +266,8 @@ export function CallingListView({ userId, onNavigate }: Props) {
   }
 
   const getListStats = (list: CallingList) => {
-    const candidates = listCandidatesMap[list.id]
-    if (!candidates || candidates.length === 0) {
-      return { total: list.candidates?.length || 0, pending: 0, done: 0, scheduled: 0 }
-    }
+    // Always compute from list.candidates (included in API response with status field)
+    const candidates = list.candidates || []
     const total = candidates.length
     const pending = candidates.filter((c) => c.status === 'PENDING').length
     const done = candidates.filter((c) => c.status === 'DONE').length
@@ -333,20 +358,20 @@ export function CallingListView({ userId, onNavigate }: Props) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="flex items-center gap-2 text-xs">
+                      <div className="flex items-center gap-2 text-xs flex-wrap justify-end">
                         <Badge variant="secondary" className="text-xs">
                           <Users className="h-3 w-3 mr-1" />
-                          {stats.total}
+                          {stats.total} candidates
                         </Badge>
-                        {stats.pending > 0 && (
-                          <Badge className={statusColors.PENDING}>{stats.pending} pending</Badge>
-                        )}
-                        {stats.done > 0 && (
-                          <Badge className={statusColors.DONE}>{stats.done} done</Badge>
-                        )}
+                        <Badge className={statusColors.PENDING}>{stats.pending} pending</Badge>
+                        <Badge className={statusColors.DONE}>{stats.done} done</Badge>
                         {stats.scheduled > 0 && (
                           <Badge className={statusColors.SCHEDULED}>{stats.scheduled} scheduled</Badge>
                         )}
+                        <span className="text-muted-foreground text-xs whitespace-nowrap">
+                          <Clock className="h-3 w-3 inline mr-1" />
+                          {format(new Date(list.createdAt), 'MMM dd, yyyy')}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1 ml-2">
                         <Button
