@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, requireAdmin } from '@/lib/auth-middleware';
+import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -10,7 +10,7 @@ import path from 'path';
 export async function GET(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth || !requireSuperAdmin(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = await authenticateRequest(request);
-    if (!auth || !requireAdmin(auth.role)) {
+    if (!auth || !requireSuperAdmin(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
