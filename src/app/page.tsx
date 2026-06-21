@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { AppContent } from '@/components/app-router'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
+import { PwaInstallPrompt } from '@/components/pwa/pwa-install-prompt'
 
 export default function Home() {
   const isOnline = useNetworkStatus()
@@ -25,6 +26,7 @@ export default function Home() {
     <AppErrorBoundary onReset={() => window.location.reload()}>
       <OfflineOverlay isOnline={isOnline} onRetry={handleRetry} retrying={retrying} />
       <AppContent />
+      <PwaInstallPrompt />
     </AppErrorBoundary>
   )
 }
