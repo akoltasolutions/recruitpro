@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserPlus, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert, KeyRound } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserPlus, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert, KeyRound, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { MfaVerification } from './mfa-verification'
 
@@ -14,6 +14,38 @@ interface LoginPageProps {
   onSwitch: () => void
   onForgotPassword?: () => void
   onRegister?: () => void
+}
+
+/* ── PWA Install Button (shown on login page) ── */
+function InstallAppButton() {
+  const handleClick = () => {
+    // If browser supports native install prompt, trigger it
+    const beforeInstall = (window as unknown as { beforeinstallpromptevent?: unknown }).beforeinstallpromptevent as { prompt: () => void } | undefined
+    if (beforeInstall) {
+      beforeInstall.prompt()
+      return
+    }
+    // For iOS or browsers without prompt: show instructions
+    const isIos = /ipad|iphone|ipod/.test(navigator.userAgent.toLowerCase()) && !('MSStream' in window)
+    if (isIos) {
+      toast.info('To install on iPhone/iPad: Tap the Share button → "Add to Home Screen"', { duration: 6000 })
+    } else {
+      // Android Chrome: open the PWA in standalone context
+      toast.success('RecruitPro can be installed! Use your browser menu → "Install app" or "Add to Home Screen"', { duration: 6000 })
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors cursor-pointer"
+    >
+      <Smartphone className="h-4 w-4" />
+      Download Android App
+      <Download className="h-4 w-4 ml-0.5" />
+    </button>
+  )
 }
 
 export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageProps) {
@@ -261,15 +293,9 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
               </div>
             )}
 
-            {/* Android App Download — Coming Soon */}
+            {/* Android App Install — PWA */}
             <div className="w-full border-t pt-4 mt-2">
-              <div
-                className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg border border-muted-foreground/20 bg-muted/50 text-muted-foreground cursor-default text-sm font-medium"
-              >
-                <Smartphone className="h-4 w-4" />
-                Download Android App
-                <span className="ml-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-2 py-0.5 text-xs font-semibold">Coming Soon</span>
-              </div>
+              <InstallAppButton />
               <p className="text-xs text-center text-muted-foreground mt-2">
                 Install the RecruitPro app on your Android phone for the best calling experience
               </p>
