@@ -715,3 +715,26 @@ Stage Summary:
 - Super admin credentials guaranteed: ompratap@akolta.com / Admin@123 always works after deploy
 - Dead code removed: -261 lines, 2 files deleted, 3 package moves
 - 3 commits pushed: a84fd7c (cleanup), 90882b3 (deploy fix), 07a524e (password fix)
+---
+Task ID: pwa-android-app
+Agent: Main Agent
+Task: Generate Android/iOS installable PWA for RecruitPro
+
+Work Log:
+- Generated AI app icon (1024x1024 emerald green headset/recruitment design)
+- Created all icon sizes: 512x512, 192x192, 180x180 (Apple), 32x32, 16x16 + maskable variant
+- Created manifest.json: standalone display, emerald theme (#059669), all icon sizes
+- Created service worker (sw.js): network-first for API, cache-first for static, offline HTML fallback
+- Updated layout.tsx: PWA meta tags, manifest link, apple-mobile-web-app, theme-color
+- Created PwaRegister component: registers service worker with auto-update on visibility change
+- Created PwaInstallPrompt component: auto dialog after 15s for Android + iOS Safari instructions
+- Verified live: manifest serves as JSON (200), theme-color meta, Apple PWA meta, SW active
+- Verified install dialog renders on live site after login
+
+Stage Summary:
+- PWA fully live at https://app.akolta.com
+- Android: "Install App" prompt appears automatically after 15s on Chrome
+- iOS: Step-by-step Safari instructions shown
+- App opens fullscreen without browser chrome (standalone mode)
+- Service worker provides offline caching for static assets and cached pages
+- Commit: 8c8154a "feat: Progressive Web App (PWA) — installable Android/iOS app"
