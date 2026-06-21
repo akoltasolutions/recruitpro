@@ -12,7 +12,7 @@ jobs:
   deploy:
     name: SSH Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Deploy via SSH
@@ -21,8 +21,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 60s
-          command_timeout: 4m
+          timeout: 120s
+          command_timeout: 8m
           envs: RESEND_API_KEY
           script: |
             cd /home/ubuntu/recruitpro
