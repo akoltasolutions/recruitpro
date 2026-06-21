@@ -27,20 +27,20 @@ async function migrate() {
     })
 
     if (existingAdmin) {
-      // Ensure it has SUPER_ADMIN role and is active
-      if (existingAdmin.role !== 'SUPER_ADMIN' || !existingAdmin.isActive) {
-        await prisma.user.update({
-          where: { email: 'ompratap@akolta.com' },
-          data: {
-            role: 'SUPER_ADMIN',
-            isActive: true,
-            approvalStatus: 'APPROVED',
-          },
-        })
-        console.log('Updated ompratap@akolta.com to SUPER_ADMIN (was role:', existingAdmin.role, ', active:', existingAdmin.isActive, ')')
-      } else {
-        console.log('ompratap@akolta.com already exists as SUPER_ADMIN — no changes needed')
-      }
+      // Ensure it has SUPER_ADMIN role, is active, and password is correct
+      const hashedPassword = await bcrypt.hash('Admin@123', SALT_ROUNDS)
+      await prisma.user.update({
+        where: { email: 'ompratap@akolta.com' },
+        data: {
+          password: hashedPassword,
+          role: 'SUPER_ADMIN',
+          isActive: true,
+          approvalStatus: 'APPROVED',
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      })
+      console.log('Updated ompratap@akolta.com: reset password, ensured SUPER_ADMIN + active + unlocked')
     } else {
       // 2. Check if there's a legacy admin@recruitment.com to migrate from
       const legacyAdmin = await prisma.user.findUnique({
