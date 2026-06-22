@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="emerald_primary">#059669</color>
+    <color name="emerald_dark">#047857</color>
+    <color name="statusBarColor">#047857</color>
+    <color name="navigationBarBarColor">#059669</color>
+    <color name="splash_bg">#059669</color>
+</resources>

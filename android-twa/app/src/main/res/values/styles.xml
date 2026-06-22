@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RecruitPro" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/emerald_primary</item>
+        <item name="android:colorPrimaryDark">@color/emerald_dark</item>
+        <item name="android:colorAccent">@color/emerald_primary</item>
+        <item name="android:statusBarColor">@color/statusBarColor</item>
+        <item name="android:navigationBarColor">@color/navigationBarBarColor</item>
+    </style>
+
+    <style name="Theme.RecruitPro.Launcher" parent="Theme.RecruitPro">
+        <item name="android:windowBackground">@color/splash_bg</item>
+    </style>
+</resources>
