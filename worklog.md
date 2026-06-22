@@ -738,3 +738,22 @@ Stage Summary:
 - App opens fullscreen without browser chrome (standalone mode)
 - Service worker provides offline caching for static assets and cached pages
 - Commit: 8c8154a "feat: Progressive Web App (PWA) — installable Android/iOS app"
+
+---
+Task ID: PWA-popup-fix
+Agent: Main Agent
+Task: Disable automatic PWA install popup — only show on explicit user action
+
+Work Log:
+- Identified two auto-popup triggers in `PwaInstallPrompt` component: (1) 15s timer after `beforeinstallprompt` event, (2) 15s timer for iOS users
+- Removed `<PwaInstallPrompt />` from `src/app/page.tsx` — eliminates all automatic popups
+- Kept `InstallAppButton` on login page — only triggers on explicit user click
+- Kept `PwaRegister` in layout.tsx — service worker registration has no popup, just caching/offline
+- Verified on live site: no auto-popup after 20+ seconds, zero console errors, login page renders clean
+- Deployed via git push → GitHub Actions
+
+Stage Summary:
+- Users can now use the portal without any installation interruption
+- "Download Android App" button remains on login page as explicit user action only
+- Commit: 12eb439 "fix: disable automatic PWA install popup - only show on explicit user action"
+- Live at https://app.akolta.com
