@@ -832,3 +832,23 @@ Stage Summary:
 - Note: APK needs rebuild on machine with Android SDK (not available in sandbox)
 - Commit: 74e8348 "feat: Android native calling bridge - ACTION_CALL + return-from-dialer detection"
 - Live web app verified: login, all routes intact
+
+---
+Task ID: apk-download-button
+Agent: Main Agent
+Task: Fix Download Android App button to download actual APK file
+
+Work Log:
+- Old button used JS handler (PWA install prompt/toast) — no actual APK download
+- Changed from <button onClick={handler}> to <a href="/RecruitPro.apk" download="RecruitPro.apk">
+- Copied android-twa/RecruitPro.apk → public/RecruitPro.apk (served as static file)
+- Added auto-sync step in deploy.sh (both zero-downtime and sync build paths):
+  - `cp -f android-twa/RecruitPro.apk public/RecruitPro.apk`
+  - Every deployment automatically syncs the latest APK
+- Verified live: APK returns 200, correct MIME type, 162KB
+
+Stage Summary:
+- Button click → direct APK download (works on all browsers, no JS needed)
+- Future APK updates: rebuild android-twa → git push → deploy auto-copies to public/
+- Commit: 06f1810 "fix: Download Android App button now downloads actual APK file"
+- Live verified: https://app.akolta.com/RecruitPro.apk returns 200
