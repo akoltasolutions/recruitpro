@@ -2,55 +2,84 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-const APK_FILE_NAME = 'recruitpro.apk';
 const UPLOAD_DIR = path.join(process.cwd(), 'upload');
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
+const APK_VERSIONS_DIR = path.join(UPLOAD_DIR, 'apk-versions');
+const META_FILE = path.join(process.cwd(), 'db', 'android-versions.json');
 
-async function getMobileAppConfig() {
+interface ApkVersion {
+  id: string
+  version: string
+  fileName: string
+  originalName: string
+  size: number
+  uploadedAt: string
+  releaseNotes: string
+  isActive: boolean
+}
+
+async function getVersionsMeta(): Promise<ApkVersion[]> {
   try {
-    const raw = await fs.readFile(path.join(process.cwd(), 'db', 'platform-settings.json'), 'utf-8');
-    const settings = JSON.parse(raw);
-    return settings.mobileApp || null;
+    const raw = await fs.readFile(META_FILE, 'utf-8');
+    return JSON.parse(raw) as ApkVersion[];
   } catch {
-    return null;
+    return [];
   }
 }
 
 /**
  * Find the APK file across multiple locations.
- * Priority: upload/ → public/
+ * Priority: upload/apk-versions/{active} → upload/recruitpro.apk → public/RecruitPro.apk
  */
-async function findApkPath(): Promise<string | null> {
-  const locations = [
-    path.join(UPLOAD_DIR, APK_FILE_NAME),
+async function findApkPath(): Promise<{ path: string | null; activeVersion: ApkVersion | null }> {
+  // 1. Check version history for active version
+  try {
+    const versions = await getVersionsMeta();
+    const active = versions.find(v => v.isActive);
+    if (active) {
+      const versionPath = path.join(APK_VERSIONS_DIR, active.fileName);
+      try {
+        await fs.access(versionPath);
+        return { path: versionPath, activeVersion: active };
+      } catch {
+        // File missing, fall through
+      }
+    }
+  } catch {
+    // Fall through to legacy locations
+  }
+
+  // 2. Legacy: upload/recruitpro.apk
+  const legacyPaths = [
+    path.join(UPLOAD_DIR, 'recruitpro.apk'),
     path.join(PUBLIC_DIR, 'RecruitPro.apk'),
   ];
-  for (const loc of locations) {
+  for (const loc of legacyPaths) {
     try {
       await fs.access(loc);
-      return loc;
+      return { path: loc, activeVersion: null };
     } catch {
-      // not found, try next
+      // not found
     }
   }
-  return null;
+
+  return { path: null, activeVersion: null };
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const filePath = await findApkPath();
+    const { path: filePath, activeVersion } = await findApkPath();
     const fileExists = !!filePath;
-
-    const mobileConfig = await getMobileAppConfig();
 
     // If requesting JSON metadata (used by frontend to show version info)
     if (request.nextUrl.searchParams.get('info') === '1') {
       return NextResponse.json({
         available: fileExists,
-        downloadUrl: mobileConfig?.downloadUrl || '/api/download-apk',
+        downloadUrl: '/api/download-apk',
         fileName: 'RecruitPro.apk',
-        version: mobileConfig?.version || '1.0',
-        releaseDate: mobileConfig?.releaseDate || null,
+        version: activeVersion?.version || '1.0',
+        releaseDate: activeVersion?.uploadedAt || null,
+        releaseNotes: activeVersion?.releaseNotes || null,
         size: fileExists && filePath ? (await fs.stat(filePath)).size : 0,
       });
     }
@@ -85,7 +114,7 @@ export async function GET(request: NextRequest) {
     <p>The RecruitPro Android app is being prepared. Please check back later or contact your administrator for the APK file.</p>
     <span class="badge">APK Not Uploaded Yet</span>
     <br>
-    <a href="/" class="back">← Back to Login</a>
+    <a href="/" class="back">&larr; Back to Login</a>
   </div>
 </body>
 </html>`;
@@ -99,12 +128,17 @@ export async function GET(request: NextRequest) {
     const fileBuffer = await fs.readFile(filePath);
     const stats = await fs.stat(filePath);
 
+    // Use version-specific filename if available
+    const downloadName = activeVersion
+      ? `RecruitPro-v${activeVersion.version}.apk`
+      : 'RecruitPro.apk';
+
     // Disable caching so users always get the latest APK
     return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.android.package-archive',
-        'Content-Disposition': `attachment; filename="RecruitPro.apk"`,
+        'Content-Disposition': `attachment; filename="${downloadName}"`,
         'Content-Length': stats.size.toString(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
