@@ -26,8 +26,11 @@ const EXCLUDE_FILE_NAMES = new Set([
   'worklog.md',
 ]);
 
+/** Format a date as a file-safe timestamp: YYYY-MM-DD_HH-mm-ss */
 function getTimestamp(): string {
-  return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15); // YYYYMMDDHHmmss
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 }
 
 function getProjectRoot(): string {

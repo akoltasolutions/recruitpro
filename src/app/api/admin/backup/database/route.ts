@@ -4,6 +4,12 @@ import { db } from '@/lib/db';
 import path from 'path';
 import { existsSync } from 'fs';
 
+/** Format a date as a file-safe timestamp: YYYY-MM-DD_HH-mm-ss */
+function formatFileTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 /**
  * Pure TypeScript SQLite dump generator.
  * No external CLI (sqlite3) dependency — works on any server.
@@ -81,10 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Generate timestamp for filename ───────────────────────────────
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[-:T]/g, '')
-      .slice(0, 15);
+    const timestamp = formatFileTimestamp(new Date());
     const filename = `recruitpro-db-backup-${timestamp}.sql`;
 
     // ── Step 1: Get all table schemas from sqlite_master ─────────────

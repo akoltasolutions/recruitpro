@@ -157,7 +157,7 @@ function CodeBackupSection() {
         throw new Error(data.error || 'Failed to create backup')
       }
       const blob = await res.blob()
-      downloadBlob(blob, `recruitpro-backup.${format}`)
+      downloadBlob(blob, res, `recruitpro-backup.${format}`)
       setLastBackup(new Date().toLocaleString())
       toast.success(`Code backup (.${format}) downloaded successfully`)
     } catch (err) {
@@ -336,7 +336,7 @@ function DatabaseBackupSection() {
         throw new Error(data.error || 'Failed to create database backup')
       }
       const blob = await res.blob()
-      downloadBlob(blob, 'recruitpro-db-backup.sql')
+      downloadBlob(blob, res, 'recruitpro-db-backup.sql')
       setLastBackup(new Date().toLocaleString())
       toast.success('Database backup downloaded successfully')
     } catch (err) {
@@ -559,7 +559,7 @@ function ExportSection() {
 
       const blob = await res.blob()
       const ext = format === 'excel' ? '.xlsx' : '.csv'
-      downloadBlob(blob, `${type}-export${ext}`)
+      downloadBlob(blob, res, `${type}-export${ext}`)
       toast.success(`${type === 'users' ? 'Users' : 'Candidates'} exported successfully`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Export failed')
@@ -1022,11 +1022,18 @@ function ImportSection() {
 
 // ── Shared Helpers ─────────────────────────────────────────────────────────
 
-function downloadBlob(blob: Blob, fallbackName?: string) {
+function downloadBlob(blob: Blob, response: Response, fallbackName?: string) {
+  // Extract filename from Content-Disposition header (set by the server)
+  const disposition = response.headers.get('content-disposition') || ''
+  let filename = fallbackName || 'download'
+  const match = disposition.match(/filename[^;=]*=["']?([^"';]+)/i)
+  if (match && match[1]) {
+    filename = match[1].trim()
+  }
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = fallbackName || 'download'
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

@@ -3,6 +3,12 @@ import { authenticateRequest, requireSuperAdmin } from '@/lib/auth-middleware';
 import { db } from '@/lib/db';
 import { formatDateTimeExport } from '@/lib/formatters';
 
+/** Format a date as a file-safe timestamp: YYYY-MM-DD_HH-mm-ss */
+function formatFileTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // ── Auth: Super Admin only ────────────────────────────────────────
@@ -54,7 +60,7 @@ export async function GET(request: NextRequest) {
       'Created Date': formatDateTimeExport(user.createdAt),
     }));
 
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
+    const timestamp = formatFileTimestamp(new Date());
 
     // ── CSV format ─────────────────────────────────────────────────────
     if (format === 'csv') {

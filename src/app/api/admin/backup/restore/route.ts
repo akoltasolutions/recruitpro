@@ -5,6 +5,12 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 
+/** Format a date as a file-safe timestamp: YYYY-MM-DD_HH-mm-ss */
+function formatFileTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 /**
  * Pure TypeScript SQLite restore.
  * No external CLI (sqlite3) dependency — works on any server.
@@ -114,7 +120,7 @@ export async function POST(request: NextRequest) {
     const dbPath = path.join(process.cwd(), 'db', 'custom.db');
 
     // ── SAFETY: Auto-backup current database before restore ───────────
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15);
+    const timestamp = formatFileTimestamp(new Date());
     const preRestoreBackupPath = path.join(path.dirname(dbPath), `custom.db.pre-restore-${timestamp}`);
 
     try {
