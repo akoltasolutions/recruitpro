@@ -293,6 +293,15 @@ echo $$ > /tmp/recruitpro-deploy.lock
 
 cd "$PROJECT_DIR"
 
+# Sync latest Android APK to public/ (serves /RecruitPro.apk)
+log "[BUILD] Syncing Android APK to public/..."
+if [ -f android-twa/RecruitPro.apk ]; then
+    cp -f android-twa/RecruitPro.apk public/RecruitPro.apk
+    log "[BUILD] Android APK synced ($(du -sh public/RecruitPro.apk | cut -f1))"
+else
+    log "[BUILD] No android-twa/RecruitPro.apk found, skipping APK sync."
+fi
+
 # Backup existing .next
 log "[BUILD] Backing up existing .next build..."
 if [ -d .next ]; then
@@ -397,6 +406,15 @@ else
         rm -rf .next-backup 2>/dev/null || true
         cp -a .next .next-backup
         log "Backed up existing .next ($(du -sh .next-backup | cut -f1))"
+    fi
+
+    # Sync latest Android APK to public/
+    log "Syncing Android APK to public/..."
+    if [ -f android-twa/RecruitPro.apk ]; then
+        cp -f android-twa/RecruitPro.apk public/RecruitPro.apk
+        log "Android APK synced ($(du -sh public/RecruitPro.apk | cut -f1))"
+    else
+        log "No android-twa/RecruitPro.apk found, skipping APK sync."
     fi
 
     # Free memory before build

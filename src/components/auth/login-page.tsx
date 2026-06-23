@@ -16,35 +16,18 @@ interface LoginPageProps {
   onRegister?: () => void
 }
 
-/* ── PWA Install Button (shown on login page) ── */
+/* ── APK Download Button (shown on login page) ── */
 function InstallAppButton() {
-  const handleClick = () => {
-    // If browser supports native install prompt, trigger it
-    const beforeInstall = (window as unknown as { beforeinstallpromptevent?: unknown }).beforeinstallpromptevent as { prompt: () => void } | undefined
-    if (beforeInstall) {
-      beforeInstall.prompt()
-      return
-    }
-    // For iOS or browsers without prompt: show instructions
-    const isIos = /ipad|iphone|ipod/.test(navigator.userAgent.toLowerCase()) && !('MSStream' in window)
-    if (isIos) {
-      toast.info('To install on iPhone/iPad: Tap the Share button → "Add to Home Screen"', { duration: 6000 })
-    } else {
-      // Android Chrome: open the PWA in standalone context
-      toast.success('RecruitPro can be installed! Use your browser menu → "Install app" or "Add to Home Screen"', { duration: 6000 })
-    }
-  }
-
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors cursor-pointer"
+    <a
+      href="/RecruitPro.apk"
+      download="RecruitPro.apk"
+      className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors cursor-pointer no-underline"
     >
       <Smartphone className="h-4 w-4" />
       Download Android App
       <Download className="h-4 w-4 ml-0.5" />
-    </button>
+    </a>
   )
 }
 
