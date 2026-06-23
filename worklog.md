@@ -757,3 +757,29 @@ Stage Summary:
 - "Download Android App" button remains on login page as explicit user action only
 - Commit: 12eb439 "fix: disable automatic PWA install popup - only show on explicit user action"
 - Live at https://app.akolta.com
+
+---
+Task ID: backup-fix
+Agent: Main Agent
+Task: Fix "Internal server error" on Generate Database Backup (sqlite3 CLI not installed on AWS)
+
+Work Log:
+- Identified root cause: `POST /api/admin/backup/database` used `execSync('sqlite3 ...')` which requires the sqlite3 CLI tool — not installed on the AWS Ubuntu server
+- Rewrote `/api/admin/backup/database/route.ts`: Pure TypeScript SQL dump generator using Prisma `$queryRawUnsafe`
+  - Queries `sqlite_master` to auto-discover all 24 tables (no hardcoded list)
+  - Generates proper CREATE TABLE + DROP TABLE IF EXISTS + INSERT statements
+  - Handles NULL, strings with escaped quotes, dates, BLOBs, BigInt
+  - Includes indexes in dump
+  - Wrapped in BEGIN TRANSACTION / COMMIT
+- Also fixed `/api/admin/backup/restore/route.ts`: Same sqlite3 CLI dependency replaced
+  - Custom SQL parser that handles quoted strings with semicolons and comments
+  - Executes statements via Prisma `$executeRawUnsafe`
+  - Pre-restore auto-backup for safety
+  - Detailed error reporting with per-statement tracking
+- Verified on live: API returns 200, Content-Type: application/sql, 273,462 chars of valid SQL
+
+Stage Summary:
+- Zero external CLI dependencies — works on any server with just Node.js/Bun
+- Auto-discovers tables — always accurate even when schema changes
+- Commit: d6e89b3 "fix: replace sqlite3 CLI with pure TypeScript SQL dump/restore"
+- Live verified at https://app.akolta.com/api/admin/backup/database
