@@ -4,6 +4,7 @@ import path from 'path';
 
 const APK_FILE_NAME = 'recruitpro.apk';
 const UPLOAD_DIR = path.join(process.cwd(), 'upload');
+const PUBLIC_DIR = path.join(process.cwd(), 'public');
 
 async function getMobileAppConfig() {
   try {
@@ -15,18 +16,30 @@ async function getMobileAppConfig() {
   }
 }
 
+/**
+ * Find the APK file across multiple locations.
+ * Priority: upload/ → public/
+ */
+async function findApkPath(): Promise<string | null> {
+  const locations = [
+    path.join(UPLOAD_DIR, APK_FILE_NAME),
+    path.join(PUBLIC_DIR, 'RecruitPro.apk'),
+  ];
+  for (const loc of locations) {
+    try {
+      await fs.access(loc);
+      return loc;
+    } catch {
+      // not found, try next
+    }
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const filePath = path.join(UPLOAD_DIR, APK_FILE_NAME);
-
-    // Check if APK file exists
-    let fileExists = false;
-    try {
-      await fs.access(filePath);
-      fileExists = true;
-    } catch {
-      fileExists = false;
-    }
+    const filePath = await findApkPath();
+    const fileExists = !!filePath;
 
     const mobileConfig = await getMobileAppConfig();
 
@@ -38,11 +51,11 @@ export async function GET(request: NextRequest) {
         fileName: 'RecruitPro.apk',
         version: mobileConfig?.version || '1.0',
         releaseDate: mobileConfig?.releaseDate || null,
-        size: fileExists ? (await fs.stat(filePath)).size : 0,
+        size: fileExists && filePath ? (await fs.stat(filePath)).size : 0,
       });
     }
 
-    if (!fileExists) {
+    if (!fileExists || !filePath) {
       // APK not uploaded yet — return a friendly message page
       const html = `<!DOCTYPE html>
 <html>
