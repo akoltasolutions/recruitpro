@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       body.recruiterId = auth.userId;
     }
 
-    const { candidateId, recruiterId, dispositionId, clientId, customClientName, notes, callDuration, callStatus, scheduledAt, f2fInterviewDate } = body;
+    const { candidateId, recruiterId, dispositionId, clientId, customClientName, notes, callDuration, callStartedAt, callStatus, scheduledAt, f2fInterviewDate } = body;
 
     if (!candidateId || !recruiterId) {
       return NextResponse.json({ error: 'candidateId and recruiterId are required' }, { status: 400 });
@@ -145,6 +145,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // SERVER-SIDE DURATION CALCULATION (2026-06-23):
+    // If callDuration is 0 or missing, calculate from callStartedAt to now.
+    // This is the permanent server-side fallback that ensures duration is always captured
+    // even if the client-side timer fails.
+    let finalCallDuration = Math.max(0, callDuration || 0);
+    let finalCallStartedAt: Date | null = null;
+
+    if (callStartedAt) {
+      finalCallStartedAt = new Date(callStartedAt);
+      if (finalCallDuration === 0 || !callDuration) {
+        // Client didn't send a duration — compute from call start to now
+        const computedSeconds = Math.round((Date.now() - finalCallStartedAt.getTime()) / 1000);
+        if (computedSeconds > 0) {
+          finalCallDuration = computedSeconds;
+        }
+      }
+    }
+
     const callRecord = await db.callRecord.create({
       data: {
         candidateId,
@@ -154,7 +172,8 @@ export async function POST(request: NextRequest) {
         clientId: clientId || null,
         customClientName: customClientName || null,
         notes: notes || null,
-        callDuration: Math.max(0, callDuration || 0),
+        callDuration: finalCallDuration,
+        callStartedAt: finalCallStartedAt,
         callStatus: callStatus || 'COMPLETED',
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         f2fInterviewDate: f2fInterviewDate ? new Date(f2fInterviewDate) : null,
@@ -181,8 +200,9 @@ export async function POST(request: NextRequest) {
             candidateName: candidate?.name,
             phone: candidate?.phone,
             disposition: dispositionId,
-            duration: callDuration || 0,
-            callSessionDuration: callDuration || 0,
+            duration: finalCallDuration,
+            callSessionDuration: finalCallDuration,
+            callStartedAt: finalCallStartedAt?.toISOString() || null,
           }),
         },
       });

@@ -376,6 +376,7 @@ model CallRecord {
   organizationId String?
   notes          String?
   callDuration   Int      @default(0)
+  callStartedAt  DateTime? // Timestamp when recruiter clicked Call button
   callStatus     String   @default("COMPLETED") // COMPLETED, FAILED, SKIPPED, SCHEDULED
   scheduledAt    DateTime?
   f2fInterviewDate DateTime?
@@ -394,6 +395,7 @@ model CallRecord {
   @@index([recruiterId, calledAt])
   @@index([candidateId])
   @@index([dispositionId])
+  @@index([callStartedAt])
 }
 
 model MessageTemplate {

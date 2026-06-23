@@ -133,9 +133,11 @@ export async function GET(request: NextRequest) {
       const calls = callsByUser.get(r.id) || [];
       const sh = calcHours(logs);
       let connected = 0, notAnswered = 0, shortlisted = 0;
+      let totalCallDuration = 0;
       const other: Record<string, number> = {};
 
       for (const c of calls) {
+        totalCallDuration += c.callDuration || 0;
         const d = c.dispositionId ? dispMap.get(c.dispositionId) : null;
         const dt = d?.type?.toUpperCase() || '';
         if (c.callStatus === 'FAILED' || dt === 'NOT_CONNECTED') notAnswered++;
@@ -145,6 +147,12 @@ export async function GET(request: NextRequest) {
         else if (c.callStatus === 'COMPLETED') connected++;
       }
 
+      // Format total call duration as HH:MM:SS
+      const durH = Math.floor(totalCallDuration / 3600);
+      const durM = Math.floor((totalCallDuration % 3600) / 60);
+      const durS = totalCallDuration % 60;
+      const totalCallTimeStr = `${String(durH).padStart(2, '0')}:${String(durM).padStart(2, '0')}:${String(durS).padStart(2, '0')}`;
+
       return {
         name: r.name, email: r.email, phone: r.phone || '',
         totalLoginHours: Math.round(sh.LOGIN * 100) / 100,
@@ -153,6 +161,7 @@ export async function GET(request: NextRequest) {
         idleHours: Math.round(sh.IDLE * 100) / 100,
         lunchHours: Math.round(sh.LUNCH * 100) / 100,
         totalCalls: calls.length, connected, notAnswered, shortlisted,
+        totalCallTimeStr, totalCallDurationSec: totalCallDuration,
         otherDispositions: other,
       };
     });
@@ -176,7 +185,7 @@ export async function GET(request: NextRequest) {
     const tRow = sheet.addRow(['Recruiter Performance Report']);
     tRow.getCell(1).font = { bold: true, size: 16, name: 'Arial' };
     tRow.getCell(1).alignment = { vertical: 'middle' };
-    sheet.mergeCells('A1:N1');
+    sheet.mergeCells('A1:P1');
     sheet.getRow(1).height = 36;
 
     const fI = toIST(dateFrom);
@@ -184,13 +193,14 @@ export async function GET(request: NextRequest) {
     const ds = `${fI.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} — ${tI.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
     const pRow = sheet.addRow([`Period: ${ds} (IST, 08:00 AM – 07:00 PM)`]);
     pRow.getCell(1).font = { size: 10, italic: true, color: { argb: '666666' }, name: 'Arial' };
-    sheet.mergeCells('A2:N2');
+    sheet.mergeCells('A2:P2');
     sheet.addRow([]);
 
     const hRow = sheet.addRow([
       'S.No', 'Recruiter Name', 'Email', 'Phone',
       'Login Hours', 'Active Hours', 'Break Hours', 'Idle Hours', 'Lunch Hours',
-      'Total Calls', 'Connected', 'Not Answered', 'Shortlisted', 'Other',
+      'Total Calls', 'Total Call Time', 'Avg Call Time',
+      'Connected', 'Not Answered', 'Shortlisted', 'Other',
     ]);
     hRow.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 10, name: 'Arial' };
@@ -201,10 +211,15 @@ export async function GET(request: NextRequest) {
 
     reportData.forEach((row, idx) => {
       const otherCt = Object.values(row.otherDispositions).reduce((a, b) => a + b, 0);
+      const avgCallSec = row.totalCalls > 0 ? Math.round(row.totalCallDurationSec / row.totalCalls) : 0;
+      const avgH = Math.floor(avgCallSec / 60);
+      const avgS = avgCallSec % 60;
+      const avgCallStr = `${avgH}m ${avgS}s`;
       const dr = sheet.addRow([
         idx + 1, row.name, row.email, row.phone,
         row.totalLoginHours, row.activeHours, row.breakHours, row.idleHours, row.lunchHours,
-        row.totalCalls, row.connected, row.notAnswered, row.shortlisted, otherCt,
+        row.totalCalls, row.totalCallTimeStr, avgCallStr,
+        row.connected, row.notAnswered, row.shortlisted, otherCt,
       ]);
       if (idx % 2 === 1) {
         dr.eachCell({ includeEmpty: true }, (c) => {
@@ -222,9 +237,9 @@ export async function GET(request: NextRequest) {
     sheet.getColumn(2).width = 22;
     sheet.getColumn(3).width = 28;
     sheet.getColumn(4).width = 16;
-    for (let c = 5; c <= 14; c++) sheet.getColumn(c).width = 12;
+    for (let c = 5; c <= 16; c++) sheet.getColumn(c).width = 12;
 
-    sheet.autoFilter = { from: 'A4', to: `N${4 + reportData.length}` };
+    sheet.autoFilter = { from: 'A4', to: `P${4 + reportData.length}` };
 
     const buf = await wb.xlsx.writeBuffer();
     const fn = `Recruiter_Report_${fI.toISOString().slice(0, 10)}_to_${tI.toISOString().slice(0, 10)}.xlsx`;

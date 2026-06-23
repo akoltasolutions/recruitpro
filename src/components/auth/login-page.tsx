@@ -20,7 +20,7 @@ interface LoginPageProps {
 function InstallAppButton() {
   return (
     <a
-      href="/RecruitPro.apk"
+      href="/api/download-apk"
       download="RecruitPro.apk"
       className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors cursor-pointer no-underline"
     >

@@ -13,7 +13,12 @@ import { startOfDay, endOfDay } from 'date-fns'
  *   Previously, dateTo was parsed as midnight UTC, causing all calls made
  *   during the day (in IST timezone) to be excluded from results.
  * - Added organizationId scoping for multi-tenant data isolation.
- * - Added comprehensive error logging for call-tracking failures.
+ * 
+ * FIX (2026-06-23):
+ * - Added _sum for totalTalkTime (was missing — caused Total Call Time to always show 0)
+ * - Added shortlisted and notConnected counts to aggregate response
+ * - Added activeHours calculation from first/last call timestamps
+ * - All stats are now computed server-side from ALL matching records
  */
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request)
@@ -48,22 +53,17 @@ export async function GET(request: NextRequest) {
     if (dateFrom || dateTo) {
       const calledAtFilter: Record<string, unknown> = {}
       if (dateFrom) {
-        // CRITICAL: Use startOfDay to get midnight of the date in LOCAL timezone,
-        // not midnight UTC. Previously used new Date(dateFrom) which parses as UTC.
         const fromDate = startOfDay(new Date(dateFrom + 'T00:00:00'))
         calledAtFilter.gte = fromDate
       }
       if (dateTo) {
-        // CRITICAL: Use endOfDay to get 23:59:59.999 of the date in LOCAL timezone.
-        // Previously used new Date(dateTo) which is midnight UTC, excluding all calls
-        // made during the day in IST (UTC+5:30).
         const toDate = endOfDay(new Date(dateTo + 'T00:00:00'))
         calledAtFilter.lte = toDate
       }
       where.calledAt = calledAtFilter
     }
 
-    // Fetch paginated call records, total count, and aggregate stats (from ALL matching records) in parallel
+    // Fetch paginated call records, total count, and aggregate stats in parallel
     const [callRecords, totalCount, aggregateStats] = await Promise.all([
       db.callRecord.findMany({
         where,
@@ -108,14 +108,70 @@ export async function GET(request: NextRequest) {
       db.callRecord.aggregate({
         where,
         _count: true,
+        _sum: { callDuration: true },
         _avg: { callDuration: true },
         _max: { calledAt: true },
         _min: { calledAt: true },
       }),
     ])
 
+    // ─── Disposition-based counts (shortlisted, notConnected) ───
+    // Use a single groupBy query + in-memory classification for efficiency
+    const dispositionGroups = await db.callRecord.groupBy({
+      by: ['dispositionId'],
+      where: { ...where, dispositionId: { not: null } },
+      _count: true,
+    })
+
+    // Fetch all dispositions referenced in the results
+    const dispIds = dispositionGroups.map(d => d.dispositionId).filter(Boolean) as string[]
+    const dispositions = dispIds.length > 0
+      ? await db.disposition.findMany({ where: { id: { in: dispIds } }, select: { id: true, type: true } })
+      : []
+
+    const dispTypeMap = new Map(dispositions.map(d => [d.id, d.type]))
+    const NOT_CONNECT_KEYWORDS = ['switched off', 'invalid number', 'call failed', 'busy', 'not answered']
+
+    let shortlisted = 0
+    let notConnected = 0
+
+    for (const group of dispositionGroups) {
+      if (!group.dispositionId) continue
+      const type = dispTypeMap.get(group.dispositionId)
+      if (!type) continue
+      if (type === 'SHORTLISTED') {
+        shortlisted += group._count
+      } else if (type === 'NOT_CONNECTED') {
+        notConnected += group._count
+      }
+    }
+
+    // Also check by disposition heading keywords for NOT_CONNECTED dispositions
+    // that might not have the correct type set
+    if (notConnected === 0) {
+      const allDisps = dispIds.length > 0
+        ? await db.disposition.findMany({ where: { id: { in: dispIds } }, select: { id: true, heading: true } })
+        : []
+      const headingMap = new Map(allDisps.map(d => [d.id, d.heading.toLowerCase()]))
+      for (const group of dispositionGroups) {
+        if (!group.dispositionId) continue
+        const heading = headingMap.get(group.dispositionId)
+        if (heading && NOT_CONNECT_KEYWORDS.some(kw => heading.includes(kw))) {
+          notConnected += group._count
+        }
+      }
+    }
+
+    // ─── Active Hours: time span between first and last call ───
+    const earliestAt = aggregateStats._min.calledAt
+    const latestAt = aggregateStats._max.calledAt
+    let activeHours = 0
+    if (earliestAt && latestAt) {
+      activeHours = Math.round((latestAt.getTime() - earliestAt.getTime()) / 60000) / 60
+      if (activeHours < 0) activeHours = 0
+    }
+
     // Fetch all active recruiters for the dropdown
-    // Include both USER and RECRUITER roles (system may use either)
     const recruiterWhere: Record<string, unknown> = { isActive: true }
     if (auth.organizationId) {
       recruiterWhere.organizationId = auth.organizationId
@@ -136,7 +192,11 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(totalCount / limit),
       aggregateStats: {
         totalCalls: aggregateStats._count,
+        totalTalkTime: aggregateStats._sum.callDuration ?? 0,
         avgTalkTime: aggregateStats._avg.callDuration ?? 0,
+        activeHours,
+        shortlisted,
+        notConnected,
         latestCallAt: aggregateStats._max.calledAt?.toISOString() ?? null,
         earliestCallAt: aggregateStats._min.calledAt?.toISOString() ?? null,
       },
@@ -144,7 +204,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('[TeamPerformance] Failed to fetch team performance data:', error)
-    // Log full error details for debugging
     if (error instanceof Error) {
       console.error('[TeamPerformance] Error name:', error.name)
       console.error('[TeamPerformance] Error message:', error.message)

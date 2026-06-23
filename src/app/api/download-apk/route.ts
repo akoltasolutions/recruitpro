@@ -10,9 +10,25 @@ export async function GET(request: NextRequest) {
     const filePath = path.join(UPLOAD_DIR, APK_FILE_NAME);
 
     // Check if APK file exists
+    let fileExists = false;
     try {
       await fs.access(filePath);
+      fileExists = true;
     } catch {
+      fileExists = false;
+    }
+
+    // If requesting JSON metadata (used by frontend to show version info)
+    if (request.nextUrl.searchParams.get('info') === '1') {
+      return NextResponse.json({
+        available: fileExists,
+        downloadUrl: '/api/download-apk',
+        fileName: 'RecruitPro.apk',
+        size: fileExists ? (await fs.stat(filePath)).size : 0,
+      });
+    }
+
+    if (!fileExists) {
       // APK not uploaded yet — return a friendly message page
       const html = `<!DOCTYPE html>
 <html>
@@ -56,13 +72,16 @@ export async function GET(request: NextRequest) {
     const fileBuffer = await fs.readFile(filePath);
     const stats = await fs.stat(filePath);
 
+    // Disable caching so users always get the latest APK
     return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.android.package-archive',
         'Content-Disposition': `attachment; filename="RecruitPro.apk"`,
         'Content-Length': stats.size.toString(),
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     });
   } catch (error) {

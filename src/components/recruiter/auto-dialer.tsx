@@ -164,6 +164,8 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const callInitiatedRef = useRef(false)
   const includeDispositionTimeRef = useRef(true)
+  // Track exact timestamp when Call button is clicked (for server-side duration fallback)
+  const callSessionStartRef = useRef<string | null>(null)
 
   // Dynamically measure the actual viewport height for the bottom-sheet.
   // CSS dvh/vh units are UNRELIABLE in Android WebView — they don't account for
@@ -369,6 +371,8 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // Declared before handleReturnFromDialer to prevent TDZ error in dependency arrays
   const startCallTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
+    // Capture call start timestamp for server-side duration fallback
+    callSessionStartRef.current = new Date().toISOString()
     setCallTimer(1) // Start from 1 second immediately (no delay)
     timerRef.current = setInterval(() => {
       setCallTimer((prev) => prev + 1)
@@ -976,6 +980,8 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     setIsDispositionModalOpen(false)
     // Reset the disposition shown guard for the next call
     dispositionShownRef.current = false
+    // Clear call session start timestamp
+    callSessionStartRef.current = null
     // Clear pre-call timer
     cancelPreCallTimer()
     if (recognitionRef.current) {
@@ -1069,6 +1075,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       dispositionId: selectedDisposition,
       notes: notes || null,
       callDuration: callTimer,
+      callStartedAt: callSessionStartRef.current, // Server-side duration fallback
       callStatus: isScheduled ? 'SCHEDULED' : 'COMPLETED',
       scheduledAt: isScheduled ? new Date(scheduledDate).toISOString() : null,
       f2fInterviewDate: f2fInterviewDate ? new Date(f2fInterviewDate).toISOString() : null,

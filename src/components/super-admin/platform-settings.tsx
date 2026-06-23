@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Settings, Shield, Loader2, Save, Timer } from 'lucide-react'
+import { Settings, Shield, Loader2, Save, Timer, Smartphone } from 'lucide-react'
 
 interface PlatformSettings {
   subscriptionEnforcement: boolean
@@ -17,6 +17,8 @@ interface PlatformSettings {
   defaultMaxNumbers: number
   defaultDailyUploadLimit: number
   includeDispositionTime: boolean
+  apkVersion: string
+  apkReleaseDate: string
 }
 
 const defaultSettings: PlatformSettings = {
@@ -25,6 +27,8 @@ const defaultSettings: PlatformSettings = {
   defaultMaxNumbers: 5000,
   defaultDailyUploadLimit: 500,
   includeDispositionTime: true,
+  apkVersion: '1.0.0',
+  apkReleaseDate: '',
 }
 
 export function PlatformSettingsPage() {
@@ -165,6 +169,61 @@ export function PlatformSettingsPage() {
                   setSettings((prev) => ({ ...prev, includeDispositionTime: checked }))
                 }
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Mobile App Settings */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-emerald-600" />
+              <div>
+                <CardTitle className="text-base">Mobile App</CardTitle>
+                <CardDescription>
+                  Configure Android APK version and release info. The download button on the login page always serves the latest APK from the server.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="apk-version">Current APK Version</Label>
+                <Input
+                  id="apk-version"
+                  placeholder="e.g. 1.2.0"
+                  value={settings.apkVersion}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, apkVersion: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Version displayed to users downloading the app
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apk-release-date">Release Date</Label>
+                <Input
+                  id="apk-release-date"
+                  type="date"
+                  value={settings.apkReleaseDate}
+                  onChange={(e) =>
+                    setSettings((prev) => ({ ...prev, apkReleaseDate: e.target.value }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  When this APK version was released
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border p-3 bg-muted/50">
+              <p className="text-xs text-muted-foreground">
+                <strong>APK File Location:</strong> <code className="bg-muted px-1.5 py-0.5 rounded text-xs">upload/recruitpro.apk</code>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                To update the APK: place the new <code>recruitpro.apk</code> file in the <code>upload/</code> directory and update the version above. The download button will automatically serve the latest file.
+              </p>
             </div>
           </CardContent>
         </Card>
