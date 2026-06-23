@@ -804,3 +804,31 @@ Stage Summary:
 - Example: `recruitpro-db-backup-2026-06-23_10-28-45.sql`, `recruitpro-backup-2026-06-23_10-29-03.tar.gz`
 - Commit: 9abf791 "fix: unique date-time filenames for all backup downloads"
 - Live verified: both database and code backup filenames confirmed via API headers
+
+---
+Task ID: android-native-calling
+Agent: Main Agent
+Task: Implement native Android calling (ACTION_CALL) + return-from-dialer detection
+
+Work Log:
+- Analyzed complete calling flow: web app already has 3-tier calling (AndroidBridge → _autoDial → tel: link)
+- Found Android TWA's MainActivity.java had NO JavaScript interface — AndroidBridge.makeCall() never worked
+- Found tel: links used ACTION_VIEW (opens dialer) not ACTION_CALL (direct call)
+- Found no return-from-dialer notification — disposition modal never auto-opened from TWA
+- Found no sms: URL handling in shouldOverrideUrlLoading
+- Rewrote MainActivity.java with complete AndroidBridge:
+  - makeCall(phoneNumber) → ACTION_CALL for direct dial, with runtime permission request
+  - hasCallPermission() → permission check for web app
+  - SecurityException handling → graceful fallback to ACTION_DIAL
+  - onResume() → evaluateJavascript("showPostCallDisposition('')") for auto-disposition
+  - sms: interception → native SMS app
+  - whatsapp:// interception → WhatsApp or Play Store fallback
+- ZERO web app changes — existing calling flow, analytics, dashboard, dispositions all preserved
+
+Stage Summary:
+- Android calling flow: Click Call → AndroidBridge.makeCall() → ACTION_CALL → call starts immediately
+- Fallback chain: AndroidBridge → _autoDial → tel: link → works on any Android browser
+- Return detection: onResume() → showPostCallDisposition() → disposition modal opens automatically
+- Note: APK needs rebuild on machine with Android SDK (not available in sandbox)
+- Commit: 74e8348 "feat: Android native calling bridge - ACTION_CALL + return-from-dialer detection"
+- Live web app verified: login, all routes intact
