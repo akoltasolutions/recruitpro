@@ -783,3 +783,24 @@ Stage Summary:
 - Auto-discovers tables — always accurate even when schema changes
 - Commit: d6e89b3 "fix: replace sqlite3 CLI with pure TypeScript SQL dump/restore"
 - Live verified at https://app.akolta.com/api/admin/backup/database
+
+---
+Task ID: backup-filename-fix
+Agent: Main Agent
+Task: Fix backup download filenames to include unique date-time
+
+Work Log:
+- Found timestamp bug: `.toISOString().replace(/[-:T]/g, '').slice(0, 15)` captured trailing dot → `20260623043937.` → double-dot filenames like `backup-20260623043937..sql`
+- Fixed 4 backend routes with clean `YYYY-MM-DD_HH-mm-ss` format:
+  - `/api/admin/backup/database/route.ts`
+  - `/api/admin/backup/code/route.ts` (getTimestamp function)
+  - `/api/admin/backup/export-users/route.ts`
+  - `/api/admin/backup/export-candidates/route.ts`
+- Fixed frontend `downloadBlob` to extract filename from `Content-Disposition` response header instead of using hardcoded fallback
+- Updated 3 callers to pass `response` object to `downloadBlob`
+
+Stage Summary:
+- Every backup download now has a unique, readable, sortable filename with date+time
+- Example: `recruitpro-db-backup-2026-06-23_10-28-45.sql`, `recruitpro-backup-2026-06-23_10-29-03.tar.gz`
+- Commit: 9abf791 "fix: unique date-time filenames for all backup downloads"
+- Live verified: both database and code backup filenames confirmed via API headers
