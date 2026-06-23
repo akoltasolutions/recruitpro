@@ -335,6 +335,7 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         location: candidate.location,
         company: candidate.company,
         timestamp: Date.now(),
+        callSessionStart: callSessionStartRef.current, // CRITICAL: persist call start timestamp to survive page reload
       }))
       // Call state saved to sessionStorage
     } catch (e) {
@@ -369,11 +370,14 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
 
   // ==================== CALL TIMER HELPERS ====================
   // Declared before handleReturnFromDialer to prevent TDZ error in dependency arrays
-  const startCallTimer = useCallback(() => {
+  const startCallTimer = useCallback((initialSeconds?: number) => {
     if (timerRef.current) clearInterval(timerRef.current)
     // Capture call start timestamp for server-side duration fallback
-    callSessionStartRef.current = new Date().toISOString()
-    setCallTimer(1) // Start from 1 second immediately (no delay)
+    if (!callSessionStartRef.current) {
+      callSessionStartRef.current = new Date().toISOString()
+    }
+    const startVal = typeof initialSeconds === 'number' && initialSeconds > 0 ? initialSeconds : 1
+    setCallTimer(startVal)
     timerRef.current = setInterval(() => {
       setCallTimer((prev) => prev + 1)
     }, 1000)
@@ -415,6 +419,24 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
         // Use functional update to avoid stale closure on candidates array
         return prev // Keep current index for now — will be corrected below
       })
+
+      // CRITICAL FIX: Restore call session start timestamp and timer from sessionStorage
+      // This survives page reloads in Android WebView, preventing callDuration=0
+      if (storedData.callSessionStart) {
+        callSessionStartRef.current = storedData.callSessionStart
+        const elapsed = Math.max(1, Math.round((Date.now() - new Date(storedData.callSessionStart).getTime()) / 1000))
+        // Restart timer from elapsed seconds (don't overwrite callSessionStartRef since it's already set)
+        if (includeDispositionTimeRef.current) {
+          // Timer should keep running (disposition time included) — restart with correct offset
+          setCallTimer(elapsed)
+          timerRef.current = setInterval(() => {
+            setCallTimer((prev) => prev + 1)
+          }, 1000)
+        } else {
+          // Timer was stopped on return — just set the value
+          setCallTimer(elapsed)
+        }
+      }
     }
     callInitiatedRef.current = false
     setCallInitiated(false)
@@ -1069,13 +1091,34 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   const buildSaveBody = useCallback(() => {
     const isScheduled = !!scheduledDate
 
+    // CRITICAL FIX: If callSessionStartRef was lost (page reload), try sessionStorage
+    let sessionStart = callSessionStartRef.current
+    if (!sessionStart) {
+      try {
+        const raw = sessionStorage.getItem(CALL_STATE_KEY)
+        if (raw) {
+          const stored = JSON.parse(raw)
+          if (stored.callSessionStart) {
+            sessionStart = stored.callSessionStart
+            callSessionStartRef.current = sessionStart
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Compute duration from call start timestamp if timer is 0 (safety net)
+    let duration = callTimer
+    if (duration === 0 && sessionStart) {
+      duration = Math.max(1, Math.round((Date.now() - new Date(sessionStart).getTime()) / 1000))
+    }
+
     const body: Record<string, unknown> = {
       candidateId: currentCandidate!.id,
       recruiterId: userId,
       dispositionId: selectedDisposition,
       notes: notes || null,
-      callDuration: callTimer,
-      callStartedAt: callSessionStartRef.current, // Server-side duration fallback
+      callDuration: duration,
+      callStartedAt: sessionStart, // Server-side duration fallback
       callStatus: isScheduled ? 'SCHEDULED' : 'COMPLETED',
       scheduledAt: isScheduled ? new Date(scheduledDate).toISOString() : null,
       f2fInterviewDate: f2fInterviewDate ? new Date(f2fInterviewDate).toISOString() : null,

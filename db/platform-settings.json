@@ -3,5 +3,11 @@
   "defaultMaxUsers": 10,
   "defaultMaxNumbers": 5000,
   "defaultDailyUploadLimit": 500,
-  "includeDispositionTime": true
+  "includeDispositionTime": true,
+  "mobileApp": {
+    "version": "1.0.0",
+    "releaseDate": "2026-06-26",
+    "downloadUrl": "/api/download-apk",
+    "fileName": "RecruitPro.apk"
+  }
 }

@@ -25,9 +25,10 @@ export async function POST(request: NextRequest) {
     if (!requireOrgAdmin(auth)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
     // Scope to organization if applicable
+    // Include both COMPLETED and SCHEDULED — both represent real call attempts
     const where: Record<string, unknown> = {
       callDuration: 0,
-      callStatus: 'COMPLETED',
+      callStatus: { in: ['COMPLETED', 'SCHEDULED'] },
     }
     if (auth.organizationId) {
       where.organizationId = auth.organizationId
@@ -61,14 +62,18 @@ export async function POST(request: NextRequest) {
       try {
         // Find the most recent CALL_SESSION_START for this recruiter
         // that happened BEFORE this call record's calledAt time
+        // and within a reasonable window (max 4 hours before calledAt)
         const sessionStart = await db.activityLog.findFirst({
           where: {
             userId: record.recruiterId,
             action: 'CALL_SESSION_START',
-            createdAt: { lt: record.calledAt },
+            createdAt: {
+              lt: record.calledAt,
+              gte: new Date(record.calledAt.getTime() - 4 * 60 * 60 * 1000),
+            },
           },
           orderBy: { createdAt: 'desc' },
-          select: { createdAt: true },
+          select: { createdAt: true, metadata: true },
         })
 
         if (!sessionStart) {
@@ -140,7 +145,7 @@ export async function GET(request: NextRequest) {
     const [total, withDuration, zeroDuration, avgResult] = await Promise.all([
       db.callRecord.count({ where }),
       db.callRecord.count({ where: { ...where, callDuration: { gt: 0 } } }),
-      db.callRecord.count({ where: { ...where, callDuration: 0, callStatus: 'COMPLETED' } }),
+      db.callRecord.count({ where: { ...where, callDuration: 0, callStatus: { in: ['COMPLETED', 'SCHEDULED'] } } }),
       db.callRecord.aggregate({
         where: { ...where, callDuration: { gt: 0 } },
         _avg: { callDuration: true },

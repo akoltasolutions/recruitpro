@@ -852,3 +852,25 @@ Stage Summary:
 - Future APK updates: rebuild android-twa → git push → deploy auto-copies to public/
 - Commit: 06f1810 "fix: Download Android App button now downloads actual APK file"
 - Live verified: https://app.akolta.com/RecruitPro.apk returns 200
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix Total Call Time = 0 bug, centralize APK download config, and deploy
+
+Work Log:
+- Analyzed root cause: callSessionStartRef not persisted to sessionStorage, causing callDuration=0 after Android WebView page reload
+- Fixed saveCallState() to include callSessionStart timestamp in sessionStorage
+- Modified startCallTimer() to accept optional initialSeconds and avoid overwriting existing callSessionStartRef
+- Enhanced handleReturnFromDialer() to restore timer from sessionStorage after page reload
+- Enhanced buildSaveBody() with sessionStorage fallback and timestamp-based duration computation
+- Enhanced server-side fallback in /api/call-records to use ActivityLog CALL_SESSION_START when callStartedAt is null
+- Improved audit tool to handle SCHEDULED records and use 4-hour matching window
+- Centralized APK download: version info in platform-settings.json, download-apk API reads config, login button displays version
+- All changes verified with lint
+
+Stage Summary:
+- Total Call Time will now always be captured from Call button click to Disposition submit
+- 3-tier fallback: client timer → callStartedAt → ActivityLog → sessionStorage
+- Historical records can be fixed via POST /api/admin/audit/call-duration
+- APK download uses centralized config (db/platform-settings.json → mobileApp section)
+- Files changed: auto-dialer.tsx, call-records/route.ts, audit/call-duration/route.ts, login-page.tsx, download-apk/route.ts, platform-settings.json

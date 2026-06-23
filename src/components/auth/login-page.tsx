@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,17 @@ interface LoginPageProps {
 }
 
 /* ── APK Download Button (shown on login page) ── */
+/* Reads centralized mobile app config from /api/settings/call-timer-config */
 function InstallAppButton() {
+  const [apkInfo, setApkInfo] = useState<{ available: boolean; version?: string } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/download-apk?info=1')
+      .then((r) => r.json())
+      .then((data) => setApkInfo(data))
+      .catch(() => { /* ignore */ })
+  }, [])
+
   return (
     <a
       href="/api/download-apk"
@@ -26,6 +36,9 @@ function InstallAppButton() {
     >
       <Smartphone className="h-4 w-4" />
       Download Android App
+      {apkInfo?.available && (
+        <span className="text-[11px] opacity-80">v{apkInfo.version || '1.0'}</span>
+      )}
       <Download className="h-4 w-4 ml-0.5" />
     </a>
   )

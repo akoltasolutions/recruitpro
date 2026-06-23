@@ -145,21 +145,47 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // SERVER-SIDE DURATION CALCULATION (2026-06-23):
-    // If callDuration is 0 or missing, calculate from callStartedAt to now.
-    // This is the permanent server-side fallback that ensures duration is always captured
-    // even if the client-side timer fails.
+    // SERVER-SIDE DURATION CALCULATION (2026-06-23, enhanced 2026-06-26):
+    // Ensures callDuration is ALWAYS captured, even when client loses state due to page reload.
+    // Strategy:
+    //   1. Use client-sent callDuration if non-zero
+    //   2. If zero, compute from callStartedAt (client timestamp)
+    //   3. If callStartedAt also missing (page reload), find the most recent
+    //      CALL_SESSION_START activity log for this recruiter
     let finalCallDuration = Math.max(0, callDuration || 0);
     let finalCallStartedAt: Date | null = null;
 
     if (callStartedAt) {
       finalCallStartedAt = new Date(callStartedAt);
       if (finalCallDuration === 0 || !callDuration) {
-        // Client didn't send a duration — compute from call start to now
         const computedSeconds = Math.round((Date.now() - finalCallStartedAt.getTime()) / 1000);
         if (computedSeconds > 0) {
           finalCallDuration = computedSeconds;
         }
+      }
+    }
+
+    // FALLBACK: If duration is still 0 and we have no callStartedAt, try ActivityLog
+    if (finalCallDuration === 0 && !finalCallStartedAt && recruiterId) {
+      try {
+        const recentSession = await db.activityLog.findFirst({
+          where: {
+            userId: recruiterId,
+            action: 'CALL_SESSION_START',
+            createdAt: { gte: new Date(Date.now() - 4 * 60 * 60 * 1000) }, // within last 4 hours
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        if (recentSession) {
+          finalCallStartedAt = recentSession.createdAt;
+          const computedSeconds = Math.round((Date.now() - recentSession.createdAt.getTime()) / 1000);
+          if (computedSeconds > 0 && computedSeconds <= 14400) { // max 4 hours
+            finalCallDuration = computedSeconds;
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('[CallRecords POST] ActivityLog duration fallback failed (non-fatal):', fallbackErr);
       }
     }
 

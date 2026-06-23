@@ -5,6 +5,16 @@ import path from 'path';
 const APK_FILE_NAME = 'recruitpro.apk';
 const UPLOAD_DIR = path.join(process.cwd(), 'upload');
 
+async function getMobileAppConfig() {
+  try {
+    const raw = await fs.readFile(path.join(process.cwd(), 'db', 'platform-settings.json'), 'utf-8');
+    const settings = JSON.parse(raw);
+    return settings.mobileApp || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const filePath = path.join(UPLOAD_DIR, APK_FILE_NAME);
@@ -18,12 +28,16 @@ export async function GET(request: NextRequest) {
       fileExists = false;
     }
 
+    const mobileConfig = await getMobileAppConfig();
+
     // If requesting JSON metadata (used by frontend to show version info)
     if (request.nextUrl.searchParams.get('info') === '1') {
       return NextResponse.json({
         available: fileExists,
-        downloadUrl: '/api/download-apk',
+        downloadUrl: mobileConfig?.downloadUrl || '/api/download-apk',
         fileName: 'RecruitPro.apk',
+        version: mobileConfig?.version || '1.0',
+        releaseDate: mobileConfig?.releaseDate || null,
         size: fileExists ? (await fs.stat(filePath)).size : 0,
       });
     }
