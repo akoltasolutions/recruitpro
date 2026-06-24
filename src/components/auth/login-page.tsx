@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserPlus, ShieldOff, WifiOff, Smartphone, Building2, ShieldAlert, KeyRound, Download } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, LogIn, Loader2, Headphones, AlertCircle, UserPlus, ShieldOff, WifiOff, Building2, ShieldAlert, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { MfaVerification } from './mfa-verification'
 
@@ -14,34 +14,6 @@ interface LoginPageProps {
   onSwitch: () => void
   onForgotPassword?: () => void
   onRegister?: () => void
-}
-
-/* ── APK Download Button (shown on login page) ── */
-/* Reads centralized mobile app config from /api/settings/call-timer-config */
-function InstallAppButton() {
-  const [apkInfo, setApkInfo] = useState<{ available: boolean; version?: string } | null>(null)
-
-  useEffect(() => {
-    fetch('/api/download-apk?info=1')
-      .then((r) => r.json())
-      .then((data) => setApkInfo(data))
-      .catch(() => { /* ignore */ })
-  }, [])
-
-  return (
-    <a
-      href="/api/download-apk"
-      download="RecruitPro.apk"
-      className="flex items-center justify-center gap-2.5 w-full h-11 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors cursor-pointer no-underline"
-    >
-      <Smartphone className="h-4 w-4" />
-      Download Android App
-      {apkInfo?.available && (
-        <span className="text-[11px] opacity-80">v{apkInfo.version || '1.0'}</span>
-      )}
-      <Download className="h-4 w-4 ml-0.5" />
-    </a>
-  )
 }
 
 export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageProps) {
@@ -289,13 +261,6 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
               </div>
             )}
 
-            {/* Android App Install — PWA */}
-            <div className="w-full border-t pt-4 mt-2">
-              <InstallAppButton />
-              <p className="text-xs text-center text-muted-foreground mt-2">
-                Install the RecruitPro app on your Android phone for the best calling experience
-              </p>
-            </div>
           </CardFooter>
         </form>
       </Card>
