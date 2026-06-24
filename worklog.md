@@ -804,3 +804,27 @@ Stage Summary:
 - Example: `recruitpro-db-backup-2026-06-23_10-28-45.sql`, `recruitpro-backup-2026-06-23_10-29-03.tar.gz`
 - Commit: 9abf791 "fix: unique date-time filenames for all backup downloads"
 - Live verified: both database and code backup filenames confirmed via API headers
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix APK download serving and deploy to production
+
+Work Log:
+- Discovered download API was returning 2KB HTML page instead of 165KB APK
+- Root cause: original download-apk route only checked `upload/recruitpro.apk` (didn't exist)
+- Previous session's files (apk-versions routes, android-app-download component) were not persisted
+- Fixed download-apk route: multi-location search (upload/apk-versions → upload → public), version metadata preservation on fallback
+- Created /api/apk-versions/route.ts (authenticated version listing)
+- Created /api/apk-versions/download/route.ts (authenticated version download)
+- Created permanent build-apk.sh script (bash, works on any machine with Android SDK + JDK 17)
+- Updated .gitignore to exclude *.keystore files
+- Removed old build artifacts from git tracking (build/ directory files)
+- Committed and pushed to GitHub (bb1cf2e), deployment triggered via GitHub Actions
+
+Stage Summary:
+- Download API now correctly serves 165KB APK with version 1.1.0 metadata
+- Static fallback at /RecruitPro.apk also works (Next.js public dir)
+- Permanent build script at build-apk.sh for future APK rebuilds
+- Files changed: download-apk/route.ts, apk-versions/route.ts, apk-versions/download/route.ts, build-apk.sh, .gitignore, AndroidManifest.xml, build.js, db/android-versions.json
+- Pushed to GitHub: main branch, commit bb1cf2e
