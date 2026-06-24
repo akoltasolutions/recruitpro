@@ -946,3 +946,29 @@ Stage Summary:
 - Modified files: src/components/recruiter/settings.tsx, src/components/admin/admin-settings.tsx
 - Key design decisions: Used fetch+blob for authenticated download (window.open doesn't pass Bearer token), created separate public API (not the super-admin-only one), auto-selects active version in dropdown
 - Verified working on live at app.akolta.com/admin-settings
+---
+Task ID: 3
+Agent: Main Agent
+Task: Remove download button from login, redesign Settings Android download section
+
+Work Log:
+- Removed InstallAppButton component entirely from login-page.tsx (lines 21-45)
+- Removed Android App Install section from login CardFooter (link, button, helper text)
+- Cleaned up unused imports (useEffect, Smartphone, Download)
+- Fixed syntax error (extra `)` parenthesis left from edit)
+- Redesigned AndroidAppDownloadSection component:
+  - Current Version info display: version number, release date (formatted as "24 June 2026"), file size in grid layout
+  - Highlighted green card with "Latest" badge for current version
+  - "All users automatically receive the latest version." notice with green dot
+  - Prominent "Download Current Version (vX.X.X)" button
+  - Collapsible "Previous Versions" section with ChevronDown/Up toggle
+  - Each old version shows: version, date, size, release notes + individual Download button
+  - Edge case handling: no active version but old versions exist
+  - Empty state when no versions uploaded
+- Verified on live: login page has no download button, no errors; Settings shows "Android Application" card with proper empty state
+
+Stage Summary:
+- Modified: src/components/auth/login-page.tsx (removed InstallAppButton, download section, unused imports)
+- Modified: src/components/shared/android-app-download.tsx (complete redesign per user spec)
+- Lint passes clean
+- Deployed and verified on live at app.akolta.com
