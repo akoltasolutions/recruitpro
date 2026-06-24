@@ -897,3 +897,25 @@ Stage Summary:
 - UPDATED: src/app/api/call-records/route.ts — broadened FINAL ENFORCEMENT: any record with dispositionId gets min 1s
 - UPDATED: src/components/recruiter/auto-dialer.tsx — added ABSOLUTE FLOOR: duration >= 1 on disposition submit
 - All changes lint-clean, deployed to live, verified working
+---
+Task ID: 2
+Agent: Main Agent
+Task: Remove Android App tab from Backup & Restore, add as standalone nav page
+
+Work Log:
+- Analyzed screenshot showing 6 tabs in Backup & Restore (including Android App tab)
+- Removed Android App tab trigger and TabsContent from backup-restore.tsx
+- Changed grid-cols-6 to grid-cols-5 (now Code, Database, Restore, Export, Import)
+- Removed ~330 lines of AndroidVersionsSection code (ApkVersion interface, formatFileSize, entire component)
+- Created standalone AndroidAppPage at src/components/super-admin/android-app.tsx
+- Added 'Android App' with Smartphone icon to Platform Management in super-admin-layout.tsx
+- Added 'android-app' to SuperAdminPage type and lazy import in app-router.tsx
+- Preserved all API endpoints (no API changes)
+- Fixed lint errors (restored Dialog, CheckCircle, Layers imports still used elsewhere)
+
+Stage Summary:
+- MODIFIED: src/components/admin/backup-restore.tsx (removed Android tab, back to 5 tabs)
+- CREATED: src/components/super-admin/android-app.tsx (standalone APK management page)
+- MODIFIED: src/components/super-admin/super-admin-layout.tsx (added Android App nav item)
+- MODIFIED: src/components/app-router.tsx (added route + lazy import)
+- Verified on live: backup-restore shows 5 tabs (no Android), android-app page works, nav shows "Android App"
