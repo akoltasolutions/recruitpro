@@ -4,19 +4,15 @@ import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware'
 
 /**
  * POST /api/admin/audit/call-duration
- * 
- * Audits and fixes historical CallRecord entries where callDuration is 0
- * but we can reconstruct the duration from ActivityLog entries.
- * 
- * Strategy:
- * 1. Find CallRecords with callDuration = 0 and callStatus = 'COMPLETED'
- * 2. For each, look for the most recent CALL_SESSION_START activity log
- *    for the same recruiter before the calledAt timestamp
- * 3. Calculate duration = calledAt - CALL_SESSION_START.createdAt
- * 4. Update the CallRecord with the computed duration
- * 
- * This is safe: it only fixes records with callDuration = 0 and never deletes data.
- * It can be run multiple times without side effects (idempotent).
+ *
+ * Audits and fixes historical CallRecord entries where callDuration is 0.
+ *
+ * 3-tier strategy + minimum enforcement:
+ * 1. Check if callStartedAt exists on the record
+ * 2. Find CALL_SESSION_START activity log within 4h before calledAt
+ * 3. If record has a disposition, enforce minimum 1 second
+ *
+ * Safe: only fixes records with callDuration = 0, never deletes data, idempotent.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -24,8 +20,6 @@ export async function POST(request: NextRequest) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     if (!requireOrgAdmin(auth)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-    // Scope to organization if applicable
-    // Include both COMPLETED and SCHEDULED — both represent real call attempts
     const where: Record<string, unknown> = {
       callDuration: 0,
       callStatus: { in: ['COMPLETED', 'SCHEDULED'] },
@@ -34,12 +28,11 @@ export async function POST(request: NextRequest) {
       where.organizationId = auth.organizationId
     }
 
-    // Find all completed call records with 0 duration
     const zeroDurationRecords = await db.callRecord.findMany({
       where,
-      select: { id: true, recruiterId: true, calledAt: true },
+      select: { id: true, recruiterId: true, calledAt: true, callStartedAt: true, dispositionId: true },
       orderBy: { calledAt: 'asc' },
-      take: 5000, // Process in batches
+      take: 5000,
     })
 
     if (zeroDurationRecords.length === 0) {
@@ -55,57 +48,72 @@ export async function POST(request: NextRequest) {
 
     let fixed = 0
     let noActivityLog = 0
-    const details: { id: string; recruiterId: string; computedSeconds: number }[] = []
+    const details: { id: string; recruiterId: string; computedSeconds: number; source: string }[] = []
 
-    // Process each record
     for (const record of zeroDurationRecords) {
       try {
-        // Find the most recent CALL_SESSION_START for this recruiter
-        // that happened BEFORE this call record's calledAt time
-        // and within a reasonable window (max 4 hours before calledAt)
-        const sessionStart = await db.activityLog.findFirst({
-          where: {
-            userId: record.recruiterId,
-            action: 'CALL_SESSION_START',
-            createdAt: {
-              lt: record.calledAt,
-              gte: new Date(record.calledAt.getTime() - 4 * 60 * 60 * 1000),
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true, metadata: true },
-        })
+        let computedSeconds = 0
+        let source = 'none'
 
-        if (!sessionStart) {
-          noActivityLog++
-          continue
+        // Tier 1: callStartedAt exists on record
+        if (record.callStartedAt) {
+          computedSeconds = Math.round((record.calledAt.getTime() - record.callStartedAt.getTime()) / 1000)
+          source = 'callStartedAt'
         }
 
-        // Calculate duration in seconds
-        const computedSeconds = Math.round(
-          (record.calledAt.getTime() - sessionStart.createdAt.getTime()) / 1000
-        )
-
-        // Only update if the computed duration is reasonable (between 1s and 4 hours)
-        if (computedSeconds >= 1 && computedSeconds <= 14400) {
-          await db.callRecord.update({
-            where: { id: record.id },
-            data: {
-              callDuration: computedSeconds,
-              callStartedAt: sessionStart.createdAt,
+        // Tier 2: Find CALL_SESSION_START activity log
+        if (computedSeconds <= 0) {
+          const sessionStart = await db.activityLog.findFirst({
+            where: {
+              userId: record.recruiterId,
+              action: 'CALL_SESSION_START',
+              createdAt: {
+                lt: record.calledAt,
+                gte: new Date(record.calledAt.getTime() - 4 * 60 * 60 * 1000),
+              },
             },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
           })
+
+          if (sessionStart) {
+            computedSeconds = Math.round((record.calledAt.getTime() - sessionStart.createdAt.getTime()) / 1000)
+            source = 'activityLog'
+          }
+        }
+
+        // Tier 3: Has disposition = real call = minimum 1 second
+        if (computedSeconds <= 0 && record.dispositionId) {
+          computedSeconds = 1
+          source = 'minimum_enforced'
+        }
+
+        if (computedSeconds >= 1 && computedSeconds <= 14400) {
+          const updateData: Record<string, unknown> = { callDuration: computedSeconds }
+
+          if (source === 'activityLog') {
+            const sessionStart = await db.activityLog.findFirst({
+              where: {
+                userId: record.recruiterId,
+                action: 'CALL_SESSION_START',
+                createdAt: {
+                  lt: record.calledAt,
+                  gte: new Date(record.calledAt.getTime() - 4 * 60 * 60 * 1000),
+                },
+              },
+              orderBy: { createdAt: 'desc' },
+              select: { createdAt: true },
+            })
+            if (sessionStart) updateData.callStartedAt = sessionStart.createdAt
+          }
+
+          await db.callRecord.update({ where: { id: record.id }, data: updateData })
           fixed++
-          details.push({
-            id: record.id,
-            recruiterId: record.recruiterId,
-            computedSeconds,
-          })
+          details.push({ id: record.id, recruiterId: record.recruiterId, computedSeconds, source })
         } else {
           noActivityLog++
         }
       } catch {
-        // Skip individual record errors
         noActivityLog++
       }
     }
@@ -120,10 +128,7 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('[Audit CallDuration] Error:', error)
-    return NextResponse.json(
-      { error: 'Audit failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Audit failed' }, { status: 500 })
   }
 }
 
