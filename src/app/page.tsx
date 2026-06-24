@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { AppContent } from '@/components/app-router'
-import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
+import { AppErrorBoundary, OfflineOverlay, useNetworkStatus, ChunkErrorGuard } from '@/components/shared/error-handling'
 
 export default function Home() {
   const isOnline = useNetworkStatus()
@@ -22,9 +22,11 @@ export default function Home() {
   }, [])
 
   return (
-    <AppErrorBoundary onReset={() => window.location.reload()}>
-      <OfflineOverlay isOnline={isOnline} onRetry={handleRetry} retrying={retrying} />
-      <AppContent />
-    </AppErrorBoundary>
+    <ChunkErrorGuard>
+      <AppErrorBoundary onReset={() => window.location.reload()}>
+        <OfflineOverlay isOnline={isOnline} onRetry={handleRetry} retrying={retrying} />
+        <AppContent />
+      </AppErrorBoundary>
+    </ChunkErrorGuard>
   )
 }

@@ -1131,6 +1131,9 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       body.clientId = selectedClient
     }
 
+    // ABSOLUTE FLOOR: disposition submission always has ≥ 1 second
+    if (duration === 0) duration = 1
+
     return { body }
   }, [currentCandidate, userId, selectedDisposition, notes, callTimer, scheduledDate, f2fInterviewDate, selectedClient, customClientName])
 

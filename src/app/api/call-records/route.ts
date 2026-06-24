@@ -189,12 +189,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // FINAL ENFORCEMENT (2026-06-27): A real call with a disposition CANNOT have 0 duration.
+    // FINAL ENFORCEMENT (2026-06-27): A call record with a disposition CANNOT have 0 duration.
     // Timer starts on Call button click and ends on Disposition submit — minimum is 1 second.
-    // Only SKIPPED and FAILED (no actual call placed) or records without disposition can be 0.
-    if (finalCallDuration === 0 && dispositionId && (callStatus === 'COMPLETED' || callStatus === 'SCHEDULED')) {
+    // Only records WITHOUT a disposition (e.g., quick skip with no form) can legitimately be 0.
+    if (finalCallDuration === 0 && dispositionId) {
       finalCallDuration = 1;
-      console.warn(`[CallRecords POST] Enforced min 1s for record (recruiter=${recruiterId}, candidate=${candidateId})`);
+      console.warn(`[CallRecords POST] Enforced min 1s for record (recruiter=${recruiterId}, candidate=${candidateId}, status=${callStatus || 'COMPLETED'})`);
     }
 
     const callRecord = await db.callRecord.create({
