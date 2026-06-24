@@ -919,3 +919,30 @@ Stage Summary:
 - MODIFIED: src/components/super-admin/super-admin-layout.tsx (added Android App nav item)
 - MODIFIED: src/components/app-router.tsx (added route + lazy import)
 - Verified on live: backup-restore shows 5 tabs (no Android), android-app page works, nav shows "Android App"
+---
+Task ID: 2
+Agent: Main Agent
+Task: Add Android App version download option in Settings navigation menu
+
+Work Log:
+- Analyzed screenshot: super-admin Android App page shows upload but user wants download option in Settings for all users
+- Confirmed Android App tab was already removed from Backup & Restore (no matches in backup-restore.tsx)
+- Created `/api/apk-versions` (GET) - lists all APK versions, requires any authenticated user (not just super admin)
+- Created `/api/apk-versions/download` (GET) - downloads specific version by ID, requires any authenticated user
+- Created reusable `AndroidAppDownloadSection` component in `src/components/shared/android-app-download.tsx`:
+  - Version dropdown selector (auto-selects active version)
+  - Version details display (size, date, release notes)
+  - Authenticated download via fetch+blob URL approach (properly passes Bearer token, unlike window.open)
+  - All versions list with click-to-select
+  - Empty state when no versions available
+- Added AndroidAppDownloadSection to Recruiter Settings page (before Security Settings)
+- Added AndroidAppDownloadSection to Admin Settings page (before Security Settings)
+- Ran lint - clean, no errors
+- Deployed via GitHub push to live
+- Verified on live: Android App Download card visible on admin Settings page with proper empty state
+
+Stage Summary:
+- New files: src/app/api/apk-versions/route.ts, src/app/api/apk-versions/download/route.ts, src/components/shared/android-app-download.tsx
+- Modified files: src/components/recruiter/settings.tsx, src/components/admin/admin-settings.tsx
+- Key design decisions: Used fetch+blob for authenticated download (window.open doesn't pass Bearer token), created separate public API (not the super-admin-only one), auto-selects active version in dropdown
+- Verified working on live at app.akolta.com/admin-settings
