@@ -37,6 +37,7 @@ const PlatformDashboard = React.lazy(() => import('@/components/super-admin/plat
 const OrganizationManagement = React.lazy(() => import('@/components/super-admin/organization-management').then(m => ({ default: m.OrganizationManagement })))
 const PlanManagement = React.lazy(() => import('@/components/super-admin/plan-management').then(m => ({ default: m.PlanManagement })))
 const PlatformSettingsPage = React.lazy(() => import('@/components/super-admin/platform-settings').then(m => ({ default: m.PlatformSettingsPage })))
+const AndroidAppPage = React.lazy(() => import('@/components/super-admin/android-app').then(m => ({ default: m.AndroidAppPage })))
 const AutoDialer = React.lazy(() => import('@/components/recruiter/auto-dialer').then(m => ({ default: m.AutoDialer })))
 const CallHistory = React.lazy(() => import('@/components/recruiter/call-history').then(m => ({ default: m.CallHistory })))
 const ScheduledCalls = React.lazy(() => import('@/components/recruiter/scheduled-calls').then(m => ({ default: m.ScheduledCalls })))
@@ -58,7 +59,7 @@ const AUTH_ROUTES = ['login', 'signup', 'register', 'forgot-password'] as const
 type AuthView = typeof AUTH_ROUTES[number]
 
 type AdminPage = 'dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
-type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
+type SuperAdminPage = 'platform-dashboard' | 'organizations' | 'plans' | 'platform-settings' | 'backup-restore' | 'android-app' | 'admin-dashboard' | 'team-performance' | 'team-monitoring' | 'shift-management' | 'dispositions' | 'call-lists' | 'templates' | 'clients' | 'users' | 'team-management' | 'approvals' | 'admin-settings' | 'organization-settings' | 'announcements' | 'field-builder' | 'disposition-builder'
 type RecruiterPage = 'home' | 'calling-list' | 'create-list' | 'pending' | 'history' | 'scheduled' | 'pipeline' | 'settings'
 
 /**
@@ -301,6 +302,7 @@ export function AppContent() {
         case 'plans': return <Suspense fallback={<PageLoader />}><PlanManagement /></Suspense>
         case 'platform-settings': return <Suspense fallback={<PageLoader />}><PlatformSettingsPage /></Suspense>
         case 'backup-restore': return <Suspense fallback={<PageLoader />}><BackupRestorePage /></Suspense>
+        case 'android-app': return <Suspense fallback={<PageLoader />}><AndroidAppPage /></Suspense>
         case 'admin-dashboard': return <AdminDashboard />
         case 'team-performance': return <Suspense fallback={<PageLoader />}>{isPipelineSubPage ? <AdminPipeline /> : <TeamPerformance />}</Suspense>
         case 'team-monitoring': return <Suspense fallback={<PageLoader />}><TeamMonitoring /></Suspense>
