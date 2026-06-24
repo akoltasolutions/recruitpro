@@ -72,5 +72,10 @@ Caddyfile
 # Upload files
 upload/
 
+# Android build artifacts (rebuilt from source)
+android-twa/build/
+android-twa/RecruitPro.apk.idsig
+android-twa/*.keystore
+
 # Tool results (generated during development)
 tool-results/
