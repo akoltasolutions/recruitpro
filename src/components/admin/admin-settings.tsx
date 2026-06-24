@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/shared/page-header'
 import { toast } from 'sonner'
 import { useAuthStore, authFetch } from '@/stores/auth-store'
 import { SecuritySettings } from './security-settings'
+import { AndroidAppDownloadSection } from '../shared/android-app-download'
 
 interface AdminSettingsProps {
   userId: string
@@ -498,6 +499,9 @@ export function AdminSettings({ userId }: AdminSettingsProps) {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Android App Download */}
+      <AndroidAppDownloadSection />
 
       {/* Security Settings */}
       <SecuritySettings showMfa />

@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { SecuritySettings } from '../admin/security-settings'
+import { AndroidAppDownloadSection } from '../shared/android-app-download'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -525,6 +526,9 @@ export function Settings({ userId, onLogout }: SettingsProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Android App Download */}
+      <AndroidAppDownloadSection />
 
       {/* Security - Session Management (no MFA for recruiters) */}
       <SecuritySettings showMfa={false} />
