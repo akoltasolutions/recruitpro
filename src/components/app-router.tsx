@@ -22,6 +22,7 @@ import { RecruiterDashboard } from '@/components/recruiter/recruiter-dashboard'
 import { Settings } from '@/components/recruiter/settings'
 import { Loader2, Headphones } from 'lucide-react'
 import { AppErrorBoundary, OfflineOverlay, useNetworkStatus } from '@/components/shared/error-handling'
+import { ForcePasswordChangeDialog } from '@/components/shared/force-password-change-dialog'
 
 // Lazy-loaded heavy components (code-split for faster initial load)
 const CallListManagement = React.lazy(() => import('@/components/admin/call-list-management').then(m => ({ default: m.CallListManagement })))
@@ -291,6 +292,9 @@ export function AppContent() {
     return null
   }
 
+  // Force password change dialog (shown after temporary password login)
+  const forcePasswordChangeDialog = <ForcePasswordChangeDialog />
+
   // Super Admin Panel
   if (user.role === 'SUPER_ADMIN') {
     const renderSuperAdminPage = () => {
@@ -324,9 +328,12 @@ export function AppContent() {
     }
 
     return (
+      <>
+      {forcePasswordChangeDialog}
       <SuperAdminLayout activePage={currentPath || 'platform-dashboard'} onNavigate={(page) => go(page)} onLogout={handleLogout}>
         {renderSuperAdminPage()}
       </SuperAdminLayout>
+      </>
     )
   }
 
@@ -357,9 +364,12 @@ export function AppContent() {
     }
 
     return (
+      <>
+      {forcePasswordChangeDialog}
       <AdminLayout activePage={currentPath || 'dashboard'} onNavigate={(page) => go(page)} onLogout={handleLogout}>
         {renderAdminPage()}
       </AdminLayout>
+      </>
     )
   }
 
@@ -379,8 +389,11 @@ export function AppContent() {
   }
 
   return (
+    <>
+    {forcePasswordChangeDialog}
     <RecruiterLayout activePage={recruiterPage} onNavigate={(page) => go(page)} onLogout={handleLogout}>
       {renderRecruiterPage()}
     </RecruiterLayout>
+    </>
   )
 }

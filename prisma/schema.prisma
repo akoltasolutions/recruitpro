@@ -258,6 +258,7 @@ model User {
   pipelineNotes        PipelineNote[]
   passwordHistories    PasswordHistory[]
   sessions            Session[]
+  temporaryPasswords  TemporaryPassword[]
 
   @@index([organizationId, role])
   @@index([organizationId, isActive])
@@ -509,6 +510,45 @@ model SecurityAuditLog {
   createdAt      DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ==================== TEMPORARY PASSWORD ====================
+
+model TemporaryPassword {
+  id             String   @id @default(cuid())
+  userId         String
+  passwordHash   String   // bcrypt hash of the temporary password
+  expiresAt      DateTime // when the temp password becomes invalid
+  isUsed         Boolean  @default(false) // set to true after successful login
+  usedAt         DateTime? // when the temp password was used
+  invalidatedAt  DateTime? // when manually invalidated (e.g. after password change)
+  createdAt      DateTime @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditLogs      TempPasswordAuditLog[]
+
+  @@index([userId, isUsed])
+  @@index([expiresAt])
+}
+
+model TempPasswordAuditLog {
+  id             String   @id @default(cuid())
+  tempPasswordId String
+  adminId        String   // admin who generated it
+  userId         String   // target user
+  organizationId String?
+  action         String   // GENERATED, USED, EXPIRED, INVALIDATED
+  ipAddress      String?
+  userAgent      String?
+  expiresAt      DateTime // copy of the temp password expiry for audit reference
+  createdAt      DateTime @default(now())
+
+  tempPassword   TemporaryPassword @relation(fields: [tempPasswordId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([adminId, createdAt])
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
 }

@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
-import { authFetch } from '@/stores/auth-store'
+import { authFetch, useAuthStore } from '@/stores/auth-store'
 import { 
   Users, Plus, Search, Pencil, Trash2, Power, KeyRound, 
   Phone, Mail, Loader2, UserCheck, UserX, MessageSquare, Upload, 
-  ListPlus, Eye, EyeOff
+  ListPlus, Eye, EyeOff, MoreVertical, Shield, Copy, Check, Send
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu'
 import { PageHeader } from '@/components/shared/page-header'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { EmptyState } from '@/components/shared/empty-state'
@@ -117,6 +125,20 @@ export function UserManagement() {
   const [deleteConfirm, setDeleteConfirm] = useState<User | null>(null)
   const [toggleConfirm, setToggleConfirm] = useState<User | null>(null)
   const [resetConfirm, setResetConfirm] = useState<User | null>(null)
+
+  // Temporary password dialog state
+  const [tempPasswordDialog, setTempPasswordDialog] = useState<User | null>(null)
+  const [tempPasswordData, setTempPasswordData] = useState<{
+    password: string
+    expiresAt: string
+    expiresHours: number
+  } | null>(null)
+  const [tempPasswordLoading, setTempPasswordLoading] = useState(false)
+  const [tempPasswordCopied, setTempPasswordCopied] = useState(false)
+
+  // Current user role for permission checks
+  const currentUserRole = useAuthStore((s) => s.user?.role)
+  const canGenerateTempPassword = currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'ORG_ADMIN'
 
   // ─── Debounced Search ────────────────────────────────────────────────────
 
@@ -380,6 +402,43 @@ export function UserManagement() {
     }
   }
 
+  async function handleGenerateTempPassword(user: User) {
+    setTempPasswordDialog(user)
+    setTempPasswordLoading(true)
+    setTempPasswordData(null)
+    setTempPasswordCopied(false)
+    try {
+      const res = await authFetch(`/api/users/${user.id}/temp-password`, { method: 'POST' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed' }))
+        throw new Error(err.error || 'Failed to generate temporary password')
+      }
+      const data = await res.json()
+      setTempPasswordData({
+        password: data.temporaryPassword,
+        expiresAt: data.expiresAt,
+        expiresHours: data.expiresHours,
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate temporary password')
+      setTempPasswordDialog(null)
+    } finally {
+      setTempPasswordLoading(false)
+    }
+  }
+
+  async function handleCopyTempPassword() {
+    if (!tempPasswordData) return
+    try {
+      await navigator.clipboard.writeText(tempPasswordData.password)
+      setTempPasswordCopied(true)
+      toast.success('Password copied to clipboard')
+      setTimeout(() => setTempPasswordCopied(false), 2000)
+    } catch {
+      toast.error('Failed to copy password')
+    }
+  }
+
   // ─── Badge Helpers ───────────────────────────────────────────────────────
 
   function StatusBadge({ active }: { active: boolean }) {
@@ -403,6 +462,57 @@ export function UserManagement() {
       <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950 dark:text-red-400 dark:border-red-800">
         {label} OFF
       </Badge>
+    )
+  }
+
+  // ─── Overflow Menu Component ─────────────────────────────────────────────
+
+  function UserOverflowMenu({ user }: { user: User }) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-8">
+            <MoreVertical className="size-4" />
+            <span className="sr-only">Open menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuLabel className="text-xs text-muted-foreground font-normal truncate max-w-[200px]">
+            {user.name} &middot; {user.email}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-sm cursor-pointer" onClick={() => toast.info(`Viewing profile for ${user.name}`)}>
+            <Eye className="size-4 mr-2" />
+            View Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-sm cursor-pointer" onClick={() => openEdit(user)}>
+            <Pencil className="size-4 mr-2" />
+            Edit User
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-sm cursor-pointer" onClick={() => setResetConfirm(user)}>
+            <KeyRound className="size-4 mr-2" />
+            Reset Password
+          </DropdownMenuItem>
+          {canGenerateTempPassword && (
+            <DropdownMenuItem className="text-sm cursor-pointer" onClick={() => handleGenerateTempPassword(user)}>
+              <Shield className="size-4 mr-2" />
+              Generate Temporary Password
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-sm cursor-pointer" onClick={() => setToggleConfirm(user)}>
+            <Power className="size-4 mr-2" />
+            {user.isActive ? 'Deactivate' : 'Activate'}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-sm cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-400 dark:focus:bg-red-950"
+            onClick={() => setDeleteConfirm(user)}
+          >
+            <Trash2 className="size-4 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
   }
 
@@ -504,44 +614,7 @@ export function UserManagement() {
                       <ToggleBadge on={user.createListPermission} label="Create List" />
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => openEdit(user)}
-                          title="Edit user"
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => setToggleConfirm(user)}
-                          title={user.isActive ? 'Deactivate user' : 'Activate user'}
-                        >
-                          <Power className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8"
-                          onClick={() => setResetConfirm(user)}
-                          title="Reset password"
-                        >
-                          <KeyRound className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                          onClick={() => setDeleteConfirm(user)}
-                          title="Delete user"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
+                      <UserOverflowMenu user={user} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -591,29 +664,15 @@ export function UserManagement() {
                       </div>
                     )}
                   </div>
-                  <StatusBadge active={user.isActive} />
+                  <UserOverflowMenu user={user} />
                 </div>
 
                 <div className="flex flex-wrap gap-2">
+                  <StatusBadge active={user.isActive} />
                   <ToggleBadge on={user.callModeOn} label="Calling" />
                   <ToggleBadge on={user.whatsappAccess} label="WhatsApp" />
                   <ToggleBadge on={user.uploadPermission} label="Upload" />
                   <ToggleBadge on={user.createListPermission} label="Create List" />
-                </div>
-
-                <div className="flex items-center gap-1 pt-2 border-t">
-                  <Button variant="outline" size="sm" className="flex-1 text-xs h-9" onClick={() => openEdit(user)}>
-                    <Pencil className="size-3" /> Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1 text-xs h-9" onClick={() => setToggleConfirm(user)}>
-                    <Power className="size-3" /> {user.isActive ? 'Deactivate' : 'Activate'}
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-xs h-9" onClick={() => setResetConfirm(user)} title="Reset password">
-                    <KeyRound className="size-3" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-xs h-9 text-red-500 hover:text-red-600" onClick={() => setDeleteConfirm(user)}>
-                    <Trash2 className="size-3" />
-                  </Button>
                 </div>
               </div>
             ))}
@@ -836,6 +895,112 @@ export function UserManagement() {
           }
         }}
       />
+
+      {/* ═══════════ Temporary Password Dialog ═══════════ */}
+      <Dialog
+        open={!!tempPasswordDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTempPasswordDialog(null)
+            setTempPasswordData(null)
+            setTempPasswordCopied(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Temporary Password Generated</DialogTitle>
+            <DialogDescription>
+              {tempPasswordDialog && (
+                <>A temporary password has been generated for <span className="font-medium text-foreground">{tempPasswordDialog.name}</span> ({tempPasswordDialog.email})</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {tempPasswordLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Generating password...</span>
+            </div>
+          ) : tempPasswordData ? (
+            <div className="space-y-4">
+              {/* Password Display */}
+              <div className="rounded-lg border bg-muted/50 p-4">
+                <p className="text-xs text-muted-foreground mb-2">Temporary Password</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 font-mono text-lg font-semibold tracking-wider bg-background border rounded px-3 py-2 select-all">
+                    {tempPasswordData.password}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-10 shrink-0"
+                    onClick={handleCopyTempPassword}
+                  >
+                    {tempPasswordCopied ? (
+                      <Check className="size-4 text-emerald-600" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Expiration Info */}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Shield className="size-4 shrink-0" />
+                <span>
+                  Expires in <span className="font-medium text-foreground">{tempPasswordData.expiresHours} hour{tempPasswordData.expiresHours !== 1 ? 's' : ''}</span>
+                  {tempPasswordData.expiresAt && (
+                    <> &middot; {new Date(tempPasswordData.expiresAt).toLocaleString()}</>
+                  )}
+                </span>
+              </div>
+
+              {/* Warning Banner */}
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                  ⚠️ This password will be shown only once. Share it securely.
+                </p>
+              </div>
+
+              {/* Send Options */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => toast.info('Email feature coming soon')}
+                >
+                  <Mail className="size-4 mr-2" />
+                  Send via Email
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => toast.info('SMS feature coming soon')}
+                >
+                  <Send className="size-4 mr-2" />
+                  Send via SMS
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTempPasswordDialog(null)
+                setTempPasswordData(null)
+                setTempPasswordCopied(false)
+              }}
+              disabled={tempPasswordLoading}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

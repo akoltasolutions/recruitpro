@@ -54,10 +54,12 @@ interface AuthState {
   organization: Organization | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string, organization?: Organization | null) => void;
+  requirePasswordChange: boolean;
+  login: (user: User, token: string, organization?: Organization | null, requirePasswordChange?: boolean) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   updateOrganization: (org: Partial<Organization>) => void;
+  clearRequirePasswordChange: () => void;
 }
 
 /**
@@ -97,13 +99,15 @@ export const useAuthStore = create<AuthState>()(
       organization: null,
       token: null,
       isAuthenticated: false,
-      login: (user, token, organization = null) => {
+      requirePasswordChange: false,
+      login: (user, token, organization = null, requirePasswordChange = false) => {
         markLoginTime(); // start grace period
         set({
           user,
           organization,
           token,
           isAuthenticated: true,
+          requirePasswordChange,
         });
       },
       logout: () =>
@@ -112,6 +116,7 @@ export const useAuthStore = create<AuthState>()(
           organization: null,
           token: null,
           isAuthenticated: false,
+          requirePasswordChange: false,
         }),
       updateUser: (updates) =>
         set((state) => ({
@@ -121,6 +126,8 @@ export const useAuthStore = create<AuthState>()(
         set((state) => ({
           organization: state.organization ? { ...state.organization, ...updates } : null,
         })),
+      clearRequirePasswordChange: () =>
+        set({ requirePasswordChange: false }),
     }),
     {
       name: 'auth-storage',

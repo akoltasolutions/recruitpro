@@ -75,7 +75,7 @@ export function LoginPage({ onSwitch, onForgotPassword, onRegister }: LoginPageP
         return
       }
 
-      login(data.user, data.token, data.organization)
+      login(data.user, data.token, data.organization, data.requirePasswordChange || false)
       toast.success(`Welcome back, ${data.user.name}!`)
     } catch {
       setErrorCode('NO_CONNECTION')

@@ -11,9 +11,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { currentPassword, newPassword } = await request.json();
+    const { currentPassword, newPassword, skipCurrentPassword } = await request.json();
 
-    if (!currentPassword || !newPassword) {
+    // When skipCurrentPassword is true, verify the user recently used a temp password
+    let isTempPasswordSession = false;
+    if (skipCurrentPassword && !currentPassword) {
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+      const recentTempPassword = await db.temporaryPassword.findFirst({
+        where: {
+          userId: auth.userId,
+          isUsed: true,
+          usedAt: { gte: thirtyMinutesAgo },
+        },
+      });
+      if (!recentTempPassword) {
+        return NextResponse.json(
+          { error: 'Current password is required' },
+          { status: 400 }
+        );
+      }
+      isTempPasswordSession = true;
+    }
+
+    if (!isTempPasswordSession && (!currentPassword || !newPassword)) {
       return NextResponse.json(
         { error: 'Current password and new password are required' },
         { status: 400 }
@@ -46,7 +66,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const isCurrentPasswordValid = await verifyPassword(currentPassword, user.password);
+    const isCurrentPasswordValid = isTempPasswordSession || await verifyPassword(currentPassword, user.password);
 
     if (!isCurrentPasswordValid) {
       return NextResponse.json(
@@ -82,6 +102,20 @@ export async function POST(request: NextRequest) {
         otpExpires: null,
       },
     });
+
+    // Invalidate all unused temporary passwords for this user
+    try {
+      await db.temporaryPassword.updateMany({
+        where: {
+          userId: auth.userId,
+          isUsed: false,
+          invalidatedAt: null,
+        },
+        data: { invalidatedAt: new Date() },
+      });
+    } catch (err) {
+      console.error('[ChangePassword] Temp password invalidation failed (non-blocking):', err);
+    }
 
     // Try to update tokenVersion and passwordChangedAt (may not exist in old schema)
     try {

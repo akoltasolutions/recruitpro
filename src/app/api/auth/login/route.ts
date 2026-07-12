@@ -153,14 +153,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Wrong password — distinct error code for UI
+    // Check normal password first
     const isValid = await verifyPassword(password, user.password);
+
+    // If normal password fails, check for valid temporary passwords
+    let usedTempPassword = false;
     if (!isValid) {
-      console.error('[Auth] Wrong password attempt for:', loginId, 'IP:', clientIp);
-      return NextResponse.json(
-        { error: 'Incorrect password. Please try again.', code: 'WRONG_PASSWORD', remainingAttempts: rateResult.remaining },
-        { status: 401 }
-      );
+      const now = new Date();
+      const activeTempPasswords = await db.temporaryPassword.findMany({
+        where: {
+          userId: user.id,
+          isUsed: false,
+          invalidatedAt: null,
+          expiresAt: { gt: now },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      let matchedTempPassword = null;
+      for (const tp of activeTempPasswords) {
+        if (await verifyPassword(password, tp.passwordHash)) {
+          matchedTempPassword = tp;
+          break;
+        }
+      }
+
+      if (matchedTempPassword) {
+        // Mark temp password as used
+        await db.temporaryPassword.update({
+          where: { id: matchedTempPassword.id },
+          data: {
+            isUsed: true,
+            usedAt: new Date(),
+          },
+        });
+
+        // Audit log
+        try {
+          await db.tempPasswordAuditLog.create({
+            data: {
+              tempPasswordId: matchedTempPassword.id,
+              adminId: user.id, // self-referencing for audit trail
+              userId: user.id,
+              organizationId: user.organizationId || undefined,
+              action: 'USED',
+              ipAddress: clientIp,
+              userAgent: request.headers.get('user-agent') || null,
+              expiresAt: matchedTempPassword.expiresAt,
+            },
+          });
+        } catch (auditErr) {
+          console.error('[Auth] Temp password audit log failed:', auditErr);
+        }
+
+        usedTempPassword = true;
+      } else {
+        // Also clean up expired temp passwords for this user (housekeeping)
+        try {
+          await db.temporaryPassword.updateMany({
+            where: {
+              userId: user.id,
+              isUsed: false,
+              invalidatedAt: null,
+              expiresAt: { lte: now },
+            },
+            data: { invalidatedAt: now },
+          });
+        } catch { /* non-blocking housekeeping */ }
+
+        console.error('[Auth] Wrong password attempt for:', loginId, 'IP:', clientIp);
+        return NextResponse.json(
+          { error: 'Incorrect password. Please try again.', code: 'WRONG_PASSWORD', remainingAttempts: rateResult.remaining },
+          { status: 401 }
+        );
+      }
     }
 
     // Check organization status before issuing token
@@ -197,7 +263,12 @@ export async function POST(request: NextRequest) {
 
     const { password: _, organization, ...safeUser } = user;
     if (safeUser.role === 'ADMIN') safeUser.role = 'ORG_ADMIN';
-    return NextResponse.json({ user: safeUser, token, organization: organization || null });
+    return NextResponse.json({
+      user: safeUser,
+      token,
+      organization: organization || null,
+      ...(usedTempPassword ? { requirePasswordChange: true } : {}),
+    });
   } catch (error) {
     console.error('[Auth] Login error:', error);
     return NextResponse.json(
