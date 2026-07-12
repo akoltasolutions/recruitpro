@@ -828,3 +828,30 @@ Stage Summary:
 - Permanent build script at build-apk.sh for future APK rebuilds
 - Files changed: download-apk/route.ts, apk-versions/route.ts, apk-versions/download/route.ts, build-apk.sh, .gitignore, AndroidManifest.xml, build.js, db/android-versions.json
 - Pushed to GitHub: main branch, commit bb1cf2e
+---
+Task ID: 1
+Agent: Main Agent
+Task: Users Module – Modern 3-Dot Actions Menu & Temporary Password Feature
+
+Work Log:
+- Explored existing user-management.tsx (842 lines) with 4 action buttons: Edit, Toggle Active, Reset Password, Delete
+- Updated Prisma schema: Added TemporaryPassword and TempPasswordAuditLog models with proper indexes
+- Pushed schema to SQLite database via `bun run db:push`
+- Created POST /api/users/[id]/temp-password API with role-based access (SUPER_ADMIN + ORG_ADMIN)
+- Modified login route to check temporary passwords after normal password fails (single-use, marks as used)
+- Modified change-password route to invalidate all unused temp passwords after password change
+- Added skipCurrentPassword support in change-password for temp password sessions (verifies recent temp password usage within 30 min)
+- Updated auth store: Added requirePasswordChange flag and clearRequirePasswordChange action
+- Updated login page to pass requirePasswordChange flag from API response
+- Created ForcePasswordChangeDialog component (force-show dialog, new password + confirm, skip current password)
+- Rewrote user-management.tsx: Replaced 4 action buttons with three-dot DropdownMenu overflow menu
+- Menu items: View Profile, Edit User, Reset Password, Generate Temporary Password (role-gated), separator, Activate/Deactivate, Delete
+- Temp password dialog: monospace password display, copy button, expiration info, warning banner, Send via Email/SMS placeholders
+- Full E2E API testing: generation, login with temp password, audit trails, permission checks all verified
+- Browser verification: three-dot menu renders correctly, temp password dialog shows password + copy + expiry + warning
+
+Stage Summary:
+- Files modified: prisma/schema.prisma, src/app/api/auth/login/route.ts, src/app/api/auth/change-password/route.ts, src/app/api/users/[id]/temp-password/route.ts (new), src/components/admin/user-management.tsx, src/components/app-router.tsx, src/components/auth/login-page.tsx, src/stores/auth-store.ts, src/components/shared/force-password-change-dialog.tsx (new)
+- All existing functionality preserved (create, edit, delete, toggle, reset password, search, pagination)
+- Security: role-based permissions, bcrypt hashing, 24h expiry, single-use, audit trail, no plaintext passwords in logs
+- Commit: 548573c (ready for push, GitHub token expired in sandbox)
