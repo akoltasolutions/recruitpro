@@ -571,3 +571,64 @@ model Session {
   @@index([userId, isActive])
   @@index([expiresAt])
 }
+
+// ==================== ANDROID APP MANAGEMENT ====================
+
+model ApkVersion {
+  id            String    @id @default(cuid())
+  appName       String    @default("Akolta Dialer")
+  versionName   String
+  versionCode   Int
+  fileName      String
+  originalName  String
+  size          Int
+  checksum      String?
+  releaseNotes  String?
+  status        String    @default("DRAFT") // DRAFT, TESTING, PUBLISHED, ARCHIVED
+  downloadCount Int       @default(0)
+  uploadedBy    String?
+  publishedBy   String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userAssignments  ApkUserAssignment[]
+  orgAssignments   ApkOrgAssignment[]
+  downloads        ApkDownload[]
+}
+
+model ApkUserAssignment {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  versionId  String
+  assignedBy String?
+  createdAt  DateTime @default(now())
+
+  version ApkVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model ApkOrgAssignment {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  versionId      String
+  assignedBy     String?
+  createdAt      DateTime @default(now())
+
+  version ApkVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model ApkDownload {
+  id             String   @id @default(cuid())
+  userId         String
+  versionId      String
+  organizationId String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  version ApkVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([versionId, createdAt])
+  @@index([organizationId])
+}
