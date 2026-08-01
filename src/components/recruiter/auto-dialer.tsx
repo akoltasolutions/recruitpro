@@ -562,6 +562,18 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
   }, [clearCallState, checkPendingCall, handleReturnFromDialer, stopCallTimer])
 
+  // ==================== PRE-CALL DELAY TIMER ====================
+  // Shows a countdown overlay before automatically placing the call.
+  // When countdown reaches 0, it programmatically opens the phone dialer.
+  // Declared before the onCallResult useEffect to prevent TDZ error.
+  const cancelPreCallTimer = useCallback(() => {
+    if (preCallTimerRef.current) {
+      clearInterval(preCallTimerRef.current)
+      preCallTimerRef.current = null
+    }
+    setPreCallCountdown(null)
+  }, [])
+
   // ==================== ANDROID CALL RESULT CALLBACK ====================
   // Handles callbacks from the Android native bridge (onCallResult).
   // Called by MainActivity.java via evaluateJavascript when:
@@ -624,17 +636,6 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       delete (window as unknown as Record<string, unknown>).onCallResult
     }
   }, [stopCallTimer, clearCallState, cancelPreCallTimer])
-
-  // ==================== PRE-CALL DELAY TIMER ====================
-  // Shows a countdown overlay before automatically placing the call.
-  // When countdown reaches 0, it programmatically opens the phone dialer.
-  const cancelPreCallTimer = useCallback(() => {
-    if (preCallTimerRef.current) {
-      clearInterval(preCallTimerRef.current)
-      preCallTimerRef.current = null
-    }
-    setPreCallCountdown(null)
-  }, [])
 
   // Helper: programmatically trigger a native link click.
   // This is the MOST reliable way to open tel:/sms:/https: links in Android WebView
