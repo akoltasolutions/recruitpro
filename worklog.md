@@ -855,3 +855,27 @@ Stage Summary:
 - All existing functionality preserved (create, edit, delete, toggle, reset password, search, pagination)
 - Security: role-based permissions, bcrypt hashing, 24h expiry, single-use, audit trail, no plaintext passwords in logs
 - Commit: 548573c (ready for push, GitHub token expired in sandbox)
+---
+Task ID: 1
+Agent: Main Agent
+Task: Implement one-click direct phone calling (ACTION_CALL) for Android app
+
+Work Log:
+- Explored project structure: found Android app in android-twa/ (native WebView + JS bridge)
+- Analyzed existing flow: makeCall() bridge existed but silently fell back to ACTION_DIAL on permission denial
+- Rewrote MainActivity.java with proper permission handling, callbacks, and no silent fallback
+- Added onCallResult callback system (CALL_INITIATED, PERMISSION_DENIED, PERMISSION_PERMANENTLY_DENIED, CALL_FAILED, INVALID_NUMBER)
+- Added openAppSettings() and requestCallPermission() bridge methods
+- Added callPlaced flag to prevent false disposition triggers
+- Updated auto-dialer.tsx with onCallResult handler, permission dialog UI, double-tap protection
+- Enhanced activity log with full call context (candidate, call list, phone, role)
+- Fixed activity API: added CALL_SESSION_START to VALID_ACTIONS, added organizationId
+- Bumped APK to v1.2.0 (versionCode 3)
+- Committed and pushed to GitHub (ff61c54)
+
+Stage Summary:
+- Android: One-click ACTION_CALL with full permission lifecycle (request, denied, permanently denied, open settings)
+- Web: Permission dialog UI, call button double-tap protection, onCallResult state management
+- Backend: Activity API now accepts CALL_SESSION_START and sets organizationId
+- APK v1.2.0 code pushed (APK binary must be built on server with Android SDK)
+
