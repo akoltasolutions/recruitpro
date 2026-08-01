@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * RecruitPro Android APK Builder v1.1
+ * RecruitPro Android APK Builder v1.2
  * Builds a WebView APK using Android SDK command-line tools only.
  * No Gradle, no Android Studio needed.
  *
@@ -48,8 +48,8 @@ const BUILD = path.join(__dirname, 'build');
 const SRC = path.join(__dirname, 'app/src/main');
 const MIN_SDK = 28;
 const TARGET_SDK = 34;
-const VERSION_CODE = 2;
-const VERSION_NAME = '1.1.0';
+const VERSION_CODE = 3;
+const VERSION_NAME = '1.2.0';
 
 function run(cmd) {
   console.log('>', cmd.split('\n').join('\n  '));

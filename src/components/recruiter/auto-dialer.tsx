@@ -167,6 +167,15 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
   // Track exact timestamp when Call button is clicked (for server-side duration fallback)
   const callSessionStartRef = useRef<string | null>(null)
 
+  // Permission dialog state — shown when Android denies CALL_PHONE permission
+  const [permissionDialog, setPermissionDialog] = useState<{
+    open: boolean
+    type: 'denied' | 'permanently_denied' | null
+    message: string
+  }>({ open: false, type: null, message: '' })
+  // Debounce guard for Call button — prevents double-tap / rapid clicks
+  const callButtonLockedRef = useRef(false)
+
   // Dynamically measure the actual viewport height for the bottom-sheet.
   // CSS dvh/vh units are UNRELIABLE in Android WebView — they don't account for
   // the status bar, navigation bar, or browser chrome. window.innerHeight gives
@@ -553,6 +562,69 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
   }, [clearCallState, checkPendingCall, handleReturnFromDialer, stopCallTimer])
 
+  // ==================== ANDROID CALL RESULT CALLBACK ====================
+  // Handles callbacks from the Android native bridge (onCallResult).
+  // Called by MainActivity.java via evaluateJavascript when:
+  //   - Permission is denied or permanently denied
+  //   - Call fails (no SIM, carrier issue)
+  //   - Phone number is invalid
+  useEffect(() => {
+    const resetCallState = () => {
+      callInitiatedRef.current = false
+      setCallInitiated(false)
+      stopCallTimer()
+      clearCallState()
+      cancelPreCallTimer()
+      dispositionShownRef.current = false
+      callButtonLockedRef.current = false
+    }
+
+    ;(window as unknown as Record<string, unknown>).onCallResult = (resultCode: string, message?: string) => {
+      switch (resultCode) {
+        case 'CALL_INITIATED':
+          // Call was successfully initiated — web already set callInitiated optimistically.
+          // Unlock the button guard since the call went through.
+          callButtonLockedRef.current = false
+          break
+
+        case 'PERMISSION_DENIED':
+          // User denied permission but can be asked again
+          resetCallState()
+          setPermissionDialog({
+            open: true,
+            type: 'denied',
+            message: message || 'Phone call permission is required to place calls directly from Akolta Dialer.',
+          })
+          break
+
+        case 'PERMISSION_PERMANENTLY_DENIED':
+          // User permanently denied (checked "Don\'t ask again") — must go to Settings
+          resetCallState()
+          setPermissionDialog({
+            open: true,
+            type: 'permanently_denied',
+            message: message || 'Phone call permission has been permanently denied. Please enable it in App Settings.',
+          })
+          break
+
+        case 'CALL_FAILED':
+          // Call failed (no SIM, carrier issue, etc.)
+          resetCallState()
+          toast.error(message || 'Failed to place call. Please check your SIM and try again.')
+          break
+
+        case 'INVALID_NUMBER':
+          resetCallState()
+          toast.error(message || 'Invalid phone number')
+          break
+      }
+    }
+
+    return () => {
+      delete (window as unknown as Record<string, unknown>).onCallResult
+    }
+  }, [stopCallTimer, clearCallState, cancelPreCallTimer])
+
   // ==================== PRE-CALL DELAY TIMER ====================
   // Shows a countdown overlay before automatically placing the call.
   // When countdown reaches 0, it programmatically opens the phone dialer.
@@ -583,16 +655,30 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
   }, [])
 
-  // Execute the actual call — programmatically trigger tel: link
-  // First tries Android native bridge (ACTION_CALL = direct dial), falls back to tel: link (ACTION_DIAL = open dialer)
+  // Execute the actual call — uses Android native bridge (ACTION_CALL = direct dial).
+  // Falls back to tel: link (ACTION_DIAL) only on non-Android platforms.
+  // Includes double-tap protection via callButtonLockedRef.
   const executeCall = useCallback(() => {
+    // ===== DOUBLE-TAP / RAPID CLICK PROTECTION =====
+    // Prevents duplicate calls caused by double tap, multiple rapid clicks,
+    // network delay, or UI re-render. The guard is released when:
+    //   - onCallResult('CALL_INITIATED') fires (success)
+    //   - onCallResult failure callback fires (reset)
+    //   - Component cleanup
+    if (callButtonLockedRef.current) {
+      return
+    }
+    callButtonLockedRef.current = true
+
     if (!currentCandidate?.phone) {
       toast.error('No phone number available')
+      callButtonLockedRef.current = false
       return
     }
     const phone = cleanPhone(currentCandidate.phone)
     if (!phone || phone.length < 7) {
       toast.error('Invalid phone number')
+      callButtonLockedRef.current = false
       return
     }
 
@@ -602,20 +688,21 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
       const allowedStatuses = ['ACTIVE']
       if (!rawStatus || !allowedStatuses.includes(rawStatus)) {
         const statusLabel = rawStatus || 'not set'
-        toast.error(`⚠️ Status is ${statusLabel}. Please set your status to Active before making calls.`, { duration: 4000 })
+        toast.error(`Status is ${statusLabel}. Please set your status to Active before making calls.`, { duration: 4000 })
         stopCallTimer()
         callInitiatedRef.current = false
         setCallInitiated(false)
         clearCallState()
+        callButtonLockedRef.current = false
         return
       }
     } catch {
-      // If localStorage read fails, block the call (safer default)
-      toast.error('⚠️ Could not verify your status. Please go to Dashboard and set your status to Active.', { duration: 4000 })
+      toast.error('Could not verify your status. Please go to Dashboard and set your status to Active.', { duration: 4000 })
       stopCallTimer()
       callInitiatedRef.current = false
       setCallInitiated(false)
       clearCallState()
+      callButtonLockedRef.current = false
       return
     }
 
@@ -630,29 +717,46 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
     recordCallActivity() // Reset auto-idle timer on call initiation
 
-    // Log call session start for active time tracking
+    // Log call session start with full call context for analytics tracking.
+    // This creates an activity record that captures: recruiter, candidate,
+    // call list, phone number, role, location, and call start timestamp.
     authFetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'CALL_SESSION_START', status: 'ACTIVE' }),
+      body: JSON.stringify({
+        action: 'CALL_SESSION_START',
+        status: 'ON_CALL',
+        metadata: {
+          candidateId: currentCandidate.id,
+          candidateName: currentCandidate.name,
+          phone: currentCandidate.phone,
+          callListId: selectedList?.id,
+          callListName: selectedList?.name,
+          role: currentCandidate.role,
+          location: currentCandidate.location,
+          company: currentCandidate.company,
+        },
+      }),
     }).catch(() => {}) // Non-blocking, best-effort
 
     // Persist to sessionStorage — survives if WebView reloads the page
     saveCallState(currentCandidate!)
 
-    // executeCall invoked
-
     // ===== ANDROID WEBVIEW: Use native bridge to place call directly (ACTION_CALL) =====
     // This bypasses the phone dialer UI and calls the number directly.
-    // The Android app must implement: AndroidBridge.makeCall(phoneNumber)
+    // The Android app implements: AndroidBridge.makeCall(phoneNumber)
     //   → Intent(Intent.ACTION_CALL, Uri.parse("tel:" + phoneNumber))
     //   → Requires CALL_PHONE permission in AndroidManifest.xml
+    //   → Requests permission at runtime if not yet granted
+    //   → Notifies web via onCallResult callback (success/denied/failed)
     try {
       const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
         { makeCall: (phoneNumber: string) => void } | undefined
       if (bridge?.makeCall) {
-        // Using AndroidBridge.makeCall for direct dial
+        // Using AndroidBridge.makeCall for direct dial (ACTION_CALL)
         bridge.makeCall(phone)
+        // Note: callButtonLockedRef is released in onCallResult('CALL_INITIATED')
+        // or in the error/permission-denied callbacks.
         return
       }
     } catch {
@@ -660,25 +764,25 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
     }
 
     // ===== ENHANCED: Try window._autoDial bridge (custom WebView injection) =====
-    // Some WebView implementations inject a custom global function for direct calling
     try {
       const autoDial = (window as unknown as Record<string, unknown>)._autoDial as
         ((phoneNumber: string) => void) | undefined
       if (typeof autoDial === 'function') {
-        // Using window._autoDial for direct dial
         autoDial(phone)
+        callButtonLockedRef.current = false
         return
       }
     } catch {
       // Not available — fall through
     }
 
-    // ===== FALLBACK: tel: link (ACTION_DIAL) — opens phone dialer with number pasted =====
+    // ===== FALLBACK: tel: link (ACTION_DIAL) — for non-Android platforms (web browser) =====
     // This is the standard web behavior; requires user to press Call in the dialer.
-    // AndroidBridge not available, falling back to tel: link
+    // On Android with the bridge, this code path should never be reached.
+    callButtonLockedRef.current = false
     triggerNativeLink(`tel:${phone}`)
     toast.info('Opening dialer... Please press Call to connect.', { duration: 2000 })
-  }, [currentCandidate, saveCallState, startCallTimer, stopCallTimer, clearCallState, triggerNativeLink])
+  }, [currentCandidate, selectedList, saveCallState, startCallTimer, stopCallTimer, clearCallState, triggerNativeLink])
 
   // Helper: check if current status allows calling
   const canMakeCalls = useCallback((): boolean => {
@@ -2526,6 +2630,76 @@ export function AutoDialer({ userId, onNavigate }: AutoDialerProps) {
             </div>
           </div>
         )}
+
+        {/* ==================== PERMISSION DIALOG ==================== */}
+        {/* Shown when Android denies CALL_PHONE permission.
+            Provides options to re-request permission or open App Settings. */}
+        <Dialog open={permissionDialog.open} onOpenChange={(open) => {
+          if (!open) {
+            setPermissionDialog({ open: false, type: null, message: '' })
+            callButtonLockedRef.current = false
+          }
+        }}>
+          <DialogContent className="sm:max-w-md" showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+                Phone Permission Required
+              </DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                {permissionDialog.message}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col gap-2 sm:flex-col">
+              {permissionDialog.type === 'permanently_denied' ? (
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
+                  onClick={() => {
+                    try {
+                      const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
+                        { openAppSettings: () => void } | undefined
+                      if (bridge?.openAppSettings) {
+                        bridge.openAppSettings()
+                        setPermissionDialog({ open: false, type: null, message: '' })
+                      }
+                    } catch { /* bridge not available */ }
+                  }}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  Open App Settings
+                </Button>
+              ) : (
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
+                  onClick={() => {
+                    try {
+                      const bridge = (window as unknown as Record<string, unknown>).AndroidBridge as
+                        { requestCallPermission: () => void } | undefined
+                      if (bridge?.requestCallPermission) {
+                        bridge.requestCallPermission()
+                        setPermissionDialog({ open: false, type: null, message: '' })
+                      }
+                    } catch { /* bridge not available */ }
+                  }}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  Request Permission
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="w-full h-11"
+                onClick={() => {
+                  setPermissionDialog({ open: false, type: null, message: '' })
+                  callButtonLockedRef.current = false
+                }}
+                style={{ touchAction: 'manipulation' }}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }

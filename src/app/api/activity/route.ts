@@ -6,6 +6,7 @@ import { authenticateRequest, requireOrgAdmin } from '@/lib/auth-middleware';
 const VALID_ACTIONS = [
   'LOGIN', 'LOGOUT', 'BREAK_START', 'BREAK_END', 'LUNCH',
   'IDLE', 'CALL_START', 'CALL_END', 'STATUS_CHANGE',
+  'CALL_SESSION_START', 'CALL_SESSION_END',
 ] as const;
 
 // Whitelist of valid statuses for activity logging
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
         userId: targetUserId,
         action,
         status,
+        organizationId: auth.organizationId || null,
         metadata: metadata ? JSON.stringify(metadata) : null,
         userAgent: request.headers.get('user-agent') || null,
       },
