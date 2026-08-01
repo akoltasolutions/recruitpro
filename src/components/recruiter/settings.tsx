@@ -12,6 +12,7 @@ import {
   Pencil,
   Check,
   Loader2,
+  ShieldAlert,
 } from 'lucide-react'
 import { SecuritySettings } from '../admin/security-settings'
 import { AndroidAppDownloadSection } from '../shared/android-app-download'
@@ -36,6 +37,7 @@ interface SettingsProps {
 export function Settings({ userId, onLogout }: SettingsProps) {
   const user = useAuthStore((s) => s.user)
   const updateUser = useAuthStore((s) => s.updateUser)
+  const hasTemporaryPassword = useAuthStore((s) => s.hasTemporaryPassword)
 
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
@@ -410,6 +412,36 @@ export function Settings({ userId, onLogout }: SettingsProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Temporary Password Reminder */
+      {hasTemporaryPassword && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  Temporary password is still active
+                </p>
+                <p className="text-xs text-amber-700/70 dark:text-amber-300/70 mt-1">
+                  Please change your password to secure your account.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                onClick={() => {
+                  const el = document.getElementById('current-password')
+                  el?.focus()
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }}
+              >
+                Change Password
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Change Password */}
       <Card>

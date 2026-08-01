@@ -55,11 +55,16 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   requirePasswordChange: boolean;
+  /** Persists even after dismissing the popup — used for non-blocking Settings reminder */
+  hasTemporaryPassword: boolean;
   login: (user: User, token: string, organization?: Organization | null, requirePasswordChange?: boolean) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   updateOrganization: (org: Partial<Organization>) => void;
+  /** Called when password is successfully changed — clears both flags */
   clearRequirePasswordChange: () => void;
+  /** Called when user dismisses the popup via X — only hides the dialog, keeps temp password status */
+  dismissPasswordDialog: () => void;
 }
 
 /**
@@ -100,6 +105,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       isAuthenticated: false,
       requirePasswordChange: false,
+      hasTemporaryPassword: false,
       login: (user, token, organization = null, requirePasswordChange = false) => {
         markLoginTime(); // start grace period
         set({
@@ -108,6 +114,7 @@ export const useAuthStore = create<AuthState>()(
           token,
           isAuthenticated: true,
           requirePasswordChange,
+          hasTemporaryPassword: requirePasswordChange,
         });
       },
       logout: () =>
@@ -117,6 +124,7 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           isAuthenticated: false,
           requirePasswordChange: false,
+          hasTemporaryPassword: false,
         }),
       updateUser: (updates) =>
         set((state) => ({
@@ -127,6 +135,8 @@ export const useAuthStore = create<AuthState>()(
           organization: state.organization ? { ...state.organization, ...updates } : null,
         })),
       clearRequirePasswordChange: () =>
+        set({ requirePasswordChange: false, hasTemporaryPassword: false }),
+      dismissPasswordDialog: () =>
         set({ requirePasswordChange: false }),
     }),
     {

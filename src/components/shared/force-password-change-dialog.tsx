@@ -19,6 +19,7 @@ import {
 export function ForcePasswordChangeDialog() {
   const requirePasswordChange = useAuthStore((s) => s.requirePasswordChange)
   const clearRequirePasswordChange = useAuthStore((s) => s.clearRequirePasswordChange)
+  const dismissPasswordDialog = useAuthStore((s) => s.dismissPasswordDialog)
   const logout = useAuthStore((s) => s.logout)
 
   const [newPassword, setNewPassword] = useState('')
@@ -29,6 +30,8 @@ export function ForcePasswordChangeDialog() {
 
   if (!requirePasswordChange) return null
 
+  // Keep state hooks above this return for React hook ordering consistency
+  // (they're initialized above but we need to avoid conditional rendering issues)
   const isValid = newPassword.length >= 8 && /[a-zA-Z]/.test(newPassword) && /\d/.test(newPassword)
   const passwordsMatch = newPassword === confirmPassword && newPassword.length > 0
 
@@ -83,8 +86,8 @@ export function ForcePasswordChangeDialog() {
   }
 
   return (
-    <Dialog open={true} onOpenChange={() => { /* prevent closing */ }}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+    <Dialog open={requirePasswordChange} onOpenChange={(open) => { if (!open) dismissPasswordDialog() }}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center size-10 rounded-full bg-amber-100 dark:bg-amber-950">
